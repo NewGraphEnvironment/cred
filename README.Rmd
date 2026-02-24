@@ -8,7 +8,7 @@ output: github_document
 knitr::opts_chunk$set(collapse = TRUE, comment = "#>")
 ```
 
-# cred — Citation Review and Evidence Documentation
+# cred — Citation Review and Evidence Documentation <img src="man/figures/logo.png" align="right" height="139" />
 
 `cred` catches a specific failure mode in LLM-assisted scientific writing: a real citation key attached to a claim the source does not actually make. It automates the tedious part — finding the right passage in a PDF or Word doc — so a human can focus on the judgment call.
 

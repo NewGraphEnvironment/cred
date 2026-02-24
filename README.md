@@ -1,7 +1,7 @@
 
 <!-- README.md is generated from README.Rmd. Please edit that file -->
 
-# cred — Citation Review and Evidence Documentation
+# cred — Citation Review and Evidence Documentation <img src="man/figures/logo.png" align="right" height="139" />
 
 `cred` catches a specific failure mode in LLM-assisted scientific
 writing: a real citation key attached to a claim the source does not
