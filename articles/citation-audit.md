@@ -21,14 +21,15 @@ call.
                                              auto-match   abstract-match   no match
                                              (review)     (review)       (manual check)
 
-| Step | Function                                                                                                       | What it does                                                                    |
-|------|----------------------------------------------------------------------------------------------------------------|---------------------------------------------------------------------------------|
-| 1    | [`crd_aud_write()`](https://newgraphenvironment.github.io/cred/reference/crd_aud_write.md)                     | Scan Rmd files → extract citations with paraphrase context → write CSV scaffold |
-| 2    | [`crd_aud_verify_all()`](https://newgraphenvironment.github.io/cred/reference/crd_aud_verify_all.md)           | Look up Zotero attachments → search each source → fill `quote` and `verified`   |
-| 2b   | [`crd_aud_verify_abstract()`](https://newgraphenvironment.github.io/cred/reference/crd_aud_verify_abstract.md) | For remaining NA rows, score against Zotero abstract text                       |
-| 3    | [`crd_aud_sort()`](https://newgraphenvironment.github.io/cred/reference/crd_aud_sort.md)                       | Sort `auto` rows first so reviewable rows are at the top                        |
-| 4    | [`crd_aud_summary()`](https://newgraphenvironment.github.io/cred/reference/crd_aud_summary.md)                 | Print status snapshot and PDF attachment priority list                          |
-| 5    | [`crd_aud_review()`](https://newgraphenvironment.github.io/cred/reference/crd_aud_review.md)                   | Launch interactive Shiny app — paraphrase vs quote side by side                 |
+| Step | Function                                                                                                       | What it does                                                                         |
+|------|----------------------------------------------------------------------------------------------------------------|--------------------------------------------------------------------------------------|
+| 1    | [`crd_aud_write()`](https://newgraphenvironment.github.io/cred/reference/crd_aud_write.md)                     | Scan Rmd files → extract citations with paraphrase context → write CSV scaffold      |
+| 2    | [`crd_aud_verify_all()`](https://newgraphenvironment.github.io/cred/reference/crd_aud_verify_all.md)           | Look up Zotero attachments → search each source → fill `quote` and `verified`        |
+| 2b   | [`crd_aud_verify_abstract()`](https://newgraphenvironment.github.io/cred/reference/crd_aud_verify_abstract.md) | For remaining NA rows, score against Zotero abstract text                            |
+| 3    | [`crd_aud_score()`](https://newgraphenvironment.github.io/cred/reference/crd_aud_score.md)                     | Add `review_score` (1–6) and `review_flag` — prioritise review by hallucination risk |
+| 4    | [`crd_aud_sort()`](https://newgraphenvironment.github.io/cred/reference/crd_aud_sort.md)                       | Sort `auto` rows first so reviewable rows are at the top                             |
+| 5    | [`crd_aud_summary()`](https://newgraphenvironment.github.io/cred/reference/crd_aud_summary.md)                 | Print status snapshot and PDF attachment priority list                               |
+| 6    | [`crd_aud_review()`](https://newgraphenvironment.github.io/cred/reference/crd_aud_review.md)                   | Launch interactive Shiny app — paraphrase vs quote side by side                      |
 
 ------------------------------------------------------------------------
 
@@ -110,7 +111,7 @@ writeLines(c(
 crd_aud_write(rmd_dir = rmd_dir, out_file = audit_file)
 #> Scanning: 0100-habitat.Rmd
 #> Scanning: 0200-beaver.Rmd
-#> Wrote 9 rows to /tmp/Rtmp92dAjz/audit_1c9c1f4140cf.csv
+#> Wrote 9 rows to /tmp/Rtmp7rGmCx/audit_1cb22521f5c3.csv
 ```
 
 Nine rows across two chapters. The `verified` column is blank — no
@@ -197,21 +198,47 @@ you still need the PDF.
 
 ------------------------------------------------------------------------
 
-### Step 3 — Sort for review
+### Step 3 — Score for review priority
+
+[`crd_aud_score()`](https://newgraphenvironment.github.io/cred/reference/crd_aud_score.md)
+adds `review_score` (1–6) and `review_flag` columns. Lower scores are
+more suspect — review them first.
+
+| Score | Meaning                                                    |
+|-------|------------------------------------------------------------|
+| 1     | `no_match`, or auto with claim numbers absent from quote   |
+| 2     | No source, abstract with numeric claim, or very weak prose |
+| 3     | Abstract qualitative, weak prose overlap                   |
+| 4     | Numeric partial match or moderate prose overlap            |
+| 5     | Strong numeric + prose match                               |
+| 6     | Human-reviewed                                             |
+
+``` r
+crd_aud_score(audit_file)
+#> Scored 9 rows: 1=1, 3=1, 5=7
+```
+
+The `no_match` row (Pacific Salmon Treaty → wrong source) scores 1. The
+`NA`/abstract-only rows score 2–3. Strong auto matches score 4–5. The
+review app shows these columns colour-coded when present.
+
+------------------------------------------------------------------------
+
+### Step 4 — Sort for review
 
 ``` r
 crd_aud_sort(audit_file, by = "status")
-#> Sorted by 'status' and wrote 9 rows to /tmp/Rtmp92dAjz/audit_1c9c1f4140cf.csv
+#> Sorted by 'status' and wrote 9 rows to /tmp/Rtmp7rGmCx/audit_1cb22521f5c3.csv
 ```
 
 ------------------------------------------------------------------------
 
-### Step 4 — Summary
+### Step 5 — Summary
 
 ``` r
 crd_aud_summary(audit_file)
 #> === Citation Audit Summary ===
-#> File: /tmp/Rtmp92dAjz/audit_1c9c1f4140cf.csv 
+#> File: /tmp/Rtmp7rGmCx/audit_1cb22521f5c3.csv 
 #> Total rows: 9 
 #> 
 #> -- Status breakdown --
@@ -236,7 +263,7 @@ crd_aud_summary(audit_file)
 
 ------------------------------------------------------------------------
 
-### Step 5 — Interactive review
+### Step 6 — Interactive review
 
 ``` r
 crd_aud_review("background/citation_audit.csv")
@@ -270,9 +297,9 @@ populates `claim_type` to prioritise your review effort. Numeric claims
 carry the highest hallucination risk.
 
 ``` r
-d4 <- readr::read_csv(audit_file, show_col_types = FALSE)
-d4 <- crd_aud_scr_risk(d4)
-table(d4$claim_type)
+d5 <- readr::read_csv(audit_file, show_col_types = FALSE)
+d5 <- crd_aud_scr_risk(d5)
+table(d5$claim_type)
 #> 
 #> statistic 
 #>         9
@@ -296,6 +323,9 @@ crd_aud_verify_all("background/citation_audit.csv")
 
 # ── Abstract fallback for remaining NA rows ──────────────────────────────────
 crd_aud_verify_abstract("background/citation_audit.csv")
+
+# ── Score rows for review priority ─────────────────────────────────────────
+crd_aud_score("background/citation_audit.csv")
 
 # ── Check progress ──────────────────────────────────────────────────────────
 crd_aud_summary("background/citation_audit.csv")

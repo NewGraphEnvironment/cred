@@ -76,7 +76,7 @@ are defined and they will be found automatically.</p></dd>
     <p>Paraphrases extracted from Rmd source often contain unevaluated inline R
 expressions such as <code>`r format(optimum_morice, big.mark = ",")`</code>.
 These make paraphrase vs quote comparison difficult in the review app, and
-prevent <code>crd_aud_score()</code> from detecting numeric mismatches.</p>
+prevent <code><a href="crd_aud_score.html">crd_aud_score()</a></code> from detecting numeric mismatches.</p>
 <p><code>crd_aud_eval_inline()</code> evaluates each expression in <code>env</code> and stores the
 result in a <code>paraphrase_eval</code> column. On evaluation failure the expression
 is left as-is and a warning is issued. <code>paraphrase</code> is never modified —

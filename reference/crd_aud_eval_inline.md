@@ -36,7 +36,9 @@ The updated audit data frame, invisibly. Writes to `audit_file`.
 Paraphrases extracted from Rmd source often contain unevaluated inline R
 expressions such as `` `r format(optimum_morice, big.mark = ",")` ``.
 These make paraphrase vs quote comparison difficult in the review app,
-and prevent `crd_aud_score()` from detecting numeric mismatches.
+and prevent
+[`crd_aud_score()`](https://newgraphenvironment.github.io/cred/reference/crd_aud_score.md)
+from detecting numeric mismatches.
 
 `crd_aud_eval_inline()` evaluates each expression in `env` and stores
 the result in a `paraphrase_eval` column. On evaluation failure the

@@ -161,6 +161,9 @@ package.
 - [`crd_aud_review()`](https://newgraphenvironment.github.io/cred/reference/crd_aud_review.md)
   : Launch an interactive review app for the citation audit CSV
 
+- [`crd_aud_score()`](https://newgraphenvironment.github.io/cred/reference/crd_aud_score.md)
+  : Score audit rows by review priority
+
 - [`crd_aud_scr_risk()`](https://newgraphenvironment.github.io/cred/reference/crd_aud_scr_risk.md)
   : Auto-score citation rows by hallucination risk
 
