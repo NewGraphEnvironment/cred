@@ -96,7 +96,7 @@ audit_file <- tempfile("citation_audit_", fileext = ".csv")
 crd_aud_write(rmd_dir = rmd_dir, out_file = audit_file)
 #> Scanning: 0100-habitat.Rmd
 #> Scanning: 0200-beaver.Rmd
-#> Wrote 6 rows to /tmp/Rtmpo7J1mf/citation_audit_1d5eb0d88ae.csv
+#> Wrote 6 rows to /tmp/RtmpRcY41m/citation_audit_1cfd263cf7dc.csv
 ```
 
 ``` r
@@ -203,7 +203,7 @@ ready to check) first and `NA` rows (nothing to review) last.
 
 ``` r
 crd_aud_sort(audit_file, by = "status")
-#> Sorted by 'status' and wrote 6 rows to /tmp/Rtmpo7J1mf/citation_audit_1d5eb0d88ae.csv
+#> Sorted by 'status' and wrote 6 rows to /tmp/RtmpRcY41m/citation_audit_1cfd263cf7dc.csv
 d3 <- readr::read_csv(audit_file, show_col_types = FALSE)
 knitr::kable(d3[, c("citation_key", "verified", "sort_index")])
 ```
@@ -231,7 +231,7 @@ snapshot of where things stand.
 ``` r
 crd_aud_summary(audit_file)
 #> === Citation Audit Summary ===
-#> File: /tmp/Rtmpo7J1mf/citation_audit_1d5eb0d88ae.csv 
+#> File: /tmp/RtmpRcY41m/citation_audit_1cfd263cf7dc.csv 
 #> Total rows: 6 
 #> 
 #> -- Status breakdown --

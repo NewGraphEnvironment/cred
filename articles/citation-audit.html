@@ -163,7 +163,7 @@ surrounding sentence as <code>paraphrase</code>.</p>
 <span><span class="fu"><a href="../reference/crd_aud_write.html">crd_aud_write</a></span><span class="op">(</span>rmd_dir <span class="op">=</span> <span class="va">rmd_dir</span>, out_file <span class="op">=</span> <span class="va">audit_file</span><span class="op">)</span></span>
 <span><span class="co">#&gt; Scanning: 0100-habitat.Rmd</span></span>
 <span><span class="co">#&gt; Scanning: 0200-beaver.Rmd</span></span>
-<span><span class="co">#&gt; Wrote 6 rows to /tmp/Rtmpo7J1mf/citation_audit_1d5eb0d88ae.csv</span></span></code></pre></div>
+<span><span class="co">#&gt; Wrote 6 rows to /tmp/RtmpRcY41m/citation_audit_1cfd263cf7dc.csv</span></span></code></pre></div>
 <div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">d</span> <span class="op">&lt;-</span> <span class="fu">readr</span><span class="fu">::</span><span class="fu"><a href="https://readr.tidyverse.org/reference/read_delim.html" class="external-link">read_csv</a></span><span class="op">(</span><span class="va">audit_file</span>, show_col_types <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span>
 <span><span class="fu">knitr</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/pkg/knitr/man/kable.html" class="external-link">kable</a></span><span class="op">(</span><span class="va">d</span><span class="op">[</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"section"</span>, <span class="st">"citation_key"</span>, <span class="st">"paraphrase"</span>, <span class="st">"verified"</span><span class="op">)</span><span class="op">]</span><span class="op">)</span></span></code></pre></div>
@@ -363,7 +363,7 @@ efficient. The <code>"status"</code> sort puts <code>auto</code> rows
 review) last.</p>
 <div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/crd_aud_sort.html">crd_aud_sort</a></span><span class="op">(</span><span class="va">audit_file</span>, by <span class="op">=</span> <span class="st">"status"</span><span class="op">)</span></span>
-<span><span class="co">#&gt; Sorted by 'status' and wrote 6 rows to /tmp/Rtmpo7J1mf/citation_audit_1d5eb0d88ae.csv</span></span>
+<span><span class="co">#&gt; Sorted by 'status' and wrote 6 rows to /tmp/RtmpRcY41m/citation_audit_1cfd263cf7dc.csv</span></span>
 <span><span class="va">d3</span> <span class="op">&lt;-</span> <span class="fu">readr</span><span class="fu">::</span><span class="fu"><a href="https://readr.tidyverse.org/reference/read_delim.html" class="external-link">read_csv</a></span><span class="op">(</span><span class="va">audit_file</span>, show_col_types <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span>
 <span><span class="fu">knitr</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/pkg/knitr/man/kable.html" class="external-link">kable</a></span><span class="op">(</span><span class="va">d3</span><span class="op">[</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"citation_key"</span>, <span class="st">"verified"</span>, <span class="st">"sort_index"</span><span class="op">)</span><span class="op">]</span><span class="op">)</span></span></code></pre></div>
 <table class="table">
@@ -418,7 +418,7 @@ stand.</p>
 <div class="sourceCode" id="cb10"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/crd_aud_summary.html">crd_aud_summary</a></span><span class="op">(</span><span class="va">audit_file</span><span class="op">)</span></span>
 <span><span class="co">#&gt; === Citation Audit Summary ===</span></span>
-<span><span class="co">#&gt; File: /tmp/Rtmpo7J1mf/citation_audit_1d5eb0d88ae.csv </span></span>
+<span><span class="co">#&gt; File: /tmp/RtmpRcY41m/citation_audit_1cfd263cf7dc.csv </span></span>
 <span><span class="co">#&gt; Total rows: 6 </span></span>
 <span><span class="co">#&gt; </span></span>
 <span><span class="co">#&gt; -- Status breakdown --</span></span>

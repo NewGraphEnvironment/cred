@@ -4,6 +4,10 @@
 
 - [`crd_aud_fill_src()`](crd_aud_fill_src.md) : Fill audit CSV quote and
   location columns from a source document
+- [`crd_aud_fmt_xlsx()`](crd_aud_fmt_xlsx.md) : Format an audit CSV as a
+  readable Excel workbook
+- [`crd_aud_review()`](crd_aud_review.md) : Launch an interactive review
+  app for the citation audit CSV
 - [`crd_aud_scr_risk()`](crd_aud_scr_risk.md) : Auto-score citation rows
   by hallucination risk
 - [`crd_aud_sort()`](crd_aud_sort.md) : Sort an audit CSV for review and
