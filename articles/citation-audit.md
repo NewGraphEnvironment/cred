@@ -110,7 +110,7 @@ writeLines(c(
 crd_aud_write(rmd_dir = rmd_dir, out_file = audit_file)
 #> Scanning: 0100-habitat.Rmd
 #> Scanning: 0200-beaver.Rmd
-#> Wrote 9 rows to /tmp/RtmplieagU/audit_1d7069b6f1bd.csv
+#> Wrote 9 rows to /tmp/Rtmp92dAjz/audit_1c9c1f4140cf.csv
 ```
 
 Nine rows across two chapters. The `verified` column is blank — no
@@ -201,7 +201,7 @@ you still need the PDF.
 
 ``` r
 crd_aud_sort(audit_file, by = "status")
-#> Sorted by 'status' and wrote 9 rows to /tmp/RtmplieagU/audit_1d7069b6f1bd.csv
+#> Sorted by 'status' and wrote 9 rows to /tmp/Rtmp92dAjz/audit_1c9c1f4140cf.csv
 ```
 
 ------------------------------------------------------------------------
@@ -211,7 +211,7 @@ crd_aud_sort(audit_file, by = "status")
 ``` r
 crd_aud_summary(audit_file)
 #> === Citation Audit Summary ===
-#> File: /tmp/RtmplieagU/audit_1d7069b6f1bd.csv 
+#> File: /tmp/Rtmp92dAjz/audit_1c9c1f4140cf.csv 
 #> Total rows: 9 
 #> 
 #> -- Status breakdown --
