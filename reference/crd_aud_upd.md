@@ -1,0 +1,51 @@
+# Update an existing audit CSV preserving manual columns
+
+Re-extracts citations from Rmd files and merges with an existing audit
+CSV, preserving any manually filled `quote`, `claim_type`,
+`page_or_section`, `verified`, and `notes` values. New rows are appended
+with blank manual columns; rows no longer present in the Rmd are
+retained but flagged.
+
+## Usage
+
+``` r
+crd_aud_upd(
+  out_file = "citation_audit.csv",
+  rmd_dir = ".",
+  pattern = "^[0-9]{4}-.*\\.Rmd$",
+  exclude = "(references|session-info|report-change-log)"
+)
+```
+
+## Arguments
+
+- out_file:
+
+  `character(1)` path to the existing audit CSV.
+
+- rmd_dir:
+
+  `character(1)` directory containing Rmd files. Default `"."`.
+
+- pattern:
+
+  `character(1)` regex to select Rmd files. Default
+  `"^[0-9]{4}-.*\\.Rmd$"`.
+
+- exclude:
+
+  `character(1)` regex for files to skip. Default skips references,
+  session-info, and change-log chapters.
+
+## Value
+
+Invisibly returns the updated
+[tibble](https://tibble.tidyverse.org/reference/tibble.html).
+
+## Examples
+
+``` r
+if (FALSE) { # \dontrun{
+crd_aud_upd("background/citation_audit.csv")
+} # }
+```

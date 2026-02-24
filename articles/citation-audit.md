@@ -1,0 +1,346 @@
+# Citation Audit Workflow
+
+## The problem
+
+LLM-assisted drafting introduces a specific failure mode: the text is
+fluent and the citation is real, but the cited source does not actually
+support the specific claim made. A statistic gets slightly wrong, a
+finding gets overgeneralised, or a number migrates from one paper to
+another.
+
+`cred` provides a systematic workflow to catch this. For each citation
+in a bookdown report, it locates the source document, finds the
+best-matching passage, and flags claims that need human review.
+
+## Workflow overview
+
+    Rmd files  →  audit CSV  →  Zotero lookup  →  auto-fill quotes  →  sort  →  review
+
+1.  **[`crd_aud_write()`](../reference/crd_aud_write.md)** — scan Rmd
+    files, extract every `@citekey` with its paraphrase context, write a
+    CSV scaffold.
+2.  **[`crd_zot_src_lookup()`](../reference/crd_zot_src_lookup.md)** —
+    query the local Zotero SQLite to find PDF/docx paths for each
+    citation key.
+3.  **[`crd_aud_verify_all()`](../reference/crd_aud_verify_all.md)** —
+    for each source, load it once and fill `quote`, `page_or_section`,
+    and `verified` for all matching rows. (Wraps steps 2 + 4.)
+4.  **[`crd_aud_sort()`](../reference/crd_aud_sort.md)** — sort by
+    status (`auto` first) so reviewable rows come first.
+5.  **[`crd_aud_summary()`](../reference/crd_aud_summary.md)** — print a
+    status snapshot and attachment priority list.
+
+Open the CSV in Excel or any spreadsheet app. For each `auto` row: read
+the `quote`, compare to the `paraphrase`, and set `verified` to `yes`,
+`no`, or `corrected`.
+
+------------------------------------------------------------------------
+
+## Step-by-step with toy data
+
+`cred` ships toy source files and a minimal Zotero SQLite in
+`inst/extdata/`:
+
+    inst/extdata/
+    ├── zotero.sqlite                         # toy Zotero DB (3 items, 2 with attachments)
+    └── storage/
+        ├── TOYPDF1/salmon_habitat.pdf        # PDF: Smith et al. 2020
+        └── TOYDOC1/beaver_ecology.docx       # docx: Jones 2019
+
+``` r
+library(cred)
+
+toy_zotero_dir <- system.file("extdata", package = "cred")
+```
+
+### Step 1: Write the audit CSV
+
+[`crd_aud_write()`](../reference/crd_aud_write.md) scans all chapter Rmd
+files (those beginning with four digits) and extracts every citation
+with its surrounding sentence as `paraphrase`.
+
+``` r
+# Create two toy Rmd files in a temp directory
+rmd_dir <- tempfile("rmd_")
+dir.create(rmd_dir)
+
+writeLines(c(
+  "# Habitat Quality {#habitat}",
+  "",
+  "Spawning gravel embeddedness is the primary metric for assessing habitat",
+  "quality for chinook salmon [@smith2020SalmonHabitat].",
+  "",
+  "Riparian vegetation provides critical shade that moderates summer",
+  "stream temperatures by 3--7 degrees [@smith2020SalmonHabitat].",
+  "",
+  "Stream temperature affects the spatial distribution of salmon across",
+  "the watershed [@doe2021NoFile]."
+), file.path(rmd_dir, "0100-habitat.Rmd"))
+
+writeLines(c(
+  "# Beaver Ecology {#beaver}",
+  "",
+  "Beaver dams increase overwinter survival of juvenile salmonids by",
+  "creating slow-water refuges with stable thermal conditions",
+  "[@jones2019BeaverEcology].",
+  "",
+  "Reintroduction of beavers reduces peak flows and extends summer",
+  "baseflows [@jones2019BeaverEcology].",
+  "",
+  "Beaver removal reduced pond habitat extent by 60% between 1850 and",
+  "1950 [@jones2019BeaverEcology]."
+), file.path(rmd_dir, "0200-beaver.Rmd"))
+
+audit_file <- tempfile("citation_audit_", fileext = ".csv")
+
+crd_aud_write(rmd_dir = rmd_dir, out_file = audit_file)
+#> Scanning: 0100-habitat.Rmd
+#> Scanning: 0200-beaver.Rmd
+#> Wrote 6 rows to /tmp/Rtmpo7J1mf/citation_audit_1d5eb0d88ae.csv
+```
+
+``` r
+d <- readr::read_csv(audit_file, show_col_types = FALSE)
+knitr::kable(d[, c("section", "citation_key", "paraphrase", "verified")])
+```
+
+| section | citation_key           | paraphrase                                                      | verified |
+|:--------|:-----------------------|:----------------------------------------------------------------|:---------|
+| habitat | smith2020SalmonHabitat | quality for chinook salmon \[@smith2020SalmonHabitat\].         | NA       |
+| habitat | smith2020SalmonHabitat | stream temperatures by 3–7 degrees \[@smith2020SalmonHabitat\]. | NA       |
+| habitat | doe2021NoFile          | the watershed \[@doe2021NoFile\].                               | NA       |
+| beaver  | jones2019BeaverEcology | \[@jones2019BeaverEcology\].                                    | NA       |
+| beaver  | jones2019BeaverEcology | baseflows \[@jones2019BeaverEcology\].                          | NA       |
+| beaver  | jones2019BeaverEcology | 1950 \[@jones2019BeaverEcology\].                               | NA       |
+
+Six rows: three citation keys (`smith2020SalmonHabitat`,
+`doe2021NoFile`, `jones2019BeaverEcology`), each appearing one to three
+times.
+
+------------------------------------------------------------------------
+
+### Step 2: Look up Zotero source paths
+
+[`crd_zot_src_lookup()`](../reference/crd_zot_src_lookup.md) queries the
+Zotero SQLite database for the PDF or docx attachment for each key. It
+uses an immutable read-only URI to avoid locking a running Zotero
+process.
+
+``` r
+keys <- unique(d$citation_key)
+
+sources <- crd_zot_src_lookup(keys, zotero_dir = toy_zotero_dir)
+#> Warning in crd_zot_src_lookup(keys, zotero_dir = toy_zotero_dir): No attachment
+#> found in Zotero for: doe2021NoFile
+print(sources)
+#> # A tibble: 2 × 3
+#>   citation_key           src_path                                       src_type
+#>   <chr>                  <chr>                                          <chr>   
+#> 1 jones2019BeaverEcology /home/runner/work/_temp/Library/cred/extdata/… docx    
+#> 2 smith2020SalmonHabitat /home/runner/work/_temp/Library/cred/extdata/… pdf
+```
+
+`doe2021NoFile` has no attachment in this toy database (metadata-only
+entry), so it is warned and excluded. In a real workflow this is the
+list of PDFs you need to attach in Zotero before they can be
+auto-verified.
+
+------------------------------------------------------------------------
+
+### Step 3: Auto-fill quotes (`crd_aud_verify_all`)
+
+[`crd_aud_verify_all()`](../reference/crd_aud_verify_all.md) loads each
+source document once and, for every unverified row matching that
+citation key, searches the document using the `paraphrase` as a query.
+It fills:
+
+- `quote` — best-matching passage
+- `page_or_section` — paragraph index (docx) or page number (pdf)
+- `verified` — `"auto"` if score ≥ `min_score`; `"no_match"` otherwise
+
+The `sources` argument is optional — if omitted, the function runs
+[`crd_zot_src_lookup()`](../reference/crd_zot_src_lookup.md)
+automatically.
+
+``` r
+crd_aud_verify_all(
+  audit_file = audit_file,
+  sources    = sources   # pass pre-looked-up sources to skip re-querying SQLite
+)
+#> [1/2] Loading source for jones2019BeaverEcology (docx) ...
+#> Filling 3 rows for jones2019BeaverEcology ...
+#> Done — 1 filled, 2 no_match
+#> [2/2] Loading source for smith2020SalmonHabitat (pdf) ...
+#> Filling 2 rows for smith2020SalmonHabitat ...
+#> Done — 2 filled, 0 no_match
+```
+
+``` r
+d2 <- readr::read_csv(audit_file, show_col_types = FALSE)
+knitr::kable(d2[, c("citation_key", "paraphrase", "quote", "page_or_section", "verified")])
+```
+
+| citation_key           | paraphrase                                                      | quote                                                                                                                                                                              | page_or_section | verified |
+|:-----------------------|:----------------------------------------------------------------|:-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|----------------:|:---------|
+| smith2020SalmonHabitat | quality for chinook salmon \[@smith2020SalmonHabitat\].         | o assess habitat quality for chinook salmon in interior British Columbia. Sites with embeddedness below 25% support significantly higher eg                                        |               1 | auto     |
+| smith2020SalmonHabitat | stream temperatures by 3–7 degrees \[@smith2020SalmonHabitat\]. | summer stream temperatures. Removal of streamside conifers raises maximum daily temperatures by 3−7 degrees Celsius in small channe                                                |               1 | auto     |
+| doe2021NoFile          | the watershed \[@doe2021NoFile\].                               | NA                                                                                                                                                                                 |              NA | NA       |
+| jones2019BeaverEcology | \[@jones2019BeaverEcology\].                                    | NA                                                                                                                                                                                 |              NA | no_match |
+| jones2019BeaverEcology | baseflows \[@jones2019BeaverEcology\].                          | Reintroduction of beavers to degraded streams has been shown to reduce peak flows by 30% and extend summer baseflows by up to six weeks compared to pre-reintroduction conditions. |               3 | auto     |
+| jones2019BeaverEcology | 1950 \[@jones2019BeaverEcology\].                               | NA                                                                                                                                                                                 |              NA | no_match |
+
+Rows citing `doe2021NoFile` remain `NA` because no source file exists.
+Rows citing `smith2020SalmonHabitat` and `jones2019BeaverEcology` are
+filled with matching passages.
+
+------------------------------------------------------------------------
+
+### Step 4: Sort for review
+
+[`crd_aud_sort()`](../reference/crd_aud_sort.md) rearranges rows to make
+manual review efficient. The `"status"` sort puts `auto` rows (quotes
+ready to check) first and `NA` rows (nothing to review) last.
+
+``` r
+crd_aud_sort(audit_file, by = "status")
+#> Sorted by 'status' and wrote 6 rows to /tmp/Rtmpo7J1mf/citation_audit_1d5eb0d88ae.csv
+d3 <- readr::read_csv(audit_file, show_col_types = FALSE)
+knitr::kable(d3[, c("citation_key", "verified", "sort_index")])
+```
+
+| citation_key           | verified | sort_index |
+|:-----------------------|:---------|-----------:|
+| doe2021NoFile          | NA       |          3 |
+| smith2020SalmonHabitat | auto     |          1 |
+| smith2020SalmonHabitat | auto     |          2 |
+| jones2019BeaverEcology | auto     |          5 |
+| jones2019BeaverEcology | no_match |          4 |
+| jones2019BeaverEcology | no_match |          6 |
+
+`sort_index` is set at write time and never changes — use
+`crd_aud_sort(by = "report")` to restore original report order at any
+time.
+
+------------------------------------------------------------------------
+
+### Step 5: Summary
+
+[`crd_aud_summary()`](../reference/crd_aud_summary.md) gives a live
+snapshot of where things stand.
+
+``` r
+crd_aud_summary(audit_file)
+#> === Citation Audit Summary ===
+#> File: /tmp/Rtmpo7J1mf/citation_audit_1d5eb0d88ae.csv 
+#> Total rows: 6 
+#> 
+#> -- Status breakdown --
+#> # A tibble: 3 × 2
+#>   status       n
+#>   <chr>    <int>
+#> 1 auto         3
+#> 2 no_match     2
+#> 3 (NA)         1
+#> 
+#> -- NA sources (no Zotero attachment) ranked by claim count --
+#>    Attach PDFs for these to unlock auto-verification.
+#> # A tibble: 1 × 2
+#>   citation_key      n
+#>   <chr>         <int>
+#> 1 doe2021NoFile     1
+#> 
+#> -- no_match sources ranked by claim count --
+#>    Attachment found but paraphrase did not score above threshold.
+#> # A tibble: 1 × 2
+#>   citation_key               n
+#>   <chr>                  <int>
+#> 1 jones2019BeaverEcology     2
+```
+
+------------------------------------------------------------------------
+
+## Manual review (the human step)
+
+Open the CSV in Excel, Numbers, or any spreadsheet app. For each `auto`
+row:
+
+| Column            | What to check                              |
+|-------------------|--------------------------------------------|
+| `paraphrase`      | What the report claims                     |
+| `quote`           | What the source actually says              |
+| `page_or_section` | Where in the source to look                |
+| `verified`        | Set to `yes` / `no` / `corrected`          |
+| `notes`           | Record discrepancies; write corrected text |
+
+**`verified` vocabulary:**
+
+| Value       | Meaning                                                    |
+|-------------|------------------------------------------------------------|
+| `auto`      | Machine-matched — awaiting your review                     |
+| `yes`       | Reviewed and confirmed accurate                            |
+| `no`        | Claim not supported by source                              |
+| `corrected` | Claim was wrong; you fixed it in the Rmd                   |
+| `no_match`  | Source exists but paraphrase did not score above threshold |
+| `context`   | Citation provides context, not a direct factual claim      |
+| `NA`        | No source file in Zotero — attach a PDF to unblock         |
+
+------------------------------------------------------------------------
+
+## Working with your real report
+
+``` r
+# One-time: generate the audit CSV (run from project root)
+crd_aud_write(rmd_dir = ".", out_file = "background/citation_audit.csv")
+
+# After adding Rmd content: update without losing manual edits
+crd_aud_upd("background/citation_audit.csv")
+
+# Auto-fill from Zotero (Zotero must be running for BBT, but not needed for lookup)
+crd_aud_verify_all("background/citation_audit.csv")
+
+# Check progress any time
+crd_aud_summary("background/citation_audit.csv")
+
+# Sort for review session
+crd_aud_sort("background/citation_audit.csv", by = "status")
+
+# Restore report order when done
+crd_aud_sort("background/citation_audit.csv", by = "report")
+```
+
+### Attaching missing PDFs
+
+[`crd_aud_summary()`](../reference/crd_aud_summary.md) lists sources
+with `NA` status ranked by claim count. These are your highest-priority
+Zotero attachment targets — attaching one PDF can unlock many rows at
+once.
+
+In Zotero:
+
+1.  Find the item (citation key is in the `citation_key` column)
+2.  Right-click → Add Attachment → Attach File
+3.  Re-run [`crd_aud_verify_all()`](../reference/crd_aud_verify_all.md)
+    — newly attached files are picked up automatically
+
+------------------------------------------------------------------------
+
+## How source matching works
+
+The token scoring approach is intentionally simple and fast:
+
+1.  Strip `@citekey` patterns and markdown punctuation from the
+    `paraphrase`
+2.  Split into tokens (≥ 4 characters)
+3.  For each paragraph/page in the source, compute score = proportion of
+    query tokens found
+4.  Accept the top-scoring passage if score ≥ `min_score` (default 0.2)
+
+This works well for specific factual claims (statistics, named
+findings). It produces `no_match` for:
+
+- Our own narrative synthesis text (no direct quote exists)
+- Highly paraphrased claims where phrasing diverges from source
+- Compound `[@a; @b]` citations where the paraphrase is attributed
+  jointly
+
+`no_match` is not an error — it means the row needs manual verification.
