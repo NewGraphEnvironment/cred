@@ -187,16 +187,17 @@ test_that("crd_aud_upd drops rows for deleted citations", {
   unlink(env$audit_file)
 })
 
-test_that("crd_aud_upd loses manual columns when paraphrase text changes", {
+test_that("crd_aud_upd fuzzy match preserves review for minor rewording", {
   env <- setup_upd_test()
 
   # Mark first row as reviewed
   d <- readr::read_csv(env$audit_file, show_col_types = FALSE)
   d$verified[1] <- "yes"
   d$notes[1] <- "reviewed"
+  d$quote[1] <- "Beaver dams moderate summer stream temperatures."
   readr::write_csv(d, env$audit_file, na = "")
 
-  # Change the paraphrase text slightly
+  # Change the paraphrase text slightly — most tokens still overlap
   writeLines(c(
     "# Intro {#intro}",
     "",
@@ -210,9 +211,72 @@ test_that("crd_aud_upd loses manual columns when paraphrase text changes", {
   )
 
   jones_row <- result[result$citation_key == "jones2019", ]
-  # Paraphrase changed — old review work lost (exact match join fails)
+  expect_equal(jones_row$verified, "yes")
+  expect_equal(jones_row$notes, "reviewed")
+  expect_equal(jones_row$quote, "Beaver dams moderate summer stream temperatures.")
+  # Paraphrase text should be updated to the new wording
+  expect_true(grepl("water", jones_row$paraphrase))
+
+  unlink(env$rmd_dir, recursive = TRUE)
+  unlink(env$audit_file)
+})
+
+test_that("crd_aud_upd fuzzy match does not match completely different text", {
+  env <- setup_upd_test()
+
+  # Mark first row as reviewed
+  d <- readr::read_csv(env$audit_file, show_col_types = FALSE)
+  d$verified[1] <- "yes"
+  d$notes[1] <- "reviewed"
+  readr::write_csv(d, env$audit_file, na = "")
+
+  # Replace with completely unrelated text
+  writeLines(c(
+    "# Intro {#intro}",
+    "",
+    "Pacific salmon treaty allocates harvest between nations [@jones2019].",
+    "",
+    "Embeddedness exceeded 25% at most sites [@smith2020]."
+  ), file.path(env$rmd_dir, "0100-intro.Rmd"))
+
+  result <- suppressMessages(
+    crd_aud_upd(env$audit_file, rmd_dir = env$rmd_dir)
+  )
+
+  jones_row <- result[result$citation_key == "jones2019", ]
   expect_true(is.na(jones_row$verified),
-    info = "Changed paraphrase should lose verified status with exact-match join")
+    info = "Completely different paraphrase should not fuzzy match")
+
+  unlink(env$rmd_dir, recursive = TRUE)
+  unlink(env$audit_file)
+})
+
+test_that("crd_aud_upd fuzzy match respects min_similarity threshold", {
+  env <- setup_upd_test()
+
+  # Mark first row as reviewed
+  d <- readr::read_csv(env$audit_file, show_col_types = FALSE)
+  d$verified[1] <- "yes"
+  d$notes[1] <- "reviewed"
+  readr::write_csv(d, env$audit_file, na = "")
+
+  # Minor change — would normally fuzzy-match
+  writeLines(c(
+    "# Intro {#intro}",
+    "",
+    "Beaver dams moderate summer water temperatures [@jones2019].",
+    "",
+    "Embeddedness exceeded 25% at most sites [@smith2020]."
+  ), file.path(env$rmd_dir, "0100-intro.Rmd"))
+
+  # Set min_similarity = 1 to disable fuzzy matching
+  result <- suppressMessages(
+    crd_aud_upd(env$audit_file, rmd_dir = env$rmd_dir, min_similarity = 1)
+  )
+
+  jones_row <- result[result$citation_key == "jones2019", ]
+  expect_true(is.na(jones_row$verified),
+    info = "min_similarity=1 should disable fuzzy matching")
 
   unlink(env$rmd_dir, recursive = TRUE)
   unlink(env$audit_file)

@@ -79,6 +79,11 @@ crd_aud_write <- function(
 #' @param out_file `character(1)` path to the existing audit CSV.
 #' @param rmd_dir `character(1)` directory containing Rmd files.
 #'   Default `"."`.
+#' @param min_similarity `numeric(1)` minimum token-overlap score (0–1) for
+#'   fuzzy matching when a paraphrase changes between updates. Rows that fail
+#'   the exact join are matched to existing rows with the same
+#'   `(section, citation_key)` by token similarity. Set to `1` to disable
+#'   fuzzy matching. Default `0.4`.
 #' @inheritParams crd_aud_write
 #' @return Invisibly returns the updated [tibble][tibble::tibble].
 #' @export
@@ -90,7 +95,8 @@ crd_aud_upd <- function(
     out_file = "citation_audit.csv",
     rmd_dir  = ".",
     pattern  = "^[0-9]{4}-.*\\.Rmd$",
-    exclude  = "(references|session-info|report-change-log)") {
+    exclude  = "(references|session-info|report-change-log)",
+    min_similarity = 0.4) {
 
   chk::chk_file(out_file)
   chk::chk_dir(rmd_dir)
@@ -127,9 +133,57 @@ crd_aud_upd <- function(
     if (!col %in% names(merged)) merged[[col]] <- NA_character_
   }
 
+
+  # --- Fuzzy fallback for unmatched rows ---
+  # Rows that failed the exact join have all manual columns as NA.
+  # Try to recover manual work from existing rows with the same
+
+  # (section, citation_key) by token similarity on the paraphrase text.
+  unmatched_idx <- which(
+    is.na(merged$verified) & is.na(merged$quote) & is.na(merged$notes)
+  )
+  n_fuzzy <- 0L
+  if (length(unmatched_idx) > 0L && min_similarity < 1) {
+    # Build lookup of existing rows that have any manual work
+    has_manual <- !is.na(existing$verified) | !is.na(existing$quote) |
+      !is.na(existing$notes)
+    existing_manual <- existing[has_manual, , drop = FALSE]
+
+    for (i in unmatched_idx) {
+      sec <- merged$section[i]
+      key <- merged$citation_key[i]
+      # Candidates: same section + citation_key in existing manual rows
+      cand <- existing_manual[
+        !is.na(existing_manual$section) & existing_manual$section == sec &
+          !is.na(existing_manual$citation_key) &
+          existing_manual$citation_key == key, ,
+        drop = FALSE
+      ]
+      if (nrow(cand) == 0L) next
+
+      tokens <- .paraphrase_tokens(merged$paraphrase[i])
+      if (length(tokens) == 0L) next
+
+      scores <- vapply(cand$paraphrase, function(p) {
+        if (is.na(p)) return(0)
+        .token_score(p, tokens)
+      }, numeric(1L))
+
+      best <- which.max(scores)
+      if (scores[best] >= min_similarity) {
+        for (col in manual_cols) {
+          merged[[col]][i] <- cand[[col]][best]
+        }
+        n_fuzzy <- n_fuzzy + 1L
+      }
+    }
+  }
+
   readr::write_csv(merged, out_file, na = "")
-  n_new <- nrow(merged) - sum(!is.na(existing$verified))
-  message("Updated ", out_file, " — ", nrow(merged), " rows (", n_new, " new/unverified)")
+  n_new <- sum(is.na(merged$verified))
+  parts <- paste0(nrow(merged), " rows (", n_new, " new/unverified")
+  if (n_fuzzy > 0L) parts <- paste0(parts, ", ", n_fuzzy, " fuzzy-matched")
+  message("Updated ", out_file, " \u2014 ", parts, ")")
   invisible(merged)
 }
 
