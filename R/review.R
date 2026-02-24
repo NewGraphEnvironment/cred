@@ -16,7 +16,7 @@
 #'
 #' @param audit_file `character(1)` path to the audit CSV produced by
 #'   [crd_aud_write()].
-#' @param launch.browser `logical(1)` open the app in the system browser.
+#' @param launch_browser `logical(1)` open the app in the system browser.
 #'   Default `TRUE`.
 #' @return Called for side effects. Writes to `audit_file` on Save.
 #' @export
@@ -24,7 +24,7 @@
 #' \dontrun{
 #' crd_aud_review("background/citation_audit.csv")
 #' }
-crd_aud_review <- function(audit_file, launch.browser = TRUE) {
+crd_aud_review <- function(audit_file, launch_browser = TRUE) {
   chk::chk_file(audit_file)
   for (pkg in c("shiny", "DT")) {
     if (!requireNamespace(pkg, quietly = TRUE)) {
@@ -136,8 +136,8 @@ crd_aud_review <- function(audit_file, launch.browser = TRUE) {
     # Progress counter in top bar
     output$progress <- shiny::renderText({
       d <- dat()
-      n_done  <- sum(d$verified %in% c("yes","no","corrected","context"), na.rm=TRUE)
-      n_auto  <- sum(!is.na(d$verified) & d$verified == "auto", na.rm=TRUE)
+      n_done  <- sum(d$verified %in% c("yes", "no", "corrected", "context"), na.rm = TRUE)
+      n_auto  <- sum(!is.na(d$verified) & d$verified == "auto", na.rm = TRUE)
       n_total <- nrow(d)
       paste0(n_done, " reviewed \u00b7 ", n_auto, " auto \u00b7 ", n_total, " total")
     })
@@ -159,7 +159,7 @@ crd_aud_review <- function(audit_file, launch.browser = TRUE) {
     output$tbl <- DT::renderDT({
       d <- filtered()
       show_cols <- intersect(
-        c("section","citation_key","paraphrase","quote","verified","page_or_section","notes"),
+        c("section", "citation_key", "paraphrase", "quote", "verified", "page_or_section", "notes"),
         names(d)
       )
       d_show <- d[, show_cols, drop = FALSE]
@@ -234,7 +234,7 @@ crd_aud_review <- function(audit_file, launch.browser = TRUE) {
         shiny::fluidRow(
           shiny::column(3,
             shiny::selectInput("edit_verified", "Set verified:",
-              choices  = c("auto","yes","no","corrected","no_match","context","(NA)" = ""),
+              choices  = c("auto", "yes", "no", "corrected", "no_match", "context", "(NA)" = ""),
               selected = ifelse(is.na(row$verified), "", row$verified),
               width    = "100%")
           ),
@@ -286,5 +286,5 @@ crd_aud_review <- function(audit_file, launch.browser = TRUE) {
     })
   }
 
-  shiny::runApp(shiny::shinyApp(ui, server), launch.browser = launch.browser)
+  shiny::runApp(shiny::shinyApp(ui, server), launch.browser = launch_browser)
 }

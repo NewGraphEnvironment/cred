@@ -20,8 +20,8 @@
 toy_dir <- system.file("extdata", package = "cred")
 
 skip_toy <- function() {
-  skip_if(toy_dir == "", "toy extdata not found — package not installed")
-  skip_if(
+  testthat::skip_if(toy_dir == "", "toy extdata not found — package not installed")
+  testthat::skip_if(
     !file.exists(file.path(toy_dir, "zotero.sqlite")),
     "toy zotero.sqlite missing"
   )
