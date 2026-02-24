@@ -33,12 +33,22 @@ crd_aud_review <- function(audit_file, launch_browser = TRUE) {
   }
 
   status_colours <- c(
-    auto      = "#FFF2CC",
-    yes       = "#D9EAD3",
-    no        = "#F4CCCC",
-    corrected = "#FCE5CD",
-    no_match  = "#E2EFDA",
-    context   = "#CFE2F3"
+    auto           = "#FFF2CC",
+    abstract_match = "#D0E4F7",
+    yes            = "#D9EAD3",
+    no             = "#F4CCCC",
+    corrected      = "#FCE5CD",
+    no_match       = "#E2EFDA",
+    context        = "#CFE2F3"
+  )
+
+  score_colours <- c(
+    "1" = "#F4CCCC",
+    "2" = "#FCE5CD",
+    "3" = "#FFF2CC",
+    "4" = "#D9EAD3",
+    "5" = "#B6D7A8",
+    "6" = "#f0f0f0"
   )
 
   ui <- shiny::fluidPage(
@@ -70,7 +80,7 @@ crd_aud_review <- function(audit_file, launch_browser = TRUE) {
     shiny::fluidRow(
       shiny::column(3,
         shiny::selectInput("f_status", "Status:",
-          choices  = c("auto", "no_match", "corrected", "no",
+          choices  = c("auto", "abstract_match", "no_match", "corrected", "no",
                        "context", "yes", "(NA)" = "NA_", "All" = "all"),
           selected = "auto", width = "100%")
       ),
@@ -159,14 +169,17 @@ crd_aud_review <- function(audit_file, launch_browser = TRUE) {
     output$tbl <- DT::renderDT({
       d <- filtered()
       show_cols <- intersect(
-        c("section", "citation_key", "paraphrase", "quote", "verified", "page_or_section", "notes"),
+        c("section", "citation_key", "review_score", "review_flag",
+          "paraphrase", "quote", "verified", "page_or_section", "notes"),
         names(d)
       )
       d_show <- d[, show_cols, drop = FALSE]
-      d_show$paraphrase <- trunc_chr(d_show$paraphrase)
-      d_show$quote      <- trunc_chr(d_show$quote)
+      d_show$paraphrase  <- trunc_chr(d_show$paraphrase)
+      d_show$quote       <- trunc_chr(d_show$quote)
+      if ("review_flag" %in% names(d_show))
+        d_show$review_flag <- trunc_chr(d_show$review_flag, n = 40)
 
-      DT::datatable(
+      dt <- DT::datatable(
         d_show,
         selection = "single",
         rownames  = FALSE,
@@ -175,13 +188,15 @@ crd_aud_review <- function(audit_file, launch_browser = TRUE) {
           scrollX    = TRUE,
           dom        = "tip",
           columnDefs = list(
-            list(width = "90px",  targets = 0),   # section
-            list(width = "170px", targets = 1),   # citation_key
-            list(width = "300px", targets = 2),   # paraphrase
-            list(width = "300px", targets = 3),   # quote
-            list(width = "75px",  targets = 4),   # verified
-            list(width = "55px",  targets = 5),   # page_or_section
-            list(width = "160px", targets = 6)    # notes
+            list(width = "80px",  targets = 0),   # section
+            list(width = "150px", targets = 1),   # citation_key
+            list(width = "45px",  targets = 2),   # review_score
+            list(width = "140px", targets = 3),   # review_flag
+            list(width = "270px", targets = 4),   # paraphrase
+            list(width = "270px", targets = 5),   # quote
+            list(width = "75px",  targets = 6),   # verified
+            list(width = "50px",  targets = 7),   # page_or_section
+            list(width = "150px", targets = 8)    # notes
           )
         )
       ) |>
@@ -190,6 +205,18 @@ crd_aud_review <- function(audit_file, launch_browser = TRUE) {
             names(status_colours), unname(status_colours)
           )
         )
+
+      if ("review_score" %in% names(d_show)) {
+        dt <- dt |>
+          DT::formatStyle("review_score",
+            backgroundColor = DT::styleEqual(
+              names(score_colours), unname(score_colours)
+            ),
+            fontWeight = "bold",
+            textAlign  = "center"
+          )
+      }
+      dt
     }, server = TRUE)
 
     # Selected row (matched back to full data by sort_index)
@@ -222,7 +249,12 @@ crd_aud_review <- function(audit_file, launch_browser = TRUE) {
         shiny::fluidRow(
           shiny::column(6,
             shiny::div(class = "col-lbl", "Paraphrase \u2014 what the report claims"),
-            shiny::div(class = "detail-box", row$paraphrase)
+            shiny::div(class = "detail-box",
+              if (!is.null(row$paraphrase_eval) && !is.na(row$paraphrase_eval) && row$paraphrase_eval != "")
+                row$paraphrase_eval
+              else
+                row$paraphrase
+            )
           ),
           shiny::column(6,
             shiny::div(class = "col-lbl",
