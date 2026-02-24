@@ -76,7 +76,7 @@ crd_aud_review <- function(audit_file, launch_browser = TRUE) {
       shiny::div(class = "prog", shiny::textOutput("progress", inline = TRUE))
     ),
 
-    # Filters
+    # Filters — row 1: dropdowns
     shiny::fluidRow(
       shiny::column(3,
         shiny::selectInput("f_status", "Status:",
@@ -95,6 +95,22 @@ crd_aud_review <- function(audit_file, launch_browser = TRUE) {
       shiny::column(2,
         shiny::br(),
         shiny::checkboxInput("hide_done", "Hide yes / corrected", FALSE)
+      )
+    ),
+    # Filters — row 2: text search
+    shiny::fluidRow(
+      shiny::column(5,
+        shiny::textInput("f_paraphrase", "Paraphrase contains:",
+          width = "100%", placeholder = "e.g. temperature, beaver, 38%")
+      ),
+      shiny::column(5,
+        shiny::textInput("f_quote", "Quote contains:",
+          width = "100%", placeholder = "e.g. spawning, embeddedness")
+      ),
+      shiny::column(2,
+        shiny::br(),
+        shiny::actionButton("f_clear", "Clear text",
+          class = "btn-default btn-sm", style = "margin-top:3px;")
       )
     ),
 
@@ -124,6 +140,12 @@ crd_aud_review <- function(audit_file, launch_browser = TRUE) {
         choices = c("all", sort(unique(d$section[!is.na(d$section)]))))
     })
 
+    # Clear text filters
+    shiny::observeEvent(input$f_clear, {
+      shiny::updateTextInput(session, "f_paraphrase", value = "")
+      shiny::updateTextInput(session, "f_quote", value = "")
+    })
+
     # Filtered rows for table
     filtered <- shiny::reactive({
       d <- dat()
@@ -140,6 +162,23 @@ crd_aud_review <- function(audit_file, launch_browser = TRUE) {
         d <- d[!is.na(d$section) & d$section == input$f_section, ]
       if (input$hide_done)
         d <- d[is.na(d$verified) | !d$verified %in% c("yes", "corrected"), ]
+
+      # Text search — use paraphrase_eval if available
+      f_para <- trimws(input$f_paraphrase)
+      if (nzchar(f_para)) {
+        para_col <- if ("paraphrase_eval" %in% names(d))
+          dplyr::coalesce(d$paraphrase_eval, d$paraphrase)
+        else
+          d$paraphrase
+        d <- d[grepl(f_para, para_col, ignore.case = TRUE, fixed = TRUE) &
+                 !is.na(para_col), ]
+      }
+      f_quote <- trimws(input$f_quote)
+      if (nzchar(f_quote)) {
+        d <- d[grepl(f_quote, d$quote, ignore.case = TRUE, fixed = TRUE) &
+                 !is.na(d$quote), ]
+      }
+
       d
     })
 
