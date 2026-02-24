@@ -592,6 +592,210 @@ crd_aud_eval_inline <- function(audit_file,
 
 # ---------------------------------------------------------------------------
 
+#' Score audit rows by review priority
+#'
+#' Adds `review_score` (1--6) and `review_flag` columns to the audit CSV.
+#' Lower scores indicate higher review priority (more likely hallucinated or
+#' unsupported). Rows already scored are skipped unless `overwrite = TRUE`.
+#'
+#' If `paraphrase_eval` is not yet populated and paraphrases contain inline R
+#' expressions, [crd_aud_eval_inline()] is called automatically with `env`.
+#'
+#' @section Score meanings:
+#' \describe{
+#'   \item{1}{`no_match`, or `auto` with numeric claim absent from quote}
+#'   \item{2}{`NA` (no source), abstract with numeric claim, auto with no
+#'     quote, or very weak prose overlap}
+#'   \item{3}{`abstract_match` qualitative, weak prose overlap, or no tokens}
+#'   \item{4}{`auto` numeric partial match or moderate prose overlap}
+#'   \item{5}{`auto` strong numeric + prose match}
+#'   \item{6}{Human-reviewed (`yes`, `no`, `corrected`, `context`)}
+#' }
+#'
+#' @param audit_file `character(1)` path to the audit CSV.
+#' @param env `environment` in which to evaluate inline R expressions,
+#'   passed to [crd_aud_eval_inline()] when needed. Default
+#'   `parent.frame()`.
+#' @param ignore_years `logical(1)` if `TRUE` (default), exclude standalone
+#'   4-digit years (1900--2099) from numeric claim detection. Years like
+#'   "since 2020" are date references, not statistics.
+#' @param overwrite `logical(1)` if `TRUE`, rescore rows that already have
+#'   `review_score`. Default `FALSE`.
+#' @return The updated audit data frame, invisibly. Writes to `audit_file`.
+#' @export
+#' @examples
+#' \dontrun{
+#' # After verify_all and verify_abstract:
+#' crd_aud_score("background/citation_audit.csv")
+#'
+#' # With project variables for inline R evaluation:
+#' optimum_morice <- 18175
+#' crd_aud_score("background/citation_audit.csv")
+#' }
+crd_aud_score <- function(audit_file,
+                          env          = parent.frame(),
+                          ignore_years = TRUE,
+                          overwrite    = FALSE) {
+  chk::chk_file(audit_file)
+  chk::chk_flag(ignore_years)
+  chk::chk_flag(overwrite)
+
+  d <- readr::read_csv(audit_file, show_col_types = FALSE)
+
+  # Ensure paraphrase_eval is populated when inline R is present
+  has_eval <- "paraphrase_eval" %in% names(d) &&
+    any(!is.na(d$paraphrase_eval))
+  has_inline_r <- any(
+    stringr::str_detect(d$paraphrase, "`r "),
+    na.rm = TRUE
+  )
+
+  if (!has_eval && has_inline_r) {
+    message("Evaluating inline R expressions ...")
+    d <- crd_aud_eval_inline(audit_file, env = env)
+  }
+
+  # Use paraphrase_eval if available, fall back to paraphrase
+  para_col <- if ("paraphrase_eval" %in% names(d)) {
+    dplyr::coalesce(d$paraphrase_eval, d$paraphrase)
+  } else {
+    d$paraphrase
+  }
+
+  if (!"review_score" %in% names(d)) {
+    d$review_score <- NA_integer_
+    d$review_flag  <- NA_character_
+  }
+
+  needs_score <- is.na(d$review_score) | overwrite
+  n_target <- sum(needs_score, na.rm = TRUE)
+
+  if (n_target == 0L) {
+    message("No rows to score.")
+    return(invisible(d))
+  }
+
+  for (i in which(needs_score)) {
+    result <- .score_row(
+      verified     = d$verified[i],
+      paraphrase   = para_col[i],
+      quote_text   = d$quote[i],
+      ignore_years = ignore_years
+    )
+    d$review_score[i] <- result$score
+    d$review_flag[i]  <- result$flag
+  }
+
+  readr::write_csv(d, audit_file, na = "")
+
+  score_tbl <- table(d$review_score[needs_score])
+  message(
+    "Scored ", n_target, " rows: ",
+    paste(names(score_tbl), score_tbl, sep = "=", collapse = ", ")
+  )
+
+  invisible(d)
+}
+
+# --- scoring internals ------------------------------------------------------
+
+#' Score a single audit row
+#' @noRd
+.score_row <- function(verified, paraphrase, quote_text, ignore_years = TRUE) {
+  human <- c("yes", "no", "corrected", "context")
+
+  if (!is.na(verified) && verified %in% human)
+    return(list(score = 6L, flag = "human_reviewed"))
+
+  if (is.na(verified))
+    return(list(score = 2L, flag = "no_source"))
+
+  if (verified == "no_match")
+    return(list(score = 1L, flag = "no_match_found"))
+
+  if (verified == "abstract_match") {
+    p_nums <- .score_claim_nums(paraphrase, ignore_years)
+    if (length(p_nums) > 0L)
+      return(list(score = 2L, flag = "abstract_only_numeric_claim"))
+    return(list(score = 3L, flag = "abstract_only_qualitative"))
+  }
+
+  if (verified == "auto") {
+    if (is.na(quote_text) || quote_text == "")
+      return(list(score = 2L, flag = "auto_no_quote"))
+
+    p_nums <- .score_claim_nums(paraphrase, ignore_years)
+    q_nums <- .score_num_tokens(quote_text)
+
+    if (length(p_nums) > 0L) {
+      matched <- sum(p_nums %in% q_nums)
+      frac    <- matched / length(p_nums)
+
+      if (frac == 0) {
+        return(list(
+          score = 1L,
+          flag  = paste0("num_mismatch(", paste(p_nums, collapse = ","), ")")
+        ))
+      }
+      if (frac < 0.5) {
+        return(list(
+          score = 2L,
+          flag  = paste0("num_partial(", matched, "/", length(p_nums), ")")
+        ))
+      }
+      # Full or majority numeric match — check prose reinforcement
+      p_words <- .score_word_tokens(paraphrase)
+      q_words <- .score_word_tokens(quote_text)
+      if (length(p_words) > 0L &&
+            sum(p_words %in% q_words) / length(p_words) >= 0.3)
+        return(list(score = 5L, flag = "num_match_strong"))
+      return(list(score = 4L, flag = "num_match"))
+    }
+
+    # Qualitative: word overlap only
+    p_words <- .score_word_tokens(paraphrase)
+    q_words <- .score_word_tokens(quote_text)
+    if (length(p_words) == 0L) return(list(score = 3L, flag = "no_tokens"))
+    overlap <- sum(p_words %in% q_words) / length(p_words)
+
+    if (overlap >= 0.4)  return(list(score = 5L, flag = "prose_strong"))
+    if (overlap >= 0.25) return(list(score = 4L, flag = "prose_moderate"))
+    if (overlap >= 0.1)  return(list(score = 3L, flag = "prose_weak"))
+    return(list(score = 2L, flag = "prose_very_weak"))
+  }
+
+  list(score = 3L, flag = "unknown")
+}
+
+#' Extract numeric tokens from text
+#' @noRd
+.score_num_tokens <- function(text) {
+  if (is.na(text) || text == "") return(character(0L))
+  stringr::str_extract_all(text, "[0-9]+(?:[.,][0-9]+)*")[[1L]]
+}
+
+#' Extract word tokens (>= 4 chars) from text, stripping citekeys and R inline
+#' @noRd
+.score_word_tokens <- function(text) {
+  if (is.na(text) || text == "") return(character(0L))
+  clean <- stringr::str_remove_all(text, "`r[^`]*`")
+  clean <- stringr::str_remove_all(clean, "@[A-Za-z][A-Za-z0-9_:./-]+")
+  clean <- stringr::str_remove_all(clean, "\\\\@ref\\([^)]*\\)")
+  stringr::str_extract_all(tolower(clean), "[a-z]{4,}")[[1L]]
+}
+
+#' Extract numeric tokens that represent claims (not years)
+#' @noRd
+.score_claim_nums <- function(text, ignore_years = TRUE) {
+  toks <- .score_num_tokens(text)
+  if (ignore_years) {
+    toks <- toks[!grepl("^(19|20)[0-9]{2}$", toks)]
+  }
+  toks
+}
+
+# ---------------------------------------------------------------------------
+
 #' queries the local Zotero database for the abstract of each cited item and
 #' scores it against the `paraphrase` using token overlap. Rows that score at
 #' or above `min_score` receive `verified = "abstract_match"` and the abstract

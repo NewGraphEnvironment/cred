@@ -57,9 +57,10 @@ Rmd files  ──►  audit CSV  ──►  Zotero lookup  ──►  auto-fill 
 | 1 | `crd_aud_write()` | Scan Rmd files → extract citations with paraphrase context → write CSV scaffold |
 | 2 | `crd_aud_verify_all()` | Look up Zotero attachments → search each source → fill `quote` and `verified` |
 | 2b | `crd_aud_verify_abstract()` | For remaining NA rows, score against Zotero abstract text |
-| 3 | `crd_aud_sort()` | Sort `auto` rows first so reviewable rows are at the top |
-| 4 | `crd_aud_summary()` | Print status snapshot and PDF attachment priority list |
-| 5 | `crd_aud_review()` | Launch interactive Shiny app — paraphrase vs quote side by side |
+| 3 | `crd_aud_score()` | Add `review_score` (1–6) and `review_flag` — prioritise review by hallucination risk |
+| 4 | `crd_aud_sort()` | Sort `auto` rows first so reviewable rows are at the top |
+| 5 | `crd_aud_summary()` | Print status snapshot and PDF attachment priority list |
+| 6 | `crd_aud_review()` | Launch interactive Shiny app — paraphrase vs quote side by side |
 
 ---
 
@@ -287,7 +288,62 @@ The `doe2021NoFile` row is now `abstract_match` (blue). The quote column shows t
 
 ---
 
-### Step 3 — Sort for review
+### Step 3 — Score for review priority
+
+`crd_aud_score()` adds `review_score` (1–6) and `review_flag` columns. Lower scores are more suspect — review them first.
+
+| Score | Meaning |
+|-------|---------|
+| 1 | `no_match`, or auto with claim numbers absent from quote |
+| 2 | No source, abstract with numeric claim, or very weak prose |
+| 3 | Abstract qualitative, weak prose overlap |
+| 4 | Numeric partial match or moderate prose overlap |
+| 5 | Strong numeric + prose match |
+| 6 | Human-reviewed |
+
+```{r score}
+crd_aud_score(audit_file)
+```
+
+```{r show-scores, echo = FALSE}
+d4 <- readr::read_csv(audit_file, show_col_types = FALSE)
+d4_show <- data.frame(
+  key    = d4$citation_key,
+  score  = d4$review_score,
+  flag   = d4$review_flag,
+  verified = sapply(d4$verified, badge),
+  paraphrase = substr(d4$paraphrase, 1, 80),
+  stringsAsFactors = FALSE
+)
+DT::datatable(
+  d4_show,
+  rownames = FALSE,
+  escape   = FALSE,
+  options  = list(
+    pageLength = 9, scrollX = TRUE, dom = "t",
+    order = list(list(1, "asc")),
+    initComplete = DT::JS(
+      "function(settings, json) {",
+      "$(this.api().table().node()).css('font-size', '11px');",
+      "}"
+    ),
+    columnDefs = list(
+      list(width = "110px", targets = 0),
+      list(width = "40px",  targets = 1),
+      list(width = "140px", targets = 2),
+      list(width = "90px",  targets = 3),
+      list(width = "300px", targets = 4)
+    )
+  ),
+  caption = "After crd_aud_score(): rows sorted by review_score ascending — most suspect first."
+)
+```
+
+The `no_match` row (Pacific Salmon Treaty → wrong source) scores 1. The `NA`/abstract-only rows score 2–3. Strong auto matches score 4–5. The review app shows these columns colour-coded when present.
+
+---
+
+### Step 4 — Sort for review
 
 ```{r sort}
 crd_aud_sort(audit_file, by = "status")
@@ -295,7 +351,7 @@ crd_aud_sort(audit_file, by = "status")
 
 ---
 
-### Step 4 — Summary
+### Step 5 — Summary
 
 ```{r summary}
 crd_aud_summary(audit_file)
@@ -303,7 +359,7 @@ crd_aud_summary(audit_file)
 
 ---
 
-### Step 5 — Interactive review
+### Step 6 — Interactive review
 
 ```r
 crd_aud_review("background/citation_audit.csv")
@@ -333,9 +389,9 @@ The app opens filtered to `auto` rows. Click a row to see paraphrase and quote s
 `crd_aud_scr_risk()` populates `claim_type` to prioritise your review effort. Numeric claims carry the highest hallucination risk.
 
 ```{r risk}
-d4 <- readr::read_csv(audit_file, show_col_types = FALSE)
-d4 <- crd_aud_scr_risk(d4)
-table(d4$claim_type)
+d5 <- readr::read_csv(audit_file, show_col_types = FALSE)
+d5 <- crd_aud_scr_risk(d5)
+table(d5$claim_type)
 ```
 
 ---
@@ -356,6 +412,9 @@ crd_aud_verify_all("background/citation_audit.csv")
 
 # ── Abstract fallback for remaining NA rows ──────────────────────────────────
 crd_aud_verify_abstract("background/citation_audit.csv")
+
+# ── Score rows for review priority ─────────────────────────────────────────
+crd_aud_score("background/citation_audit.csv")
 
 # ── Check progress ──────────────────────────────────────────────────────────
 crd_aud_summary("background/citation_audit.csv")
