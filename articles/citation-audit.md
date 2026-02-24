@@ -60,24 +60,35 @@ every `@citekey` with the surrounding sentence as `paraphrase`, and
 writes a CSV scaffold with blank `verified`, `quote`, and `notes`
 columns.
 
-The toy Rmd files reflect common patterns in scientific reports:
-specific statistics, process findings, and one claim the source does not
-support. The floodplain growth claim in the habitat chapter cites
-`smith2020SalmonHabitat`, but that PDF’s paragraph 4 covers large woody
-debris — not floodplain rearing. That mismatch is deliberate: it
-produces the `no_match` outcome we want to demonstrate. Each sentence is
-written on a single line so
+The toy Rmd files reflect three common paraphrase patterns:
+
+1.  **Numeric claims** — statistics copied closely from the source (“62%
+    lower”, “38% were barriers”). These score highest because numbers
+    are the most discriminative tokens.
+2.  **Qualitative paraphrases** — same finding, different words, no
+    numbers. These test whether token overlap still finds the right
+    passage when an author rewrites rather than transcribes.
+3.  **Wrong-paper citation** — a Pacific Salmon Treaty harvest claim
+    cites `smith2020SalmonHabitat`, a freshwater habitat quality paper.
+    It has no content about harvest allocation or treaty negotiations,
+    so no passage scores above the threshold → `verified = "no_match"`.
+    This is the failure mode `cred` is designed to surface: the citation
+    key is real, the prose sounds plausible, but the source does not
+    support the claim.
+
+Each sentence is on a single line so
 [`crd_aud_write()`](https://newgraphenvironment.github.io/cred/reference/crd_aud_write.md)
-captures the full paraphrase context.
+captures the full paraphrase.
 
 ``` r
 rmd_dir    <- tempfile("rmd_")
 audit_file <- tempfile("audit_", fileext = ".csv")
 dir.create(rmd_dir)
 
-# Chapter 1 — habitat quality: 4 claims, 3 citation keys
-# smith2020 has a PDF attachment; doe2021 has metadata only (no PDF)
-# Each sentence is on one line so crd_aud_write() captures the full paraphrase.
+# Chapter 1 — habitat quality: 5 claims, 3 citation keys
+# smith2020 has a PDF attachment; doe2021 has metadata only (no PDF).
+# Mix of numeric claims (rows 1-3), a qualitative paraphrase (row 4),
+# an unsupported claim that produces no_match (row 5), and an NA row (row 6).
 writeLines(c(
   "# Habitat Quality {#habitat}",
   "",
@@ -87,12 +98,15 @@ writeLines(c(
   "",
   "Fish passage assessments at 1,200 road-stream crossings found that 38% were rated as full or partial barriers to adult chinook migration, primarily due to culverts with outlet drops exceeding 15 cm [@smith2020SalmonHabitat].",
   "",
-  "Floodplain rearing habitat supports juvenile chinook growth rates substantially higher than mainstem conditions during high-flow events [@smith2020SalmonHabitat].",
+  "Loss of streamside forest cover eliminates the shade that keeps summer water temperatures within the thermal tolerance of juvenile chinook, degrading rearing conditions in harvested riparian zones [@smith2020SalmonHabitat].",
+  "",
+  "The Pacific Salmon Treaty allocates harvest between Canada and the United States based on abundance indicators and conservation thresholds negotiated through the Pacific Salmon Commission [@smith2020SalmonHabitat].",
   "",
   "Stream temperature governs the spatial distribution of juvenile salmon and limits rearing area during summer low flows [@doe2021NoFile]."
 ), file.path(rmd_dir, "0100-habitat.Rmd"))
 
-# Chapter 2 — beaver ecology: 4 claims, all jones2019 (docx attachment)
+# Chapter 2 — beaver ecology: 5 claims, all jones2019 (docx attachment)
+# Row 5 is a qualitative paraphrase of the floodplain side-channel paragraph.
 writeLines(c(
   "# Beaver Ecology {#beaver}",
   "",
@@ -102,17 +116,20 @@ writeLines(c(
   "",
   "Archival records indicate that beaver pond habitat declined by approximately 60% between 1850 and 1950 due to commercial trapping pressure, reducing overwinter rearing capacity for juvenile salmonids [@jones2019BeaverEcology].",
   "",
-  "Juvenile chinook tagged in the main channel were detected in floodplain side channels during high-flow events, where they remained for 12 to 34 days and achieved growth rates 40% higher than fish remaining in the mainstem [@jones2019BeaverEcology]."
+  "Juvenile chinook tagged in the main channel were detected in floodplain side channels during high-flow events, where they remained for 12 to 34 days and achieved growth rates 40% higher than fish remaining in the mainstem [@jones2019BeaverEcology].",
+  "",
+  "Beaver-mediated floodplain connectivity allows juvenile chinook to access off-channel rearing areas during high flows, where growth rates substantially exceed those of fish confined to the mainstem channel [@jones2019BeaverEcology]."
 ), file.path(rmd_dir, "0200-beaver.Rmd"))
 
 crd_aud_write(rmd_dir = rmd_dir, out_file = audit_file)
 #> Scanning: 0100-habitat.Rmd
 #> Scanning: 0200-beaver.Rmd
-#> Wrote 9 rows to /tmp/RtmpZL446Z/audit_1c7f731ed8d8.csv
+#> Wrote 11 rows to /tmp/Rtmpjjtg0H/audit_1c772effbafb.csv
 ```
 
-Nine rows across two chapters. The `verified` column is blank — no
-matching has happened yet.
+Eleven rows across two chapters — five per source plus the
+`doe2021NoFile` row. The `verified` column is blank — no matching has
+happened yet.
 
 ------------------------------------------------------------------------
 
@@ -160,11 +177,11 @@ crd_aud_verify_all(
   sources    = sources
 )
 #> [1/2] Loading source for jones2019BeaverEcology (docx) ...
-#> Filling 4 rows for jones2019BeaverEcology ...
-#> Done — 4 filled, 0 no_match
+#> Filling 5 rows for jones2019BeaverEcology ...
+#> Done — 5 filled, 0 no_match
 #> [2/2] Loading source for smith2020SalmonHabitat (pdf) ...
-#> Filling 4 rows for smith2020SalmonHabitat ...
-#> Done — 4 filled, 0 no_match
+#> Filling 5 rows for smith2020SalmonHabitat ...
+#> Done — 4 filled, 1 no_match
 ```
 
 **Reading the outcomes:**
@@ -179,12 +196,13 @@ crd_aud_verify_all(
 - **`NA`** (grey) — no source file is attached in Zotero. Nothing to
   match against.
 
-Notice row 4: the floodplain growth claim
-(`"Floodplain rearing habitat supports juvenile growth rates..."`) cites
-`smith2020SalmonHabitat`, but that PDF covers large woody debris in
-paragraph 4 — not floodplain rearing. The source simply doesn’t contain
-the claim. This is exactly the kind of mismatch `cred` is designed to
-surface.
+Notice the Pacific Salmon Treaty row: it cites `smith2020SalmonHabitat`,
+a freshwater habitat quality paper, for a claim about international
+harvest allocation. No passage in the source covers treaty negotiations
+— `no_match` flags it immediately. This is exactly the kind of mismatch
+`cred` is designed to surface: the citation key is real, the prose
+sounds credible, but the source simply does not support the specific
+claim.
 
 ------------------------------------------------------------------------
 
@@ -198,7 +216,7 @@ order is:
 
 ``` r
 crd_aud_sort(audit_file, by = "status")
-#> Sorted by 'status' and wrote 9 rows to /tmp/RtmpZL446Z/audit_1c7f731ed8d8.csv
+#> Sorted by 'status' and wrote 11 rows to /tmp/Rtmpjjtg0H/audit_1c772effbafb.csv
 ```
 
 `sort_index` is assigned at write time and never changes, so
@@ -216,15 +234,16 @@ attach in Zotero to unlock the most NA rows.
 ``` r
 crd_aud_summary(audit_file)
 #> === Citation Audit Summary ===
-#> File: /tmp/RtmpZL446Z/audit_1c7f731ed8d8.csv 
-#> Total rows: 9 
+#> File: /tmp/Rtmpjjtg0H/audit_1c772effbafb.csv 
+#> Total rows: 11 
 #> 
 #> -- Status breakdown --
-#> # A tibble: 2 × 2
-#>   status     n
-#>   <chr>  <int>
-#> 1 auto       8
-#> 2 (NA)       1
+#> # A tibble: 3 × 2
+#>   status       n
+#>   <chr>    <int>
+#> 1 auto         9
+#> 2 (NA)         1
+#> 3 no_match     1
 #> 
 #> -- NA sources (no Zotero attachment) ranked by claim count --
 #>    Attach PDFs for these to unlock auto-verification.
@@ -235,7 +254,10 @@ crd_aud_summary(audit_file)
 #> 
 #> -- no_match sources ranked by claim count --
 #>    Attachment found but paraphrase did not score above threshold.
-#>   (none)
+#> # A tibble: 1 × 2
+#>   citation_key               n
+#>   <chr>                  <int>
+#> 1 smith2020SalmonHabitat     1
 ```
 
 In a real report with 200+ citations, the NA sources table is your
@@ -303,7 +325,7 @@ d3 <- crd_aud_scr_risk(d3)
 table(d3$claim_type)
 #> 
 #> statistic 
-#>         9
+#>        11
 ```
 
 For domain-specific terms, pass an extra pattern:
