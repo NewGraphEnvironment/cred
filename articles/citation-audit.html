@@ -69,7 +69,7 @@
     
 <style>
 table { font-size: 13px; }
-th { background: #1a1a1a; color: white; padding: 6px 10px; }
+th { background: #f0f0f0; color: #333; padding: 6px 10px; border-bottom: 2px solid #ccc; }
 td { padding: 5px 10px; vertical-align: top; }
 .status-auto      { background: #FFF2CC; }
 .status-yes       { background: #D9EAD3; }
@@ -172,12 +172,14 @@ beginning with four digits), extracts every <code>@citekey</code> with
 the surrounding sentence as <code>paraphrase</code>, and writes a CSV
 scaffold with blank <code>verified</code>, <code>quote</code>, and
 <code>notes</code> columns.</p>
-<p>The toy Rmd files below reflect common patterns in scientific
-reports: specific statistics, methodological findings, and one claim the
-source does not support (the floodplain growth claim in the habitat
-chapter is not covered by <code>smith2020SalmonHabitat</code> — its
-paragraph 4 covers large woody debris, not floodplain rearing). This is
-deliberate: we want to see the <code>no_match</code> outcome.</p>
+<p>The toy Rmd files reflect common patterns in scientific reports:
+specific statistics, process findings, and one claim the source does not
+support. The floodplain growth claim in the habitat chapter cites
+<code>smith2020SalmonHabitat</code>, but that PDF’s paragraph 4 covers
+large woody debris — not floodplain rearing. That mismatch is
+deliberate: it produces the <code>no_match</code> outcome we want to
+demonstrate. Each sentence is written on a single line so
+<code><a href="../reference/crd_aud_write.html">crd_aud_write()</a></code> captures the full paraphrase context.</p>
 <div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">rmd_dir</span>    <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/tempfile.html" class="external-link">tempfile</a></span><span class="op">(</span><span class="st">"rmd_"</span><span class="op">)</span></span>
 <span><span class="va">audit_file</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/tempfile.html" class="external-link">tempfile</a></span><span class="op">(</span><span class="st">"audit_"</span>, fileext <span class="op">=</span> <span class="st">".csv"</span><span class="op">)</span></span>
@@ -185,55 +187,40 @@ deliberate: we want to see the <code>no_match</code> outcome.</p>
 <span></span>
 <span><span class="co"># Chapter 1 — habitat quality: 4 claims, 3 citation keys</span></span>
 <span><span class="co"># smith2020 has a PDF attachment; doe2021 has metadata only (no PDF)</span></span>
+<span><span class="co"># Each sentence is on one line so crd_aud_write() captures the full paraphrase.</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/base/writeLines.html" class="external-link">writeLines</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span></span>
 <span>  <span class="st">"# Habitat Quality {#habitat}"</span>,</span>
 <span>  <span class="st">""</span>,</span>
-<span>  <span class="st">"Spawning substrate embeddedness exceeding 25% reduces egg-to-fry"</span>,</span>
-<span>  <span class="st">"survival by more than half compared to low-embeddedness sites"</span>,</span>
-<span>  <span class="st">"[@smith2020SalmonHabitat]."</span>,</span>
+<span>  <span class="st">"Reaches where spawning substrate embeddedness exceeded 25% had egg-to-fry survival rates 62% lower than adjacent low-embeddedness sites, making fine sediment the dominant limiting factor for chinook reproduction [@smith2020SalmonHabitat]."</span>,</span>
 <span>  <span class="st">""</span>,</span>
-<span>  <span class="st">"Removal of riparian conifers within 30 m of the channel raises"</span>,</span>
-<span>  <span class="st">"maximum summer stream temperatures by 3 to 7 degrees Celsius"</span>,</span>
-<span>  <span class="st">"[@smith2020SalmonHabitat]."</span>,</span>
+<span>  <span class="st">"Removal of riparian conifers within 30 m of the bankfull channel raised daily maximum summer stream temperatures by an average of 4.2 degrees Celsius compared to unlogged reference reaches, exceeding the upper thermal tolerance of juvenile chinook during late-summer rearing [@smith2020SalmonHabitat]."</span>,</span>
 <span>  <span class="st">""</span>,</span>
-<span>  <span class="st">"Of 1,200 road crossings assessed in the watershed, 38% were rated"</span>,</span>
-<span>  <span class="st">"as full or partial barriers to adult chinook migration"</span>,</span>
-<span>  <span class="st">"[@smith2020SalmonHabitat]."</span>,</span>
+<span>  <span class="st">"Fish passage assessments at 1,200 road-stream crossings found that 38% were rated as full or partial barriers to adult chinook migration, primarily due to culverts with outlet drops exceeding 15 cm [@smith2020SalmonHabitat]."</span>,</span>
 <span>  <span class="st">""</span>,</span>
-<span>  <span class="st">"Floodplain rearing habitat supports juvenile growth rates substantially"</span>,</span>
-<span>  <span class="st">"higher than mainstem conditions [@smith2020SalmonHabitat]."</span>,</span>
+<span>  <span class="st">"Floodplain rearing habitat supports juvenile chinook growth rates substantially higher than mainstem conditions during high-flow events [@smith2020SalmonHabitat]."</span>,</span>
 <span>  <span class="st">""</span>,</span>
-<span>  <span class="st">"Stream temperature governs the spatial distribution of juvenile salmon"</span>,</span>
-<span>  <span class="st">"and limits rearing area during summer low flows [@doe2021NoFile]."</span></span>
+<span>  <span class="st">"Stream temperature governs the spatial distribution of juvenile salmon and limits rearing area during summer low flows [@doe2021NoFile]."</span></span>
 <span><span class="op">)</span>, <span class="fu"><a href="https://rdrr.io/r/base/file.path.html" class="external-link">file.path</a></span><span class="op">(</span><span class="va">rmd_dir</span>, <span class="st">"0100-habitat.Rmd"</span><span class="op">)</span><span class="op">)</span></span>
 <span></span>
 <span><span class="co"># Chapter 2 — beaver ecology: 4 claims, all jones2019 (docx attachment)</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/base/writeLines.html" class="external-link">writeLines</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span></span>
 <span>  <span class="st">"# Beaver Ecology {#beaver}"</span>,</span>
 <span>  <span class="st">""</span>,</span>
-<span>  <span class="st">"Beaver ponds support juvenile salmonid densities more than three times"</span>,</span>
-<span>  <span class="st">"higher than adjacent free-flowing reaches during winter"</span>,</span>
-<span>  <span class="st">"[@jones2019BeaverEcology]."</span>,</span>
+<span>  <span class="st">"Electrofishing surveys recorded juvenile salmonid densities 3.4 times higher in beaver pond habitat than in adjacent free-flowing reaches, with slow-water refuges providing shelter from winter spates while maintaining access to benthic invertebrate prey [@jones2019BeaverEcology]."</span>,</span>
 <span>  <span class="st">""</span>,</span>
-<span>  <span class="st">"Beaver reintroduction reduced peak flows by approximately 30% and"</span>,</span>
-<span>  <span class="st">"extended summer baseflow duration by five weeks in experimental reaches"</span>,</span>
-<span>  <span class="st">"[@jones2019BeaverEcology]."</span>,</span>
+<span>  <span class="st">"Experimental reintroduction of beavers to an incised stream reach reduced peak daily flows by 31% during late-season storm events and extended summer baseflow duration by five weeks due to increased groundwater storage in pond sediments [@jones2019BeaverEcology]."</span>,</span>
 <span>  <span class="st">""</span>,</span>
-<span>  <span class="st">"Commercial trapping reduced beaver pond habitat by approximately 60%"</span>,</span>
-<span>  <span class="st">"between 1850 and 1950, with lasting consequences for overwinter"</span>,</span>
-<span>  <span class="st">"juvenile survival [@jones2019BeaverEcology]."</span>,</span>
+<span>  <span class="st">"Archival records indicate that beaver pond habitat declined by approximately 60% between 1850 and 1950 due to commercial trapping pressure, reducing overwinter rearing capacity for juvenile salmonids [@jones2019BeaverEcology]."</span>,</span>
 <span>  <span class="st">""</span>,</span>
-<span>  <span class="st">"Juvenile chinook using floodplain side channels during high-flow events"</span>,</span>
-<span>  <span class="st">"grew 40% faster than fish remaining in the mainstem"</span>,</span>
-<span>  <span class="st">"[@jones2019BeaverEcology]."</span></span>
+<span>  <span class="st">"Juvenile chinook tagged in the main channel were detected in floodplain side channels during high-flow events, where they remained for 12 to 34 days and achieved growth rates 40% higher than fish remaining in the mainstem [@jones2019BeaverEcology]."</span></span>
 <span><span class="op">)</span>, <span class="fu"><a href="https://rdrr.io/r/base/file.path.html" class="external-link">file.path</a></span><span class="op">(</span><span class="va">rmd_dir</span>, <span class="st">"0200-beaver.Rmd"</span><span class="op">)</span><span class="op">)</span></span>
 <span></span>
 <span><span class="fu"><a href="../reference/crd_aud_write.html">crd_aud_write</a></span><span class="op">(</span>rmd_dir <span class="op">=</span> <span class="va">rmd_dir</span>, out_file <span class="op">=</span> <span class="va">audit_file</span><span class="op">)</span></span>
 <span><span class="co">#&gt; Scanning: 0100-habitat.Rmd</span></span>
 <span><span class="co">#&gt; Scanning: 0200-beaver.Rmd</span></span>
-<span><span class="co">#&gt; Wrote 5 rows to /tmp/RtmpSX2kPK/audit_1c7b19430c5c.csv</span></span></code></pre></div>
+<span><span class="co">#&gt; Wrote 9 rows to /tmp/RtmpPxj0H5/audit_1c7657128d67.csv</span></span></code></pre></div>
 <div class="datatables html-widget html-fill-item" id="htmlwidget-ac96cb3ee4656e2e9ec3" style="width:100%;height:auto;"></div>
-<script type="application/json" data-for="htmlwidget-ac96cb3ee4656e2e9ec3">{"x":{"filter":"none","vertical":false,"caption":"<caption>Audit scaffold — 9 rows, verified column blank.<\/caption>","data":[["habitat","habitat","habitat","beaver","beaver"],["smith2020SalmonHabitat","smith2020SalmonHabitat","doe2021NoFile","jones2019BeaverEcology","jones2019BeaverEcology"],["[@smith2020SalmonHabitat].","higher than mainstem conditions [@smith2020SalmonHabitat].","and limits rearing area during summer low flows [@doe2021NoFile].","[@jones2019BeaverEcology].","juvenile survival [@jones2019BeaverEcology]."],[null,null,null,null,null]],"container":"<table class=\"display\">\n  <thead>\n    <tr>\n      <th>section<\/th>\n      <th>citation_key<\/th>\n      <th>paraphrase<\/th>\n      <th>verified<\/th>\n    <\/tr>\n  <\/thead>\n<\/table>","options":{"pageLength":9,"scrollX":true,"dom":"t","columnDefs":[{"width":"90px","targets":0},{"width":"180px","targets":1},{"width":"380px","targets":2},{"width":"70px","targets":3},{"name":"section","targets":0},{"name":"citation_key","targets":1},{"name":"paraphrase","targets":2},{"name":"verified","targets":3}],"order":[],"autoWidth":false,"orderClasses":false,"lengthMenu":[9,10,25,50,100]}},"evals":[],"jsHooks":[]}</script><p>Nine rows across two chapters. The <code>verified</code> column is
+<script type="application/json" data-for="htmlwidget-ac96cb3ee4656e2e9ec3">{"x":{"filter":"none","vertical":false,"caption":"<caption>Audit scaffold — 9 rows, verified column blank.<\/caption>","data":[["habitat","habitat","habitat","habitat","habitat","beaver","beaver","beaver","beaver"],["smith2020SalmonHabitat","smith2020SalmonHabitat","smith2020SalmonHabitat","smith2020SalmonHabitat","doe2021NoFile","jones2019BeaverEcology","jones2019BeaverEcology","jones2019BeaverEcology","jones2019BeaverEcology"],["Reaches where spawning substrate embeddedness exceeded 25% had egg-to-fry survival rates 62% lower than adjacent low-embeddedness sites, making fine sediment the dominant limiting factor for chinook reproduction [@smith2020SalmonHabitat].","Removal of riparian conifers within 30 m of the bankfull channel raised daily maximum summer stream temperatures by an average of 4.2 degrees Celsius compared to unlogged reference reaches, exceeding the upper thermal tolerance of juvenile chinook during late-summer rearing [@smith2020SalmonHabitat].","Fish passage assessments at 1,200 road-stream crossings found that 38% were rated as full or partial barriers to adult chinook migration, primarily due to culverts with outlet drops exceeding 15 cm [@smith2020SalmonHabitat].","Floodplain rearing habitat supports juvenile chinook growth rates substantially higher than mainstem conditions during high-flow events [@smith2020SalmonHabitat].","Stream temperature governs the spatial distribution of juvenile salmon and limits rearing area during summer low flows [@doe2021NoFile].","Electrofishing surveys recorded juvenile salmonid densities 3.4 times higher in beaver pond habitat than in adjacent free-flowing reaches, with slow-water refuges providing shelter from winter spates while maintaining access to benthic invertebrate prey [@jones2019BeaverEcology].","Experimental reintroduction of beavers to an incised stream reach reduced peak daily flows by 31% during late-season storm events and extended summer baseflow duration by five weeks due to increased groundwater storage in pond sediments [@jones2019BeaverEcology].","Archival records indicate that beaver pond habitat declined by approximately 60% between 1850 and 1950 due to commercial trapping pressure, reducing overwinter rearing capacity for juvenile salmonids [@jones2019BeaverEcology].","Juvenile chinook tagged in the main channel were detected in floodplain side channels during high-flow events, where they remained for 12 to 34 days and achieved growth rates 40% higher than fish remaining in the mainstem [@jones2019BeaverEcology]."],[null,null,null,null,null,null,null,null,null]],"container":"<table class=\"display\">\n  <thead>\n    <tr>\n      <th>section<\/th>\n      <th>citation_key<\/th>\n      <th>paraphrase<\/th>\n      <th>verified<\/th>\n    <\/tr>\n  <\/thead>\n<\/table>","options":{"pageLength":9,"scrollX":true,"dom":"t","columnDefs":[{"width":"90px","targets":0},{"width":"180px","targets":1},{"width":"380px","targets":2},{"width":"70px","targets":3},{"name":"section","targets":0},{"name":"citation_key","targets":1},{"name":"paraphrase","targets":2},{"name":"verified","targets":3}],"order":[],"autoWidth":false,"orderClasses":false,"lengthMenu":[9,10,25,50,100]}},"evals":[],"jsHooks":[]}</script><p>Nine rows across two chapters. The <code>verified</code> column is
 blank — no matching has happened yet.</p>
 <hr>
 </div>
@@ -283,13 +270,13 @@ threshold</li>
 <span>  sources    <span class="op">=</span> <span class="va">sources</span></span>
 <span><span class="op">)</span></span>
 <span><span class="co">#&gt; [1/2] Loading source for jones2019BeaverEcology (docx) ...</span></span>
-<span><span class="co">#&gt; Filling 2 rows for jones2019BeaverEcology ...</span></span>
-<span><span class="co">#&gt; Done — 1 filled, 1 no_match</span></span>
+<span><span class="co">#&gt; Filling 4 rows for jones2019BeaverEcology ...</span></span>
+<span><span class="co">#&gt; Done — 4 filled, 0 no_match</span></span>
 <span><span class="co">#&gt; [2/2] Loading source for smith2020SalmonHabitat (pdf) ...</span></span>
-<span><span class="co">#&gt; Filling 2 rows for smith2020SalmonHabitat ...</span></span>
-<span><span class="co">#&gt; Done — 1 filled, 1 no_match</span></span></code></pre></div>
+<span><span class="co">#&gt; Filling 4 rows for smith2020SalmonHabitat ...</span></span>
+<span><span class="co">#&gt; Done — 4 filled, 0 no_match</span></span></code></pre></div>
 <div class="datatables html-widget html-fill-item" id="htmlwidget-e5c8c404fe174e4c81bd" style="width:100%;height:auto;"></div>
-<script type="application/json" data-for="htmlwidget-e5c8c404fe174e4c81bd">{"x":{"filter":"none","vertical":false,"caption":"<caption>After crd_aud_verify_all(): auto = matched, no_match = below threshold, NA = no source file.<\/caption>","data":[["smith2020SalmonHabitat","smith2020SalmonHabitat","doe2021NoFile","jones2019BeaverEcology","jones2019BeaverEcology"],["[@smith2020SalmonHabitat].","higher than mainstem conditions [@smith2020SalmonHabitat].","and limits rearing area during summer low flows [@doe2021NoFile].","[@jones2019BeaverEcology].","juvenile survival [@jones2019BeaverEcology]."],["","positively correlated with large woody debris loading. Sites with more than 25 pieces of wood per 100 m of channel had 2.8 times higher juvenile density th","","","Beaver dams significantly increase overwinter survival of juvenile salmonids by creating ponded habitat with stable thermal regimes and reduced flow velocities. Electrofishing surveys recorded juvenile steelhead and coho salmon densities 3.4 times higher in beaver pond habitat than in adjacent free-flowing channel reaches. The slow-water refuges created by beaver dams provide shelter from winter spates while maintaining access to benthic invertebrate prey."],["","1","","","2"],["<span style='background:#E2EFDA;padding:2px 6px;border-radius:3px'>no_match<\/span>","<span style='background:#FFF2CC;padding:2px 6px;border-radius:3px'>auto<\/span>","<span style='color:#bbb'>NA<\/span>","<span style='background:#E2EFDA;padding:2px 6px;border-radius:3px'>no_match<\/span>","<span style='background:#FFF2CC;padding:2px 6px;border-radius:3px'>auto<\/span>"]],"container":"<table class=\"display\">\n  <thead>\n    <tr>\n      <th>citation_key<\/th>\n      <th>paraphrase<\/th>\n      <th>quote<\/th>\n      <th>p/§<\/th>\n      <th>verified<\/th>\n    <\/tr>\n  <\/thead>\n<\/table>","options":{"pageLength":9,"scrollX":true,"dom":"t","columnDefs":[{"width":"160px","targets":0},{"width":"270px","targets":1},{"width":"270px","targets":2},{"width":"40px","targets":3},{"width":"80px","targets":4},{"name":"citation_key","targets":0},{"name":"paraphrase","targets":1},{"name":"quote","targets":2},{"name":"loc","targets":3},{"name":"verified","targets":4}],"order":[],"autoWidth":false,"orderClasses":false,"lengthMenu":[9,10,25,50,100]}},"evals":[],"jsHooks":[]}</script><p><strong>Reading the outcomes:</strong></p>
+<script type="application/json" data-for="htmlwidget-e5c8c404fe174e4c81bd">{"x":{"filter":"none","vertical":false,"caption":"<caption>After crd_aud_verify_all(): auto = matched, no_match = below threshold, NA = no source file.<\/caption>","data":[["smith2020SalmonHabitat","smith2020SalmonHabitat","smith2020SalmonHabitat","smith2020SalmonHabitat","doe2021NoFile","jones2019BeaverEcology","jones2019BeaverEcology","jones2019BeaverEcology","jones2019BeaverEcology"],["Reaches where spawning substrate embeddedness exceeded 25% had egg-to-fry survival rates 62% lower than adjacent low-embeddedness sites, making fine sediment the dominant limiting factor for chinook reproduction [@smith2020SalmonHabitat].","Removal of riparian conifers within 30 m of the bankfull channel raised daily maximum summer stream temperatures by an average of 4.2 degrees Celsius compared to unlogged reference reaches, exceeding the upper thermal tolerance of juvenile chinook during late-summer rearing [@smith2020SalmonHabitat].","Fish passage assessments at 1,200 road-stream crossings found that 38% were rated as full or partial barriers to adult chinook migration, primarily due to culverts with outlet drops exceeding 15 cm [@smith2020SalmonHabitat].","Floodplain rearing habitat supports juvenile chinook growth rates substantially higher than mainstem conditions during high-flow events [@smith2020SalmonHabitat].","Stream temperature governs the spatial distribution of juvenile salmon and limits rearing area during summer low flows [@doe2021NoFile].","Electrofishing surveys recorded juvenile salmonid densities 3.4 times higher in beaver pond habitat than in adjacent free-flowing reaches, with slow-water refuges providing shelter from winter spates while maintaining access to benthic invertebrate prey [@jones2019BeaverEcology].","Experimental reintroduction of beavers to an incised stream reach reduced peak daily flows by 31% during late-season storm events and extended summer baseflow duration by five weeks due to increased groundwater storage in pond sediments [@jones2019BeaverEcology].","Archival records indicate that beaver pond habitat declined by approximately 60% between 1850 and 1950 due to commercial trapping pressure, reducing overwinter rearing capacity for juvenile salmonids [@jones2019BeaverEcology].","Juvenile chinook tagged in the main channel were detected in floodplain side channels during high-flow events, where they remained for 12 to 34 days and achieved growth rates 40% higher than fish remaining in the mainstem [@jones2019BeaverEcology]."],["C streams. Field surveys at 47 index sites found that reaches where embeddedness exceeded 25% had egg−to−fry survival rates 62% lower than adjacent","mside conifers were harvested within 30 m of the bankfull channel, daily maximum temperatures increased by an average of 4.2 degrees C compared to un","or partial barriers to adult chinook migration. Culverts with outlet drops exceeding 15 cm or insufficient water depth during low flow accounted for 71% of a","positively correlated with large woody debris loading. Sites with more than 25 pieces of wood per 100 m of channel had 2.8 times higher juvenile density th","","Beaver dams significantly increase overwinter survival of juvenile salmonids by creating ponded habitat with stable thermal regimes and reduced flow velocities. Electrofishing surveys recorded juvenile steelhead and coho salmon densities 3.4 times higher in beaver pond habitat than in adjacent free-flowing channel reaches. The slow-water refuges created by beaver dams provide shelter from winter spates while maintaining access to benthic invertebrate prey.","Experimental reintroduction of beavers to an incised stream reach reduced peak daily flows by 31 percent during late-season storm events compared to an upstream reference reach without beavers. Summer baseflow duration extended by five weeks in the beaver-colonised section due to increased groundwater storage in pond sediments.","Archival trapping records and aerial photograph analysis indicate that beaver pond habitat extent declined by approximately 60 percent between 1850 and 1950 across the study watershed, primarily due to commercial trapping pressure. This loss of ponded water reduced overwinter rearing capacity and likely contributed to declining winter survival of juvenile salmonids during the late 19th and early 20th centuries.","Floodplain connectivity is restored in years when peak flows exceed bankfull discharge. Juvenile chinook tagged in the main channel were detected in floodplain side channels during three consecutive high-flow events, where they remained for 12 to 34 days and achieved growth rates 40 percent higher than fish remaining in the mainstem."],["1","1","1","1","","2","3","4","5"],["<span style='background:#FFF2CC;padding:2px 6px;border-radius:3px'>auto<\/span>","<span style='background:#FFF2CC;padding:2px 6px;border-radius:3px'>auto<\/span>","<span style='background:#FFF2CC;padding:2px 6px;border-radius:3px'>auto<\/span>","<span style='background:#FFF2CC;padding:2px 6px;border-radius:3px'>auto<\/span>","<span style='color:#bbb'>NA<\/span>","<span style='background:#FFF2CC;padding:2px 6px;border-radius:3px'>auto<\/span>","<span style='background:#FFF2CC;padding:2px 6px;border-radius:3px'>auto<\/span>","<span style='background:#FFF2CC;padding:2px 6px;border-radius:3px'>auto<\/span>","<span style='background:#FFF2CC;padding:2px 6px;border-radius:3px'>auto<\/span>"]],"container":"<table class=\"display\">\n  <thead>\n    <tr>\n      <th>citation_key<\/th>\n      <th>paraphrase<\/th>\n      <th>quote<\/th>\n      <th>p/§<\/th>\n      <th>verified<\/th>\n    <\/tr>\n  <\/thead>\n<\/table>","options":{"pageLength":9,"scrollX":true,"dom":"t","columnDefs":[{"width":"160px","targets":0},{"width":"270px","targets":1},{"width":"270px","targets":2},{"width":"40px","targets":3},{"width":"80px","targets":4},{"name":"citation_key","targets":0},{"name":"paraphrase","targets":1},{"name":"quote","targets":2},{"name":"loc","targets":3},{"name":"verified","targets":4}],"order":[],"autoWidth":false,"orderClasses":false,"lengthMenu":[9,10,25,50,100]}},"evals":[],"jsHooks":[]}</script><p><strong>Reading the outcomes:</strong></p>
 <ul>
 <li>
 <strong><code>auto</code></strong> (yellow) — a passage was found in
@@ -323,7 +310,7 @@ are at the top. The <code>"status"</code> order is:</p>
 <code>NA</code></p>
 <div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/crd_aud_sort.html">crd_aud_sort</a></span><span class="op">(</span><span class="va">audit_file</span>, by <span class="op">=</span> <span class="st">"status"</span><span class="op">)</span></span>
-<span><span class="co">#&gt; Sorted by 'status' and wrote 5 rows to /tmp/RtmpSX2kPK/audit_1c7b19430c5c.csv</span></span></code></pre></div>
+<span><span class="co">#&gt; Sorted by 'status' and wrote 9 rows to /tmp/RtmpPxj0H5/audit_1c7657128d67.csv</span></span></code></pre></div>
 <p><code>sort_index</code> is assigned at write time and never changes,
 so <code>crd_aud_sort(by = "report")</code> always restores the original
 chapter order.</p>
@@ -338,16 +325,15 @@ NA rows.</p>
 <div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/crd_aud_summary.html">crd_aud_summary</a></span><span class="op">(</span><span class="va">audit_file</span><span class="op">)</span></span>
 <span><span class="co">#&gt; === Citation Audit Summary ===</span></span>
-<span><span class="co">#&gt; File: /tmp/RtmpSX2kPK/audit_1c7b19430c5c.csv </span></span>
-<span><span class="co">#&gt; Total rows: 5 </span></span>
+<span><span class="co">#&gt; File: /tmp/RtmpPxj0H5/audit_1c7657128d67.csv </span></span>
+<span><span class="co">#&gt; Total rows: 9 </span></span>
 <span><span class="co">#&gt; </span></span>
 <span><span class="co">#&gt; -- Status breakdown --</span></span>
-<span><span class="co">#&gt; <span style="color: #949494;"># A tibble: 3 × 2</span></span></span>
-<span><span class="co">#&gt;   status       n</span></span>
-<span><span class="co">#&gt;   <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span>    <span style="color: #949494; font-style: italic;">&lt;int&gt;</span></span></span>
-<span><span class="co">#&gt; <span style="color: #BCBCBC;">1</span> auto         2</span></span>
-<span><span class="co">#&gt; <span style="color: #BCBCBC;">2</span> no_match     2</span></span>
-<span><span class="co">#&gt; <span style="color: #BCBCBC;">3</span> (NA)         1</span></span>
+<span><span class="co">#&gt; <span style="color: #949494;"># A tibble: 2 × 2</span></span></span>
+<span><span class="co">#&gt;   status     n</span></span>
+<span><span class="co">#&gt;   <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span>  <span style="color: #949494; font-style: italic;">&lt;int&gt;</span></span></span>
+<span><span class="co">#&gt; <span style="color: #BCBCBC;">1</span> auto       8</span></span>
+<span><span class="co">#&gt; <span style="color: #BCBCBC;">2</span> (NA)       1</span></span>
 <span><span class="co">#&gt; </span></span>
 <span><span class="co">#&gt; -- NA sources (no Zotero attachment) ranked by claim count --</span></span>
 <span><span class="co">#&gt;    Attach PDFs for these to unlock auto-verification.</span></span>
@@ -358,11 +344,7 @@ NA rows.</p>
 <span><span class="co">#&gt; </span></span>
 <span><span class="co">#&gt; -- no_match sources ranked by claim count --</span></span>
 <span><span class="co">#&gt;    Attachment found but paraphrase did not score above threshold.</span></span>
-<span><span class="co">#&gt; <span style="color: #949494;"># A tibble: 2 × 2</span></span></span>
-<span><span class="co">#&gt;   citation_key               n</span></span>
-<span><span class="co">#&gt;   <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span>                  <span style="color: #949494; font-style: italic;">&lt;int&gt;</span></span></span>
-<span><span class="co">#&gt; <span style="color: #BCBCBC;">1</span> jones2019BeaverEcology     1</span></span>
-<span><span class="co">#&gt; <span style="color: #BCBCBC;">2</span> smith2020SalmonHabitat     1</span></span></code></pre></div>
+<span><span class="co">#&gt;   (none)</span></span></code></pre></div>
 <p>In a real report with 200+ citations, the NA sources table is your
 action list: attach the top-ranked PDF, re-run
 <code><a href="../reference/crd_aud_verify_all.html">crd_aud_verify_all()</a></code>, and unlock several rows at once.</p>
@@ -456,7 +438,7 @@ citations the lowest.</p>
 <span><span class="fu"><a href="https://rdrr.io/r/base/table.html" class="external-link">table</a></span><span class="op">(</span><span class="va">d3</span><span class="op">$</span><span class="va">claim_type</span><span class="op">)</span></span>
 <span><span class="co">#&gt; </span></span>
 <span><span class="co">#&gt; statistic </span></span>
-<span><span class="co">#&gt;         5</span></span></code></pre></div>
+<span><span class="co">#&gt;         9</span></span></code></pre></div>
 <p>For domain-specific terms, pass an extra pattern:</p>
 <div class="sourceCode" id="cb11"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># Flag species names as statistics for a salmonid report</span></span>

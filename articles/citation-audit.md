@@ -59,12 +59,15 @@ files (names beginning with four digits), extracts every `@citekey` with
 the surrounding sentence as `paraphrase`, and writes a CSV scaffold with
 blank `verified`, `quote`, and `notes` columns.
 
-The toy Rmd files below reflect common patterns in scientific reports:
-specific statistics, methodological findings, and one claim the source
-does not support (the floodplain growth claim in the habitat chapter is
-not covered by `smith2020SalmonHabitat` — its paragraph 4 covers large
-woody debris, not floodplain rearing). This is deliberate: we want to
-see the `no_match` outcome.
+The toy Rmd files reflect common patterns in scientific reports:
+specific statistics, process findings, and one claim the source does not
+support. The floodplain growth claim in the habitat chapter cites
+`smith2020SalmonHabitat`, but that PDF’s paragraph 4 covers large woody
+debris — not floodplain rearing. That mismatch is deliberate: it
+produces the `no_match` outcome we want to demonstrate. Each sentence is
+written on a single line so
+[`crd_aud_write()`](../reference/crd_aud_write.md) captures the full
+paraphrase context.
 
 ``` r
 rmd_dir    <- tempfile("rmd_")
@@ -73,53 +76,38 @@ dir.create(rmd_dir)
 
 # Chapter 1 — habitat quality: 4 claims, 3 citation keys
 # smith2020 has a PDF attachment; doe2021 has metadata only (no PDF)
+# Each sentence is on one line so crd_aud_write() captures the full paraphrase.
 writeLines(c(
   "# Habitat Quality {#habitat}",
   "",
-  "Spawning substrate embeddedness exceeding 25% reduces egg-to-fry",
-  "survival by more than half compared to low-embeddedness sites",
-  "[@smith2020SalmonHabitat].",
+  "Reaches where spawning substrate embeddedness exceeded 25% had egg-to-fry survival rates 62% lower than adjacent low-embeddedness sites, making fine sediment the dominant limiting factor for chinook reproduction [@smith2020SalmonHabitat].",
   "",
-  "Removal of riparian conifers within 30 m of the channel raises",
-  "maximum summer stream temperatures by 3 to 7 degrees Celsius",
-  "[@smith2020SalmonHabitat].",
+  "Removal of riparian conifers within 30 m of the bankfull channel raised daily maximum summer stream temperatures by an average of 4.2 degrees Celsius compared to unlogged reference reaches, exceeding the upper thermal tolerance of juvenile chinook during late-summer rearing [@smith2020SalmonHabitat].",
   "",
-  "Of 1,200 road crossings assessed in the watershed, 38% were rated",
-  "as full or partial barriers to adult chinook migration",
-  "[@smith2020SalmonHabitat].",
+  "Fish passage assessments at 1,200 road-stream crossings found that 38% were rated as full or partial barriers to adult chinook migration, primarily due to culverts with outlet drops exceeding 15 cm [@smith2020SalmonHabitat].",
   "",
-  "Floodplain rearing habitat supports juvenile growth rates substantially",
-  "higher than mainstem conditions [@smith2020SalmonHabitat].",
+  "Floodplain rearing habitat supports juvenile chinook growth rates substantially higher than mainstem conditions during high-flow events [@smith2020SalmonHabitat].",
   "",
-  "Stream temperature governs the spatial distribution of juvenile salmon",
-  "and limits rearing area during summer low flows [@doe2021NoFile]."
+  "Stream temperature governs the spatial distribution of juvenile salmon and limits rearing area during summer low flows [@doe2021NoFile]."
 ), file.path(rmd_dir, "0100-habitat.Rmd"))
 
 # Chapter 2 — beaver ecology: 4 claims, all jones2019 (docx attachment)
 writeLines(c(
   "# Beaver Ecology {#beaver}",
   "",
-  "Beaver ponds support juvenile salmonid densities more than three times",
-  "higher than adjacent free-flowing reaches during winter",
-  "[@jones2019BeaverEcology].",
+  "Electrofishing surveys recorded juvenile salmonid densities 3.4 times higher in beaver pond habitat than in adjacent free-flowing reaches, with slow-water refuges providing shelter from winter spates while maintaining access to benthic invertebrate prey [@jones2019BeaverEcology].",
   "",
-  "Beaver reintroduction reduced peak flows by approximately 30% and",
-  "extended summer baseflow duration by five weeks in experimental reaches",
-  "[@jones2019BeaverEcology].",
+  "Experimental reintroduction of beavers to an incised stream reach reduced peak daily flows by 31% during late-season storm events and extended summer baseflow duration by five weeks due to increased groundwater storage in pond sediments [@jones2019BeaverEcology].",
   "",
-  "Commercial trapping reduced beaver pond habitat by approximately 60%",
-  "between 1850 and 1950, with lasting consequences for overwinter",
-  "juvenile survival [@jones2019BeaverEcology].",
+  "Archival records indicate that beaver pond habitat declined by approximately 60% between 1850 and 1950 due to commercial trapping pressure, reducing overwinter rearing capacity for juvenile salmonids [@jones2019BeaverEcology].",
   "",
-  "Juvenile chinook using floodplain side channels during high-flow events",
-  "grew 40% faster than fish remaining in the mainstem",
-  "[@jones2019BeaverEcology]."
+  "Juvenile chinook tagged in the main channel were detected in floodplain side channels during high-flow events, where they remained for 12 to 34 days and achieved growth rates 40% higher than fish remaining in the mainstem [@jones2019BeaverEcology]."
 ), file.path(rmd_dir, "0200-beaver.Rmd"))
 
 crd_aud_write(rmd_dir = rmd_dir, out_file = audit_file)
 #> Scanning: 0100-habitat.Rmd
 #> Scanning: 0200-beaver.Rmd
-#> Wrote 5 rows to /tmp/RtmpSX2kPK/audit_1c7b19430c5c.csv
+#> Wrote 9 rows to /tmp/RtmpPxj0H5/audit_1c7657128d67.csv
 ```
 
 Nine rows across two chapters. The `verified` column is blank — no
@@ -171,11 +159,11 @@ crd_aud_verify_all(
   sources    = sources
 )
 #> [1/2] Loading source for jones2019BeaverEcology (docx) ...
-#> Filling 2 rows for jones2019BeaverEcology ...
-#> Done — 1 filled, 1 no_match
+#> Filling 4 rows for jones2019BeaverEcology ...
+#> Done — 4 filled, 0 no_match
 #> [2/2] Loading source for smith2020SalmonHabitat (pdf) ...
-#> Filling 2 rows for smith2020SalmonHabitat ...
-#> Done — 1 filled, 1 no_match
+#> Filling 4 rows for smith2020SalmonHabitat ...
+#> Done — 4 filled, 0 no_match
 ```
 
 **Reading the outcomes:**
@@ -208,7 +196,7 @@ most actionable are at the top. The `"status"` order is:
 
 ``` r
 crd_aud_sort(audit_file, by = "status")
-#> Sorted by 'status' and wrote 5 rows to /tmp/RtmpSX2kPK/audit_1c7b19430c5c.csv
+#> Sorted by 'status' and wrote 9 rows to /tmp/RtmpPxj0H5/audit_1c7657128d67.csv
 ```
 
 `sort_index` is assigned at write time and never changes, so
@@ -226,16 +214,15 @@ Zotero to unlock the most NA rows.
 ``` r
 crd_aud_summary(audit_file)
 #> === Citation Audit Summary ===
-#> File: /tmp/RtmpSX2kPK/audit_1c7b19430c5c.csv 
-#> Total rows: 5 
+#> File: /tmp/RtmpPxj0H5/audit_1c7657128d67.csv 
+#> Total rows: 9 
 #> 
 #> -- Status breakdown --
-#> # A tibble: 3 × 2
-#>   status       n
-#>   <chr>    <int>
-#> 1 auto         2
-#> 2 no_match     2
-#> 3 (NA)         1
+#> # A tibble: 2 × 2
+#>   status     n
+#>   <chr>  <int>
+#> 1 auto       8
+#> 2 (NA)       1
 #> 
 #> -- NA sources (no Zotero attachment) ranked by claim count --
 #>    Attach PDFs for these to unlock auto-verification.
@@ -246,11 +233,7 @@ crd_aud_summary(audit_file)
 #> 
 #> -- no_match sources ranked by claim count --
 #>    Attachment found but paraphrase did not score above threshold.
-#> # A tibble: 2 × 2
-#>   citation_key               n
-#>   <chr>                  <int>
-#> 1 jones2019BeaverEcology     1
-#> 2 smith2020SalmonHabitat     1
+#>   (none)
 ```
 
 In a real report with 200+ citations, the NA sources table is your
@@ -318,7 +301,7 @@ d3 <- crd_aud_scr_risk(d3)
 table(d3$claim_type)
 #> 
 #> statistic 
-#>         5
+#>         9
 ```
 
 For domain-specific terms, pass an extra pattern:
