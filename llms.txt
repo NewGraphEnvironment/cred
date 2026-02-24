@@ -33,6 +33,16 @@ best-matching passage, fills `quote`, `page_or_section`, and
 crd_aud_verify_all("background/citation_audit.csv")
 ```
 
+**2b. Abstract fallback for remaining NA rows** — for citations with no
+local file, scores the Zotero abstract against the paraphrase. Sets
+`verified = "abstract_match"` if the abstract is in the same domain as
+the claim. Useful when you have many references added by DOI lookup
+without attached PDFs:
+
+``` r
+crd_aud_verify_abstract("background/citation_audit.csv")
+```
+
 **3. Check progress** — see status breakdown and which PDFs to attach in
 Zotero to unlock more rows:
 
@@ -62,15 +72,16 @@ crd_aud_sort("background/citation_audit.csv", by = "report")
 
 ## What each `verified` value means
 
-| Value       | Meaning                                                    |
-|-------------|------------------------------------------------------------|
-| `auto`      | Machine-matched — awaiting your review                     |
-| `yes`       | Reviewed and confirmed accurate                            |
-| `no`        | Claim not supported by source                              |
-| `corrected` | Claim was wrong; you fixed it in the Rmd                   |
-| `no_match`  | Source exists but paraphrase did not score above threshold |
-| `context`   | Citation provides context, not a direct factual claim      |
-| `NA`        | No source file in Zotero — attach a PDF to unblock         |
+| Value            | Meaning                                                    |
+|------------------|------------------------------------------------------------|
+| `auto`           | Machine-matched against source file — awaiting your review |
+| `abstract_match` | Matched against Zotero abstract — no full text available   |
+| `yes`            | Reviewed and confirmed accurate                            |
+| `no`             | Claim not supported by source                              |
+| `corrected`      | Claim was wrong; you fixed it in the Rmd                   |
+| `no_match`       | Source exists but paraphrase did not score above threshold |
+| `context`        | Citation provides context, not a direct factual claim      |
+| `NA`             | No source file and no abstract in Zotero                   |
 
 ## Keeping the CSV up to date
 
@@ -92,6 +103,37 @@ citation key has no attachment, the row gets `verified = NA`.
 [`crd_aud_summary()`](https://newgraphenvironment.github.io/cred/reference/crd_aud_summary.md)
 lists these ranked by claim count — attach the highest-impact PDFs
 first.
+
+## How matching works
+
+For each unverified row, `cred` scores every paragraph in the source
+document by the fraction of query tokens found in it:
+
+``` R
+score = tokens from paraphrase found in paragraph / total tokens in paraphrase
+```
+
+The default threshold is **0.2** — 1 in 5 query tokens must appear in
+the candidate paragraph. This is deliberately permissive: a false
+positive (wrong paragraph shown as `auto`) costs a few seconds of
+review; a false negative (right paragraph called `no_match`) means
+searching the PDF yourself.
+
+`min_score` is exposed in every matching function:
+
+``` r
+crd_aud_verify_all("citation_audit.csv", min_score = 0.2)  # default
+```
+
+| Situation                                       | Suggested `min_score` |
+|-------------------------------------------------|-----------------------|
+| Generic paraphrases — many false positives      | 0.3 – 0.4             |
+| Default — specific factual claims with numbers  | 0.2                   |
+| Long dense sources where good matches score low | 0.1 – 0.15            |
+
+After adjusting, re-run with `overwrite_verified = TRUE` to reprocess
+machine-assigned rows without touching human-reviewed ones (`yes`, `no`,
+`corrected`, `context`).
 
 ## Learn more
 
@@ -121,6 +163,8 @@ package.
   : Summarise an audit CSV by verification status
 - [`crd_aud_upd()`](https://newgraphenvironment.github.io/cred/reference/crd_aud_upd.md)
   : Update an existing audit CSV preserving manual columns
+- [`crd_aud_verify_abstract()`](https://newgraphenvironment.github.io/cred/reference/crd_aud_verify_abstract.md)
+  : Fill quote and verified for NA rows using Zotero abstract text
 - [`crd_aud_verify_all()`](https://newgraphenvironment.github.io/cred/reference/crd_aud_verify_all.md)
   : Verify all citation keys in an audit CSV against their source
   documents
@@ -142,6 +186,8 @@ package.
   : Search a PDF for the best-matching passage to a paraphrase
 - [`crd_sent_ext_key()`](https://newgraphenvironment.github.io/cred/reference/crd_sent_ext_key.md)
   : Extract the sentence(s) containing a specific citation key
+- [`crd_zot_abstract_lookup()`](https://newgraphenvironment.github.io/cred/reference/crd_zot_abstract_lookup.md)
+  : Retrieve Zotero abstracts for a vector of citation keys
 - [`crd_zot_src_lookup()`](https://newgraphenvironment.github.io/cred/reference/crd_zot_src_lookup.md)
   : Resolve citation keys to source file paths via Zotero SQLite
 

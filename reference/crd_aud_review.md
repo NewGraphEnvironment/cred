@@ -8,7 +8,7 @@ source of truth — git history is preserved.
 ## Usage
 
 ``` r
-crd_aud_review(audit_file, launch.browser = TRUE)
+crd_aud_review(audit_file, launch_browser = TRUE)
 ```
 
 ## Arguments
@@ -18,7 +18,7 @@ crd_aud_review(audit_file, launch.browser = TRUE)
   `character(1)` path to the audit CSV produced by
   [`crd_aud_write()`](https://newgraphenvironment.github.io/cred/reference/crd_aud_write.md).
 
-- launch.browser:
+- launch_browser:
 
   `logical(1)` open the app in the system browser. Default `TRUE`.
 

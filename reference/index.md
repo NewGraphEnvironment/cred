@@ -16,6 +16,8 @@
   : Summarise an audit CSV by verification status
 - [`crd_aud_upd()`](https://newgraphenvironment.github.io/cred/reference/crd_aud_upd.md)
   : Update an existing audit CSV preserving manual columns
+- [`crd_aud_verify_abstract()`](https://newgraphenvironment.github.io/cred/reference/crd_aud_verify_abstract.md)
+  : Fill quote and verified for NA rows using Zotero abstract text
 - [`crd_aud_verify_all()`](https://newgraphenvironment.github.io/cred/reference/crd_aud_verify_all.md)
   : Verify all citation keys in an audit CSV against their source
   documents
@@ -37,5 +39,7 @@
   : Search a PDF for the best-matching passage to a paraphrase
 - [`crd_sent_ext_key()`](https://newgraphenvironment.github.io/cred/reference/crd_sent_ext_key.md)
   : Extract the sentence(s) containing a specific citation key
+- [`crd_zot_abstract_lookup()`](https://newgraphenvironment.github.io/cred/reference/crd_zot_abstract_lookup.md)
+  : Retrieve Zotero abstracts for a vector of citation keys
 - [`crd_zot_src_lookup()`](https://newgraphenvironment.github.io/cred/reference/crd_zot_src_lookup.md)
   : Resolve citation keys to source file paths via Zotero SQLite

@@ -69,16 +69,16 @@
     
     
 <style>
-table { font-size: 13px; }
-th { background: #f0f0f0; color: #333; padding: 6px 10px; border-bottom: 2px solid #ccc; }
-td { padding: 5px 10px; vertical-align: top; }
+table { font-size: 12px; }
+th { background: #f0f0f0; color: #333; padding: 4px 8px; border-bottom: 2px solid #ccc; }
+td { padding: 4px 8px; vertical-align: top; }
 .status-auto      { background: #FFF2CC; }
 .status-yes       { background: #D9EAD3; }
 .status-no        { background: #F4CCCC; }
 .status-corrected { background: #FCE5CD; }
 .status-no_match  { background: #E2EFDA; }
 .status-na        { background: #f5f5f5; color: #999; }
-pre { font-size: 12px; }
+pre { font-size: 11px; }
 </style>
 <div class="section level2">
 <h2 id="the-problem">The problem<a class="anchor" aria-label="anchor" href="#the-problem"></a>
@@ -87,7 +87,7 @@ pre { font-size: 12px; }
 arises: the citation key is real, the prose sounds authoritative, but
 the cited source does not actually support the specific claim made. A
 percentage gets transposed, a finding from one paper gets attributed to
-another, or an experimental result gets quietly generalised.</p>
+another, or a result gets quietly generalised.</p>
 <p><code>cred</code> addresses this systematically. For every
 <code>@citekey</code> in a bookdown report it locates the source
 document, finds the best-matching passage, and surfaces it alongside the
@@ -98,11 +98,9 @@ original claim so a human can make the call.</p>
 </h2>
 <pre><code>Rmd files  ──►  audit CSV  ──►  Zotero lookup  ──►  auto-fill quotes
                                                            │
-                                              ┌────────────┴─────────────┐
-                                         auto-match                  no match
-                                         (review)                 (manual check)
-                                              │
-                                         Review app  ──►  yes / no / corrected</code></pre>
+                                              ┌────────────┼──────────────┐
+                                         auto-match   abstract-match   no match
+                                         (review)     (review)       (manual check)</code></pre>
 <table class="table">
 <colgroup>
 <col width="20%">
@@ -129,22 +127,25 @@ CSV scaffold</td>
 </td>
 </tr>
 <tr class="odd">
+<td>2b</td>
+<td><code><a href="../reference/crd_aud_verify_abstract.html">crd_aud_verify_abstract()</a></code></td>
+<td>For remaining NA rows, score against Zotero abstract text</td>
+</tr>
+<tr class="even">
 <td>3</td>
 <td><code><a href="../reference/crd_aud_sort.html">crd_aud_sort()</a></code></td>
 <td>Sort <code>auto</code> rows first so reviewable rows are at the
 top</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td>4</td>
 <td><code><a href="../reference/crd_aud_summary.html">crd_aud_summary()</a></code></td>
 <td>Print status snapshot and PDF attachment priority list</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td>5</td>
 <td><code><a href="../reference/crd_aud_review.html">crd_aud_review()</a></code></td>
-<td>Launch interactive Shiny app — paraphrase vs quote side by side,
-dropdown to set <code>verified</code>
-</td>
+<td>Launch interactive Shiny app — paraphrase vs quote side by side</td>
 </tr>
 </tbody>
 </table>
@@ -156,10 +157,13 @@ dropdown to set <code>verified</code>
 <p><code>cred</code> ships realistic toy source documents and a minimal
 Zotero SQLite in <code>inst/extdata/</code>:</p>
 <pre><code>inst/extdata/
-├── zotero.sqlite              # 3 items: smith2020, jones2019, doe2021 (no attachment)
+├── zotero.sqlite              # 3 items: smith2020, jones2019, doe2021
 └── storage/
     ├── TOYPDF1/salmon_habitat.pdf      # Smith et al. 2020 — 4 paragraphs
     └── TOYDOC1/beaver_ecology.docx     # Jones 2019 — 4 paragraphs</code></pre>
+<p><code>doe2021NoFile</code> has metadata and an abstract in Zotero but
+no attached file — the common case for references added by DOI lookup
+without downloading the PDF.</p>
 <div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://newgraphenvironment.github.io/cred/">cred</a></span><span class="op">)</span></span>
 <span></span>
@@ -168,49 +172,38 @@ Zotero SQLite in <code>inst/extdata/</code>:</p>
 <div class="section level3">
 <h3 id="step-1-write-the-audit-csv">Step 1 — Write the audit CSV<a class="anchor" aria-label="anchor" href="#step-1-write-the-audit-csv"></a>
 </h3>
-<p><code><a href="../reference/crd_aud_write.html">crd_aud_write()</a></code> scans all chapter Rmd files (names
-beginning with four digits), extracts every <code>@citekey</code> with
-the surrounding sentence as <code>paraphrase</code>, and writes a CSV
-scaffold with blank <code>verified</code>, <code>quote</code>, and
-<code>notes</code> columns.</p>
-<p>The toy Rmd files reflect three common paraphrase patterns:</p>
+<p><code><a href="../reference/crd_aud_write.html">crd_aud_write()</a></code> scans chapter Rmd files, extracts every
+<code>@citekey</code> with the surrounding sentence as
+<code>paraphrase</code>, and writes a CSV scaffold.</p>
+<p>The toy Rmd files demonstrate three paraphrase patterns:</p>
 <ol style="list-style-type: decimal">
 <li>
-<strong>Numeric claims</strong> — statistics copied closely from the
-source (“62% lower”, “38% were barriers”). These score highest because
-numbers are the most discriminative tokens.</li>
+<strong>Numeric claims</strong> — statistics cited closely from the
+source (“62% lower”, “38% were barriers”). Numbers are the most
+discriminative tokens so these tend to score highest.</li>
 <li>
 <strong>Qualitative paraphrases</strong> — same finding, different
-words, no numbers. These test whether token overlap still finds the
-right passage when an author rewrites rather than transcribes.</li>
+words, no numbers. These test whether prose overlap alone is enough to
+find the right passage.</li>
 <li>
 <strong>Wrong-paper citation</strong> — a Pacific Salmon Treaty
-harvest claim cites <code>smith2020SalmonHabitat</code>, a freshwater
-habitat quality paper. It has no content about harvest allocation or
-treaty negotiations, so no passage scores above the threshold →
-<code>verified = "no_match"</code>. This is the failure mode
-<code>cred</code> is designed to surface: the citation key is real, the
-prose sounds plausible, but the source does not support the claim.</li>
+claim cites <code>smith2020SalmonHabitat</code>, a freshwater habitat
+quality paper. No passage covers harvest allocation →
+<code>verified = "no_match"</code>.</li>
 </ol>
-<p>Each sentence is on a single line so <code><a href="../reference/crd_aud_write.html">crd_aud_write()</a></code>
-captures the full paraphrase.</p>
 <div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">rmd_dir</span>    <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/tempfile.html" class="external-link">tempfile</a></span><span class="op">(</span><span class="st">"rmd_"</span><span class="op">)</span></span>
 <span><span class="va">audit_file</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/tempfile.html" class="external-link">tempfile</a></span><span class="op">(</span><span class="st">"audit_"</span>, fileext <span class="op">=</span> <span class="st">".csv"</span><span class="op">)</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/base/files2.html" class="external-link">dir.create</a></span><span class="op">(</span><span class="va">rmd_dir</span><span class="op">)</span></span>
 <span></span>
-<span><span class="co"># Chapter 1 — habitat quality: 5 claims, 3 citation keys</span></span>
-<span><span class="co"># smith2020 has a PDF attachment; doe2021 has metadata only (no PDF).</span></span>
-<span><span class="co"># Mix of numeric claims (rows 1-3), a qualitative paraphrase (row 4),</span></span>
-<span><span class="co"># an unsupported claim that produces no_match (row 5), and an NA row (row 6).</span></span>
+<span><span class="co"># Chapter 1 — habitat quality</span></span>
+<span><span class="co"># smith2020 has a PDF; doe2021 has metadata + abstract only (no file)</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/base/writeLines.html" class="external-link">writeLines</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span></span>
 <span>  <span class="st">"# Habitat Quality {#habitat}"</span>,</span>
 <span>  <span class="st">""</span>,</span>
-<span>  <span class="st">"Reaches where spawning substrate embeddedness exceeded 25% had egg-to-fry survival rates 62% lower than adjacent low-embeddedness sites, making fine sediment the dominant limiting factor for chinook reproduction [@smith2020SalmonHabitat]."</span>,</span>
+<span>  <span class="st">"Reaches where spawning substrate embeddedness exceeded 25% had egg-to-fry survival rates 62% lower than adjacent low-embeddedness sites [@smith2020SalmonHabitat]."</span>,</span>
 <span>  <span class="st">""</span>,</span>
-<span>  <span class="st">"Removal of riparian conifers within 30 m of the bankfull channel raised daily maximum summer stream temperatures by an average of 4.2 degrees Celsius compared to unlogged reference reaches, exceeding the upper thermal tolerance of juvenile chinook during late-summer rearing [@smith2020SalmonHabitat]."</span>,</span>
-<span>  <span class="st">""</span>,</span>
-<span>  <span class="st">"Fish passage assessments at 1,200 road-stream crossings found that 38% were rated as full or partial barriers to adult chinook migration, primarily due to culverts with outlet drops exceeding 15 cm [@smith2020SalmonHabitat]."</span>,</span>
+<span>  <span class="st">"Fish passage assessments at 1,200 road-stream crossings found that 38% were rated as full or partial barriers to adult chinook migration [@smith2020SalmonHabitat]."</span>,</span>
 <span>  <span class="st">""</span>,</span>
 <span>  <span class="st">"Loss of streamside forest cover eliminates the shade that keeps summer water temperatures within the thermal tolerance of juvenile chinook, degrading rearing conditions in harvested riparian zones [@smith2020SalmonHabitat]."</span>,</span>
 <span>  <span class="st">""</span>,</span>
@@ -219,18 +212,15 @@ captures the full paraphrase.</p>
 <span>  <span class="st">"Stream temperature governs the spatial distribution of juvenile salmon and limits rearing area during summer low flows [@doe2021NoFile]."</span></span>
 <span><span class="op">)</span>, <span class="fu"><a href="https://rdrr.io/r/base/file.path.html" class="external-link">file.path</a></span><span class="op">(</span><span class="va">rmd_dir</span>, <span class="st">"0100-habitat.Rmd"</span><span class="op">)</span><span class="op">)</span></span>
 <span></span>
-<span><span class="co"># Chapter 2 — beaver ecology: 5 claims, all jones2019 (docx attachment)</span></span>
-<span><span class="co"># Row 5 is a qualitative paraphrase of the floodplain side-channel paragraph.</span></span>
+<span><span class="co"># Chapter 2 — beaver ecology (jones2019 docx)</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/base/writeLines.html" class="external-link">writeLines</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span></span>
 <span>  <span class="st">"# Beaver Ecology {#beaver}"</span>,</span>
 <span>  <span class="st">""</span>,</span>
-<span>  <span class="st">"Electrofishing surveys recorded juvenile salmonid densities 3.4 times higher in beaver pond habitat than in adjacent free-flowing reaches, with slow-water refuges providing shelter from winter spates while maintaining access to benthic invertebrate prey [@jones2019BeaverEcology]."</span>,</span>
+<span>  <span class="st">"Electrofishing surveys recorded juvenile salmonid densities 3.4 times higher in beaver pond habitat than in adjacent free-flowing reaches [@jones2019BeaverEcology]."</span>,</span>
 <span>  <span class="st">""</span>,</span>
-<span>  <span class="st">"Experimental reintroduction of beavers to an incised stream reach reduced peak daily flows by 31% during late-season storm events and extended summer baseflow duration by five weeks due to increased groundwater storage in pond sediments [@jones2019BeaverEcology]."</span>,</span>
+<span>  <span class="st">"Archival records indicate that beaver pond habitat declined by approximately 60% between 1850 and 1950 due to commercial trapping pressure [@jones2019BeaverEcology]."</span>,</span>
 <span>  <span class="st">""</span>,</span>
-<span>  <span class="st">"Archival records indicate that beaver pond habitat declined by approximately 60% between 1850 and 1950 due to commercial trapping pressure, reducing overwinter rearing capacity for juvenile salmonids [@jones2019BeaverEcology]."</span>,</span>
-<span>  <span class="st">""</span>,</span>
-<span>  <span class="st">"Juvenile chinook tagged in the main channel were detected in floodplain side channels during high-flow events, where they remained for 12 to 34 days and achieved growth rates 40% higher than fish remaining in the mainstem [@jones2019BeaverEcology]."</span>,</span>
+<span>  <span class="st">"Beaver dams create ponded habitat with stable thermal regimes that substantially increase overwinter survival of juvenile salmonids by providing shelter from winter spates [@jones2019BeaverEcology]."</span>,</span>
 <span>  <span class="st">""</span>,</span>
 <span>  <span class="st">"Beaver-mediated floodplain connectivity allows juvenile chinook to access off-channel rearing areas during high flows, where growth rates substantially exceed those of fish confined to the mainstem channel [@jones2019BeaverEcology]."</span></span>
 <span><span class="op">)</span>, <span class="fu"><a href="https://rdrr.io/r/base/file.path.html" class="external-link">file.path</a></span><span class="op">(</span><span class="va">rmd_dir</span>, <span class="st">"0200-beaver.Rmd"</span><span class="op">)</span><span class="op">)</span></span>
@@ -238,19 +228,17 @@ captures the full paraphrase.</p>
 <span><span class="fu"><a href="../reference/crd_aud_write.html">crd_aud_write</a></span><span class="op">(</span>rmd_dir <span class="op">=</span> <span class="va">rmd_dir</span>, out_file <span class="op">=</span> <span class="va">audit_file</span><span class="op">)</span></span>
 <span><span class="co">#&gt; Scanning: 0100-habitat.Rmd</span></span>
 <span><span class="co">#&gt; Scanning: 0200-beaver.Rmd</span></span>
-<span><span class="co">#&gt; Wrote 11 rows to /tmp/Rtmpjjtg0H/audit_1c772effbafb.csv</span></span></code></pre></div>
+<span><span class="co">#&gt; Wrote 9 rows to /tmp/RtmpcCGt3z/audit_1ca852d96c06.csv</span></span></code></pre></div>
 <div class="datatables html-widget html-fill-item" id="htmlwidget-ac96cb3ee4656e2e9ec3" style="width:100%;height:auto;"></div>
-<script type="application/json" data-for="htmlwidget-ac96cb3ee4656e2e9ec3">{"x":{"filter":"none","vertical":false,"caption":"<caption>Audit scaffold — 11 rows, verified column blank.<\/caption>","data":[["habitat","habitat","habitat","habitat","habitat","habitat","beaver","beaver","beaver","beaver","beaver"],["smith2020SalmonHabitat","smith2020SalmonHabitat","smith2020SalmonHabitat","smith2020SalmonHabitat","smith2020SalmonHabitat","doe2021NoFile","jones2019BeaverEcology","jones2019BeaverEcology","jones2019BeaverEcology","jones2019BeaverEcology","jones2019BeaverEcology"],["Reaches where spawning substrate embeddedness exceeded 25% had egg-to-fry survival rates 62% lower than adjacent low-embeddedness sites, making fine sediment the dominant limiting factor for chinook reproduction [@smith2020SalmonHabitat].","Removal of riparian conifers within 30 m of the bankfull channel raised daily maximum summer stream temperatures by an average of 4.2 degrees Celsius compared to unlogged reference reaches, exceeding the upper thermal tolerance of juvenile chinook during late-summer rearing [@smith2020SalmonHabitat].","Fish passage assessments at 1,200 road-stream crossings found that 38% were rated as full or partial barriers to adult chinook migration, primarily due to culverts with outlet drops exceeding 15 cm [@smith2020SalmonHabitat].","Loss of streamside forest cover eliminates the shade that keeps summer water temperatures within the thermal tolerance of juvenile chinook, degrading rearing conditions in harvested riparian zones [@smith2020SalmonHabitat].","The Pacific Salmon Treaty allocates harvest between Canada and the United States based on abundance indicators and conservation thresholds negotiated through the Pacific Salmon Commission [@smith2020SalmonHabitat].","Stream temperature governs the spatial distribution of juvenile salmon and limits rearing area during summer low flows [@doe2021NoFile].","Electrofishing surveys recorded juvenile salmonid densities 3.4 times higher in beaver pond habitat than in adjacent free-flowing reaches, with slow-water refuges providing shelter from winter spates while maintaining access to benthic invertebrate prey [@jones2019BeaverEcology].","Experimental reintroduction of beavers to an incised stream reach reduced peak daily flows by 31% during late-season storm events and extended summer baseflow duration by five weeks due to increased groundwater storage in pond sediments [@jones2019BeaverEcology].","Archival records indicate that beaver pond habitat declined by approximately 60% between 1850 and 1950 due to commercial trapping pressure, reducing overwinter rearing capacity for juvenile salmonids [@jones2019BeaverEcology].","Juvenile chinook tagged in the main channel were detected in floodplain side channels during high-flow events, where they remained for 12 to 34 days and achieved growth rates 40% higher than fish remaining in the mainstem [@jones2019BeaverEcology].","Beaver-mediated floodplain connectivity allows juvenile chinook to access off-channel rearing areas during high flows, where growth rates substantially exceed those of fish confined to the mainstem channel [@jones2019BeaverEcology]."],[null,null,null,null,null,null,null,null,null,null,null]],"container":"<table class=\"display\">\n  <thead>\n    <tr>\n      <th>section<\/th>\n      <th>citation_key<\/th>\n      <th>paraphrase<\/th>\n      <th>verified<\/th>\n    <\/tr>\n  <\/thead>\n<\/table>","options":{"pageLength":5,"scrollX":true,"dom":"tip","columnDefs":[{"width":"90px","targets":0},{"width":"180px","targets":1},{"width":"380px","targets":2},{"width":"70px","targets":3},{"name":"section","targets":0},{"name":"citation_key","targets":1},{"name":"paraphrase","targets":2},{"name":"verified","targets":3}],"order":[],"autoWidth":false,"orderClasses":false,"lengthMenu":[5,10,25,50,100]}},"evals":[],"jsHooks":[]}</script><p>Eleven rows across two chapters — five per source plus the
-<code>doe2021NoFile</code> row. The <code>verified</code> column is
-blank — no matching has happened yet.</p>
+<script type="application/json" data-for="htmlwidget-ac96cb3ee4656e2e9ec3">{"x":{"filter":"none","vertical":false,"caption":"<caption>Audit scaffold — 9 rows, verified column blank.<\/caption>","data":[["habitat","habitat","habitat","habitat","habitat","beaver","beaver","beaver","beaver"],["smith2020SalmonHabitat","smith2020SalmonHabitat","smith2020SalmonHabitat","smith2020SalmonHabitat","doe2021NoFile","jones2019BeaverEcology","jones2019BeaverEcology","jones2019BeaverEcology","jones2019BeaverEcology"],["Reaches where spawning substrate embeddedness exceeded 25% had egg-to-fry survival rates 62% lower than adjacent low-embeddedness sites [@smith2020SalmonHabitat].","Fish passage assessments at 1,200 road-stream crossings found that 38% were rated as full or partial barriers to adult chinook migration [@smith2020SalmonHabitat].","Loss of streamside forest cover eliminates the shade that keeps summer water temperatures within the thermal tolerance of juvenile chinook, degrading rearing conditions in harvested riparian zones [@smith2020SalmonHabitat].","The Pacific Salmon Treaty allocates harvest between Canada and the United States based on abundance indicators and conservation thresholds negotiated through the Pacific Salmon Commission [@smith2020SalmonHabitat].","Stream temperature governs the spatial distribution of juvenile salmon and limits rearing area during summer low flows [@doe2021NoFile].","Electrofishing surveys recorded juvenile salmonid densities 3.4 times higher in beaver pond habitat than in adjacent free-flowing reaches [@jones2019BeaverEcology].","Archival records indicate that beaver pond habitat declined by approximately 60% between 1850 and 1950 due to commercial trapping pressure [@jones2019BeaverEcology].","Beaver dams create ponded habitat with stable thermal regimes that substantially increase overwinter survival of juvenile salmonids by providing shelter from winter spates [@jones2019BeaverEcology].","Beaver-mediated floodplain connectivity allows juvenile chinook to access off-channel rearing areas during high flows, where growth rates substantially exceed those of fish confined to the mainstem channel [@jones2019BeaverEcology]."],[null,null,null,null,null,null,null,null,null]],"container":"<table class=\"display\">\n  <thead>\n    <tr>\n      <th>section<\/th>\n      <th>citation_key<\/th>\n      <th>paraphrase<\/th>\n      <th>verified<\/th>\n    <\/tr>\n  <\/thead>\n<\/table>","options":{"pageLength":9,"scrollX":true,"dom":"t","initComplete":"function(settings, json) {\n$(this.api().table().node()).css('font-size', '11px');\n}","columnDefs":[{"width":"70px","targets":0},{"width":"110px","targets":1},{"width":"420px","targets":2},{"width":"60px","targets":3},{"name":"section","targets":0},{"name":"citation_key","targets":1},{"name":"paraphrase","targets":2},{"name":"verified","targets":3}],"order":[],"autoWidth":false,"orderClasses":false,"lengthMenu":[9,10,25,50,100]}},"evals":["options.initComplete"],"jsHooks":[]}</script><p>Nine rows across two chapters. The <code>verified</code> column is
+blank — no matching has run yet.</p>
 <hr>
 </div>
 <div class="section level3">
-<h3 id="step-2-look-up-zotero-source-paths">Step 2 — Look up Zotero source paths<a class="anchor" aria-label="anchor" href="#step-2-look-up-zotero-source-paths"></a>
+<h3 id="step-2-look-up-zotero-source-paths-and-auto-fill-quotes">Step 2 — Look up Zotero source paths and auto-fill quotes<a class="anchor" aria-label="anchor" href="#step-2-look-up-zotero-source-paths-and-auto-fill-quotes"></a>
 </h3>
-<p><code><a href="../reference/crd_zot_src_lookup.html">crd_zot_src_lookup()</a></code> queries the Zotero SQLite database
-(read-only, immutable URI — safe to run while Zotero is open) and
-returns file paths for any attached PDFs or Word documents.</p>
+<p><code><a href="../reference/crd_zot_src_lookup.html">crd_zot_src_lookup()</a></code> queries the Zotero SQLite for
+attached PDFs and Word documents.</p>
 <div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">keys</span>    <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/unique.html" class="external-link">unique</a></span><span class="op">(</span><span class="va">d</span><span class="op">$</span><span class="va">citation_key</span><span class="op">)</span></span>
 <span><span class="va">sources</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/crd_zot_src_lookup.html">crd_zot_src_lookup</a></span><span class="op">(</span><span class="va">keys</span>, zotero_dir <span class="op">=</span> <span class="va">toy_zotero_dir</span><span class="op">)</span></span>
@@ -260,110 +248,96 @@ returns file paths for any attached PDFs or Word documents.</p>
 <span><span class="co">#&gt;   <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span>                  <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span>   </span></span>
 <span><span class="co">#&gt; <span style="color: #BCBCBC;">1</span> jones2019BeaverEcology docx    </span></span>
 <span><span class="co">#&gt; <span style="color: #BCBCBC;">2</span> smith2020SalmonHabitat pdf</span></span></code></pre></div>
-<p><code>doe2021NoFile</code> has no attachment — it was added to Zotero
-by DOI lookup (metadata only, no PDF downloaded). The warning is
-expected; the row will remain <code>NA</code> in the audit.
-<code><a href="../reference/crd_aud_summary.html">crd_aud_summary()</a></code> will flag it as a priority to attach.</p>
-<hr>
-</div>
-<div class="section level3">
-<h3 id="step-3-auto-fill-quotes">Step 3 — Auto-fill quotes<a class="anchor" aria-label="anchor" href="#step-3-auto-fill-quotes"></a>
-</h3>
-<p><code><a href="../reference/crd_aud_verify_all.html">crd_aud_verify_all()</a></code> loads each source document once,
-then for every unverified row matching that key it scores
-paragraphs/pages against the <code>paraphrase</code> using token
-overlap. It fills:</p>
-<ul>
-<li>
-<strong><code>quote</code></strong> — the best-matching passage from
-the source</li>
-<li>
-<strong><code>page_or_section</code></strong> — paragraph index
-(docx) or page number (pdf)</li>
-<li>
-<strong><code>verified</code></strong> — <code>"auto"</code> if
-score ≥ <code>min_score</code>; <code>"no_match"</code> if below
-threshold</li>
-</ul>
+<p><code>doe2021NoFile</code> has no attachment — the warning is
+expected. <code><a href="../reference/crd_aud_verify_all.html">crd_aud_verify_all()</a></code> then scores each source
+against its unverified rows:</p>
 <div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/crd_aud_verify_all.html">crd_aud_verify_all</a></span><span class="op">(</span></span>
 <span>  audit_file <span class="op">=</span> <span class="va">audit_file</span>,</span>
 <span>  sources    <span class="op">=</span> <span class="va">sources</span></span>
 <span><span class="op">)</span></span>
 <span><span class="co">#&gt; [1/2] Loading source for jones2019BeaverEcology (docx) ...</span></span>
-<span><span class="co">#&gt; Filling 5 rows for jones2019BeaverEcology ...</span></span>
-<span><span class="co">#&gt; Done — 5 filled, 0 no_match</span></span>
+<span><span class="co">#&gt; Filling 4 rows for jones2019BeaverEcology ...</span></span>
+<span><span class="co">#&gt; Done — 4 filled, 0 no_match</span></span>
 <span><span class="co">#&gt; [2/2] Loading source for smith2020SalmonHabitat (pdf) ...</span></span>
-<span><span class="co">#&gt; Filling 5 rows for smith2020SalmonHabitat ...</span></span>
-<span><span class="co">#&gt; Done — 4 filled, 1 no_match</span></span></code></pre></div>
+<span><span class="co">#&gt; Filling 4 rows for smith2020SalmonHabitat ...</span></span>
+<span><span class="co">#&gt; Done — 3 filled, 1 no_match</span></span></code></pre></div>
 <div class="datatables html-widget html-fill-item" id="htmlwidget-e5c8c404fe174e4c81bd" style="width:100%;height:auto;"></div>
-<script type="application/json" data-for="htmlwidget-e5c8c404fe174e4c81bd">{"x":{"filter":"none","vertical":false,"caption":"<caption>After crd_aud_verify_all(): auto = matched, no_match = below threshold, NA = no source file.<\/caption>","data":[["smith2020SalmonHabitat","smith2020SalmonHabitat","smith2020SalmonHabitat","smith2020SalmonHabitat","smith2020SalmonHabitat","doe2021NoFile","jones2019BeaverEcology","jones2019BeaverEcology","jones2019BeaverEcology","jones2019BeaverEcology","jones2019BeaverEcology"],["Reaches where spawning substrate embeddedness exceeded 25% had egg-to-fry survival rates 62% lower than adjacent low-embeddedness sites, making fine sediment the dominant limiting factor for chinook reproduction [@smith2020SalmonHabitat].","Removal of riparian conifers within 30 m of the bankfull channel raised daily maximum summer stream temperatures by an average of 4.2 degrees Celsius compared to unlogged reference reaches, exceeding the upper thermal tolerance of juvenile chinook during late-summer rearing [@smith2020SalmonHabitat].","Fish passage assessments at 1,200 road-stream crossings found that 38% were rated as full or partial barriers to adult chinook migration, primarily due to culverts with outlet drops exceeding 15 cm [@smith2020SalmonHabitat].","Loss of streamside forest cover eliminates the shade that keeps summer water temperatures within the thermal tolerance of juvenile chinook, degrading rearing conditions in harvested riparian zones [@smith2020SalmonHabitat].","The Pacific Salmon Treaty allocates harvest between Canada and the United States based on abundance indicators and conservation thresholds negotiated through the Pacific Salmon Commission [@smith2020SalmonHabitat].","Stream temperature governs the spatial distribution of juvenile salmon and limits rearing area during summer low flows [@doe2021NoFile].","Electrofishing surveys recorded juvenile salmonid densities 3.4 times higher in beaver pond habitat than in adjacent free-flowing reaches, with slow-water refuges providing shelter from winter spates while maintaining access to benthic invertebrate prey [@jones2019BeaverEcology].","Experimental reintroduction of beavers to an incised stream reach reduced peak daily flows by 31% during late-season storm events and extended summer baseflow duration by five weeks due to increased groundwater storage in pond sediments [@jones2019BeaverEcology].","Archival records indicate that beaver pond habitat declined by approximately 60% between 1850 and 1950 due to commercial trapping pressure, reducing overwinter rearing capacity for juvenile salmonids [@jones2019BeaverEcology].","Juvenile chinook tagged in the main channel were detected in floodplain side channels during high-flow events, where they remained for 12 to 34 days and achieved growth rates 40% higher than fish remaining in the mainstem [@jones2019BeaverEcology].","Beaver-mediated floodplain connectivity allows juvenile chinook to access off-channel rearing areas during high flows, where growth rates substantially exceed those of fish confined to the mainstem channel [@jones2019BeaverEcology]."],["Spawning substrate embeddedness is the dominant predictor of egg−to−fry survival\nfor chinook salmon in interior BC streams. Field surveys at 47 index sites found\nthat reaches where embeddedness exceeded 25% had egg−to−fry survival rates 62%\nlower than adjacent low−embeddedness sites. Fine sediment inputs from road\ncrossings and livestock access were the primary drivers.","Riparian canopy removal raises maximum summer stream temperatures by 3 to 7\ndegrees Celsius in small to medium channels. In reaches where streamside conifers\nwere harvested within 30 m of the bankfull channel, daily maximum temperatures\nincreased by an average of 4.2 degrees C compared to unlogged reference reaches.\nTemperature elevations of this magnitude exceed the upper thermal tolerance of\njuvenile chinook during late−summer rearing.","Fish passage assessments at 1,200 road−stream crossings found that 38 percent\nwere rated as full or partial barriers to adult chinook migration. Culverts with\noutlet drops exceeding 15 cm or insufficient water depth during low flow accounted\nfor 71% of all barrier crossings. Barrier removal restored upstream colonisation\nwithin 1 to 3 years of installation.","Riparian canopy removal raises maximum summer stream temperatures by 3 to 7\ndegrees Celsius in small to medium channels. In reaches where streamside conifers\nwere harvested within 30 m of the bankfull channel, daily maximum temperatures\nincreased by an average of 4.2 degrees C compared to unlogged reference reaches.\nTemperature elevations of this magnitude exceed the upper thermal tolerance of\njuvenile chinook during late−summer rearing.","","","Beaver dams significantly increase overwinter survival of juvenile salmonids by creating ponded habitat with stable thermal regimes and reduced flow velocities. Electrofishing surveys recorded juvenile steelhead and coho salmon densities 3.4 times higher in beaver pond habitat than in adjacent free-flowing channel reaches. The slow-water refuges created by beaver dams provide shelter from winter spates while maintaining access to benthic invertebrate prey.","Experimental reintroduction of beavers to an incised stream reach reduced peak daily flows by 31 percent during late-season storm events compared to an upstream reference reach without beavers. Summer baseflow duration extended by five weeks in the beaver-colonised section due to increased groundwater storage in pond sediments.","Archival trapping records and aerial photograph analysis indicate that beaver pond habitat extent declined by approximately 60 percent between 1850 and 1950 across the study watershed, primarily due to commercial trapping pressure. This loss of ponded water reduced overwinter rearing capacity and likely contributed to declining winter survival of juvenile salmonids during the late 19th and early 20th centuries.","Floodplain connectivity is restored in years when peak flows exceed bankfull discharge. Juvenile chinook tagged in the main channel were detected in floodplain side channels during three consecutive high-flow events, where they remained for 12 to 34 days and achieved growth rates 40 percent higher than fish remaining in the mainstem.","Floodplain connectivity is restored in years when peak flows exceed bankfull discharge. Juvenile chinook tagged in the main channel were detected in floodplain side channels during three consecutive high-flow events, where they remained for 12 to 34 days and achieved growth rates 40 percent higher than fish remaining in the mainstem."],["2","3","4","3","","","2","3","4","5","5"],["<span style='background:#FFF2CC;padding:2px 6px;border-radius:3px'>auto<\/span>","<span style='background:#FFF2CC;padding:2px 6px;border-radius:3px'>auto<\/span>","<span style='background:#FFF2CC;padding:2px 6px;border-radius:3px'>auto<\/span>","<span style='background:#FFF2CC;padding:2px 6px;border-radius:3px'>auto<\/span>","<span style='background:#E2EFDA;padding:2px 6px;border-radius:3px'>no_match<\/span>","<span style='color:#bbb'>NA<\/span>","<span style='background:#FFF2CC;padding:2px 6px;border-radius:3px'>auto<\/span>","<span style='background:#FFF2CC;padding:2px 6px;border-radius:3px'>auto<\/span>","<span style='background:#FFF2CC;padding:2px 6px;border-radius:3px'>auto<\/span>","<span style='background:#FFF2CC;padding:2px 6px;border-radius:3px'>auto<\/span>","<span style='background:#FFF2CC;padding:2px 6px;border-radius:3px'>auto<\/span>"]],"container":"<table class=\"display\">\n  <thead>\n    <tr>\n      <th>citation_key<\/th>\n      <th>paraphrase<\/th>\n      <th>quote<\/th>\n      <th>p/§<\/th>\n      <th>verified<\/th>\n    <\/tr>\n  <\/thead>\n<\/table>","options":{"pageLength":5,"scrollX":true,"dom":"tip","columnDefs":[{"width":"160px","targets":0},{"width":"270px","targets":1},{"width":"270px","targets":2},{"width":"40px","targets":3},{"width":"80px","targets":4},{"name":"citation_key","targets":0},{"name":"paraphrase","targets":1},{"name":"quote","targets":2},{"name":"loc","targets":3},{"name":"verified","targets":4}],"order":[],"autoWidth":false,"orderClasses":false,"lengthMenu":[5,10,25,50,100]}},"evals":[],"jsHooks":[]}</script><p><strong>Reading the outcomes:</strong></p>
+<script type="application/json" data-for="htmlwidget-e5c8c404fe174e4c81bd">{"x":{"filter":"none","vertical":false,"caption":"<caption>After crd_aud_verify_all(): auto = matched, no_match = below threshold, NA = no source file.<\/caption>","data":[["smith2020SalmonHabitat","smith2020SalmonHabitat","smith2020SalmonHabitat","smith2020SalmonHabitat","doe2021NoFile","jones2019BeaverEcology","jones2019BeaverEcology","jones2019BeaverEcology","jones2019BeaverEcology"],["Reaches where spawning substrate embeddedness exceeded 25% had egg-to-fry survival rates 62% lower than adjacent low-embeddedness sites [@smith2020SalmonHabitat].","Fish passage assessments at 1,200 road-stream crossings found that 38% were rated as full or partial barriers to adult chinook migration [@smith2020SalmonHabitat].","Loss of streamside forest cover eliminates the shade that keeps summer water temperatures within the thermal tolerance of juvenile chinook, degrading rearing conditions in harvested riparian zones [@smith2020SalmonHabitat].","The Pacific Salmon Treaty allocates harvest between Canada and the United States based on abundance indicators and conservation thresholds negotiated through the Pacific Salmon Commission [@smith2020SalmonHabitat].","Stream temperature governs the spatial distribution of juvenile salmon and limits rearing area during summer low flows [@doe2021NoFile].","Electrofishing surveys recorded juvenile salmonid densities 3.4 times higher in beaver pond habitat than in adjacent free-flowing reaches [@jones2019BeaverEcology].","Archival records indicate that beaver pond habitat declined by approximately 60% between 1850 and 1950 due to commercial trapping pressure [@jones2019BeaverEcology].","Beaver dams create ponded habitat with stable thermal regimes that substantially increase overwinter survival of juvenile salmonids by providing shelter from winter spates [@jones2019BeaverEcology].","Beaver-mediated floodplain connectivity allows juvenile chinook to access off-channel rearing areas during high flows, where growth rates substantially exceed those of fish confined to the mainstem channel [@jones2019BeaverEcology]."],["Spawning substrate embeddedness is the dominant predictor of egg−to−fry survival\nfor chinook salmon in interior BC streams. Field surveys at 47 index sites found\nthat reaches where embeddedness exceeded 25% had egg−to−fry survival rates 62%\nlower than adjacent low−embeddedness sites. Fine sediment inputs from road\ncrossings and livestock access were the primary drivers.","Fish passage assessments at 1,200 road−stream crossings found that 38 percent\nwere rated as full or partial barriers to adult chinook migration. Culverts with\noutlet drops exceeding 15 cm or insufficient water depth during low flow accounted\nfor 71% of all barrier crossings. Barrier removal restored upstream colonisation\nwithin 1 to 3 years of installation.","Riparian canopy removal raises maximum summer stream temperatures by 3 to 7\ndegrees Celsius in small to medium channels. In reaches where streamside conifers\nwere harvested within 30 m of the bankfull channel, daily maximum temperatures\nincreased by an average of 4.2 degrees C compared to unlogged reference reaches.\nTemperature elevations of this magnitude exceed the upper thermal tolerance of\njuvenile chinook during late−summer rearing.","","","Beaver dams significantly increase overwinter survival of juvenile salmonids by creating ponded habitat with stable thermal regimes and reduced flow velocities. Electrofishing surveys recorded juvenile steelhead and coho salmon densities 3.4 times higher in beaver pond habitat than in adjacent free-flowing channel reaches. The slow-water refuges created by beaver dams provide shelter from winter spates while maintaining access to benthic invertebrate prey.","Archival trapping records and aerial photograph analysis indicate that beaver pond habitat extent declined by approximately 60 percent between 1850 and 1950 across the study watershed, primarily due to commercial trapping pressure. This loss of ponded water reduced overwinter rearing capacity and likely contributed to declining winter survival of juvenile salmonids during the late 19th and early 20th centuries.","Beaver dams significantly increase overwinter survival of juvenile salmonids by creating ponded habitat with stable thermal regimes and reduced flow velocities. Electrofishing surveys recorded juvenile steelhead and coho salmon densities 3.4 times higher in beaver pond habitat than in adjacent free-flowing channel reaches. The slow-water refuges created by beaver dams provide shelter from winter spates while maintaining access to benthic invertebrate prey.","Floodplain connectivity is restored in years when peak flows exceed bankfull discharge. Juvenile chinook tagged in the main channel were detected in floodplain side channels during three consecutive high-flow events, where they remained for 12 to 34 days and achieved growth rates 40 percent higher than fish remaining in the mainstem."],["2","4","3","","","2","4","2","5"],["<span style='background:#FFF2CC;padding:2px 5px;border-radius:3px;font-size:10px'>auto<\/span>","<span style='background:#FFF2CC;padding:2px 5px;border-radius:3px;font-size:10px'>auto<\/span>","<span style='background:#FFF2CC;padding:2px 5px;border-radius:3px;font-size:10px'>auto<\/span>","<span style='background:#E2EFDA;padding:2px 5px;border-radius:3px;font-size:10px'>no_match<\/span>","<span style='color:#bbb'>NA<\/span>","<span style='background:#FFF2CC;padding:2px 5px;border-radius:3px;font-size:10px'>auto<\/span>","<span style='background:#FFF2CC;padding:2px 5px;border-radius:3px;font-size:10px'>auto<\/span>","<span style='background:#FFF2CC;padding:2px 5px;border-radius:3px;font-size:10px'>auto<\/span>","<span style='background:#FFF2CC;padding:2px 5px;border-radius:3px;font-size:10px'>auto<\/span>"]],"container":"<table class=\"display\">\n  <thead>\n    <tr>\n      <th>key<\/th>\n      <th>paraphrase<\/th>\n      <th>quote<\/th>\n      <th>p/§<\/th>\n      <th>verified<\/th>\n    <\/tr>\n  <\/thead>\n<\/table>","options":{"pageLength":9,"scrollX":true,"dom":"t","initComplete":"function(settings, json) {\n$(this.api().table().node()).css('font-size', '11px');\n}","columnDefs":[{"width":"110px","targets":0},{"width":"240px","targets":1},{"width":"240px","targets":2},{"width":"35px","targets":3},{"width":"90px","targets":4},{"name":"key","targets":0},{"name":"paraphrase","targets":1},{"name":"quote","targets":2},{"name":"loc","targets":3},{"name":"verified","targets":4}],"order":[],"autoWidth":false,"orderClasses":false,"lengthMenu":[9,10,25,50,100]}},"evals":["options.initComplete"],"jsHooks":[]}</script><p><strong>Reading the results:</strong></p>
 <ul>
 <li>
-<strong><code>auto</code></strong> (yellow) — a passage was found in
-the source scoring above the threshold. The <code>quote</code> column
-shows what the source actually says. Your job: read both, decide if they
-match.</li>
+<strong><code>auto</code></strong> (yellow) — passage found, score ≥
+threshold. Read paraphrase vs quote to judge.</li>
 <li>
-<strong><code>no_match</code></strong> (light green) — the source
-file exists, but no paragraph scored above the threshold. This happens
-when the report’s phrasing is too different from the source text. It
-needs manual verification.</li>
+<strong><code>no_match</code></strong> (light green) — source exists
+but no paragraph scored above the threshold. Notice the Pacific Salmon
+Treaty row: <code>smith2020SalmonHabitat</code> is a freshwater habitat
+paper with nothing about harvest negotiations. This is the core failure
+mode <code>cred</code> surfaces — real key, plausible prose, wrong
+source.</li>
 <li>
-<strong><code>NA</code></strong> (grey) — no source file is attached
-in Zotero. Nothing to match against.</li>
+<strong><code>NA</code></strong> (grey) — no source file in Zotero.
+The <code>doe2021NoFile</code> row has nowhere to search.</li>
 </ul>
-<p>Notice the Pacific Salmon Treaty row: it cites
-<code>smith2020SalmonHabitat</code>, a freshwater habitat quality paper,
-for a claim about international harvest allocation. No passage in the
-source covers treaty negotiations — <code>no_match</code> flags it
-immediately. This is exactly the kind of mismatch <code>cred</code> is
-designed to surface: the citation key is real, the prose sounds
-credible, but the source simply does not support the specific claim.</p>
+<p>The qualitative paraphrases (rows 3 and 7–8) matched without any
+numbers — the shared prose vocabulary (“streamside”, “thermal
+tolerance”, “rearing”, “ponded habitat”, “overwinter survival”) was
+enough to locate the right paragraphs.</p>
 <hr>
 </div>
 <div class="section level3">
-<h3 id="step-4-sort-for-review">Step 4 — Sort for review<a class="anchor" aria-label="anchor" href="#step-4-sort-for-review"></a>
+<h3 id="step-2b-abstract-matching-for-na-rows">Step 2b — Abstract matching for NA rows<a class="anchor" aria-label="anchor" href="#step-2b-abstract-matching-for-na-rows"></a>
 </h3>
-<p><code><a href="../reference/crd_aud_sort.html">crd_aud_sort()</a></code> rearranges rows so the most actionable
-are at the top. The <code>"status"</code> order is:</p>
-<p><code>auto</code> → <code>no_match</code> → <code>corrected</code> →
-<code>no</code> → <code>context</code> → <code>yes</code> →
-<code>NA</code></p>
+<p>For rows that remain <code>NA</code>,
+<code><a href="../reference/crd_aud_verify_abstract.html">crd_aud_verify_abstract()</a></code> queries the Zotero abstract field
+and runs the same token scoring. An abstract match confirms the citation
+is plausibly in the right domain, without requiring a local file.</p>
 <div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="fu"><a href="../reference/crd_aud_sort.html">crd_aud_sort</a></span><span class="op">(</span><span class="va">audit_file</span>, by <span class="op">=</span> <span class="st">"status"</span><span class="op">)</span></span>
-<span><span class="co">#&gt; Sorted by 'status' and wrote 11 rows to /tmp/Rtmpjjtg0H/audit_1c772effbafb.csv</span></span></code></pre></div>
-<p><code>sort_index</code> is assigned at write time and never changes,
-so <code>crd_aud_sort(by = "report")</code> always restores the original
-chapter order.</p>
+<code class="sourceCode R"><span><span class="fu"><a href="../reference/crd_aud_verify_abstract.html">crd_aud_verify_abstract</a></span><span class="op">(</span><span class="va">audit_file</span>, zotero_dir <span class="op">=</span> <span class="va">toy_zotero_dir</span><span class="op">)</span></span>
+<span><span class="co">#&gt; Abstract matching: 1 matched, 0 keys with no abstract in Zotero.</span></span></code></pre></div>
+<div class="datatables html-widget html-fill-item" id="htmlwidget-36aa3d2a04d42bbc2145" style="width:100%;height:auto;"></div>
+<script type="application/json" data-for="htmlwidget-36aa3d2a04d42bbc2145">{"x":{"filter":"none","vertical":false,"caption":"<caption>After crd_aud_verify_abstract(): doe2021NoFile row moves from NA to abstract_match.<\/caption>","data":[["smith2020SalmonHabitat","smith2020SalmonHabitat","smith2020SalmonHabitat","smith2020SalmonHabitat","doe2021NoFile","jones2019BeaverEcology","jones2019BeaverEcology","jones2019BeaverEcology","jones2019BeaverEcology"],["Reaches where spawning substrate embeddedness exceeded 25% had egg-to-fry survival rates 62% lower than adjacent low-embeddedness sites [@smith2020SalmonHabitat].","Fish passage assessments at 1,200 road-stream crossings found that 38% were rated as full or partial barriers to adult chinook migration [@smith2020SalmonHabitat].","Loss of streamside forest cover eliminates the shade that keeps summer water temperatures within the thermal tolerance of juvenile chinook, degrading rearing conditions in harvested riparian zones [@smith2020SalmonHabitat].","The Pacific Salmon Treaty allocates harvest between Canada and the United States based on abundance indicators and conservation thresholds negotiated through the Pacific Salmon Commission [@smith2020SalmonHabitat].","Stream temperature governs the spatial distribution of juvenile salmon and limits rearing area during summer low flows [@doe2021NoFile].","Electrofishing surveys recorded juvenile salmonid densities 3.4 times higher in beaver pond habitat than in adjacent free-flowing reaches [@jones2019BeaverEcology].","Archival records indicate that beaver pond habitat declined by approximately 60% between 1850 and 1950 due to commercial trapping pressure [@jones2019BeaverEcology].","Beaver dams create ponded habitat with stable thermal regimes that substantially increase overwinter survival of juvenile salmonids by providing shelter from winter spates [@jones2019BeaverEcology].","Beaver-mediated floodplain connectivity allows juvenile chinook to access off-channel rearing areas during high flows, where growth rates substantially exceed those of fish confined to the mainstem channel [@jones2019BeaverEcology]."],["Spawning substrate embeddedness is the dominant predictor of egg−to−fry survival\nfor chinook salmon in interior BC streams. Field surveys at 47 index sites found\nthat reaches where","Fish passage assessments at 1,200 road−stream crossings found that 38 percent\nwere rated as full or partial barriers to adult chinook migration. Culverts with\noutlet drops exceedin","Riparian canopy removal raises maximum summer stream temperatures by 3 to 7\ndegrees Celsius in small to medium channels. In reaches where streamside conifers\nwere harvested within ","","Stream temperature governs the spatial distribution of salmonid populations across Pacific Northwest watersheds. During summer low flows, elevated temperatures limits accessible re","Beaver dams significantly increase overwinter survival of juvenile salmonids by creating ponded habitat with stable thermal regimes and reduced flow velocities. Electrofishing surv","Archival trapping records and aerial photograph analysis indicate that beaver pond habitat extent declined by approximately 60 percent between 1850 and 1950 across the study waters","Beaver dams significantly increase overwinter survival of juvenile salmonids by creating ponded habitat with stable thermal regimes and reduced flow velocities. Electrofishing surv","Floodplain connectivity is restored in years when peak flows exceed bankfull discharge. Juvenile chinook tagged in the main channel were detected in floodplain side channels during"],["2","4","3","","abstract","2","4","2","5"],["<span style='background:#FFF2CC;padding:2px 5px;border-radius:3px;font-size:10px'>auto<\/span>","<span style='background:#FFF2CC;padding:2px 5px;border-radius:3px;font-size:10px'>auto<\/span>","<span style='background:#FFF2CC;padding:2px 5px;border-radius:3px;font-size:10px'>auto<\/span>","<span style='background:#E2EFDA;padding:2px 5px;border-radius:3px;font-size:10px'>no_match<\/span>","<span style='background:#D0E4F7;padding:2px 5px;border-radius:3px;font-size:10px'>abstract_match<\/span>","<span style='background:#FFF2CC;padding:2px 5px;border-radius:3px;font-size:10px'>auto<\/span>","<span style='background:#FFF2CC;padding:2px 5px;border-radius:3px;font-size:10px'>auto<\/span>","<span style='background:#FFF2CC;padding:2px 5px;border-radius:3px;font-size:10px'>auto<\/span>","<span style='background:#FFF2CC;padding:2px 5px;border-radius:3px;font-size:10px'>auto<\/span>"]],"container":"<table class=\"display\">\n  <thead>\n    <tr>\n      <th>key<\/th>\n      <th>paraphrase<\/th>\n      <th>quote<\/th>\n      <th>p/§<\/th>\n      <th>verified<\/th>\n    <\/tr>\n  <\/thead>\n<\/table>","options":{"pageLength":9,"scrollX":true,"dom":"t","initComplete":"function(settings, json) {\n$(this.api().table().node()).css('font-size', '11px');\n}","columnDefs":[{"width":"110px","targets":0},{"width":"240px","targets":1},{"width":"240px","targets":2},{"width":"35px","targets":3},{"width":"90px","targets":4},{"name":"key","targets":0},{"name":"paraphrase","targets":1},{"name":"quote","targets":2},{"name":"loc","targets":3},{"name":"verified","targets":4}],"order":[],"autoWidth":false,"orderClasses":false,"lengthMenu":[9,10,25,50,100]}},"evals":["options.initComplete"],"jsHooks":[]}</script><p>The <code>doe2021NoFile</code> row is now <code>abstract_match</code>
+(blue). The quote column shows the Zotero abstract — the claim about
+stream temperature and salmon distribution is consistent with the
+abstract’s content. <code>page_or_section</code> is set to
+<code>"abstract"</code> so the source is unambiguous.</p>
+<p><strong><code>abstract_match</code> is not the same as
+<code>auto</code>.</strong> The abstract confirms the source is in the
+right domain. It cannot confirm the specific statistic or quote from the
+body of the paper. Review these rows with that in mind: if the claim is
+general enough to be substantiated by the abstract alone, set
+<code>context</code>; if it cites a specific number or result, you still
+need the PDF.</p>
 <hr>
 </div>
 <div class="section level3">
-<h3 id="step-5-summary">Step 5 — Summary<a class="anchor" aria-label="anchor" href="#step-5-summary"></a>
+<h3 id="step-3-sort-for-review">Step 3 — Sort for review<a class="anchor" aria-label="anchor" href="#step-3-sort-for-review"></a>
 </h3>
-<p><code><a href="../reference/crd_aud_summary.html">crd_aud_summary()</a></code> prints a live status snapshot and —
-crucially — tells you which PDFs to attach in Zotero to unlock the most
-NA rows.</p>
 <div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="../reference/crd_aud_sort.html">crd_aud_sort</a></span><span class="op">(</span><span class="va">audit_file</span>, by <span class="op">=</span> <span class="st">"status"</span><span class="op">)</span></span>
+<span><span class="co">#&gt; Sorted by 'status' and wrote 9 rows to /tmp/RtmpcCGt3z/audit_1ca852d96c06.csv</span></span></code></pre></div>
+<hr>
+</div>
+<div class="section level3">
+<h3 id="step-4-summary">Step 4 — Summary<a class="anchor" aria-label="anchor" href="#step-4-summary"></a>
+</h3>
+<div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/crd_aud_summary.html">crd_aud_summary</a></span><span class="op">(</span><span class="va">audit_file</span><span class="op">)</span></span>
 <span><span class="co">#&gt; === Citation Audit Summary ===</span></span>
-<span><span class="co">#&gt; File: /tmp/Rtmpjjtg0H/audit_1c772effbafb.csv </span></span>
-<span><span class="co">#&gt; Total rows: 11 </span></span>
+<span><span class="co">#&gt; File: /tmp/RtmpcCGt3z/audit_1ca852d96c06.csv </span></span>
+<span><span class="co">#&gt; Total rows: 9 </span></span>
 <span><span class="co">#&gt; </span></span>
 <span><span class="co">#&gt; -- Status breakdown --</span></span>
 <span><span class="co">#&gt; <span style="color: #949494;"># A tibble: 3 × 2</span></span></span>
-<span><span class="co">#&gt;   status       n</span></span>
-<span><span class="co">#&gt;   <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span>    <span style="color: #949494; font-style: italic;">&lt;int&gt;</span></span></span>
-<span><span class="co">#&gt; <span style="color: #BCBCBC;">1</span> auto         9</span></span>
-<span><span class="co">#&gt; <span style="color: #BCBCBC;">2</span> (NA)         1</span></span>
-<span><span class="co">#&gt; <span style="color: #BCBCBC;">3</span> no_match     1</span></span>
+<span><span class="co">#&gt;   status             n</span></span>
+<span><span class="co">#&gt;   <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span>          <span style="color: #949494; font-style: italic;">&lt;int&gt;</span></span></span>
+<span><span class="co">#&gt; <span style="color: #BCBCBC;">1</span> auto               7</span></span>
+<span><span class="co">#&gt; <span style="color: #BCBCBC;">2</span> abstract_match     1</span></span>
+<span><span class="co">#&gt; <span style="color: #BCBCBC;">3</span> no_match           1</span></span>
 <span><span class="co">#&gt; </span></span>
 <span><span class="co">#&gt; -- NA sources (no Zotero attachment) ranked by claim count --</span></span>
 <span><span class="co">#&gt;    Attach PDFs for these to unlock auto-verification.</span></span>
-<span><span class="co">#&gt; <span style="color: #949494;"># A tibble: 1 × 2</span></span></span>
-<span><span class="co">#&gt;   citation_key      n</span></span>
-<span><span class="co">#&gt;   <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span>         <span style="color: #949494; font-style: italic;">&lt;int&gt;</span></span></span>
-<span><span class="co">#&gt; <span style="color: #BCBCBC;">1</span> doe2021NoFile     1</span></span>
+<span><span class="co">#&gt;   (none)</span></span>
 <span><span class="co">#&gt; </span></span>
 <span><span class="co">#&gt; -- no_match sources ranked by claim count --</span></span>
 <span><span class="co">#&gt;    Attachment found but paraphrase did not score above threshold.</span></span>
@@ -371,105 +345,93 @@ NA rows.</p>
 <span><span class="co">#&gt;   citation_key               n</span></span>
 <span><span class="co">#&gt;   <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span>                  <span style="color: #949494; font-style: italic;">&lt;int&gt;</span></span></span>
 <span><span class="co">#&gt; <span style="color: #BCBCBC;">1</span> smith2020SalmonHabitat     1</span></span></code></pre></div>
-<p>In a real report with 200+ citations, the NA sources table is your
-action list: attach the top-ranked PDF, re-run
-<code><a href="../reference/crd_aud_verify_all.html">crd_aud_verify_all()</a></code>, and unlock several rows at once.</p>
 <hr>
 </div>
 <div class="section level3">
-<h3 id="step-6-interactive-review">Step 6 — Interactive review<a class="anchor" aria-label="anchor" href="#step-6-interactive-review"></a>
+<h3 id="step-5-interactive-review">Step 5 — Interactive review<a class="anchor" aria-label="anchor" href="#step-5-interactive-review"></a>
 </h3>
-<p><code><a href="../reference/crd_aud_review.html">crd_aud_review()</a></code> launches a local Shiny app in your
-browser. It is the recommended interface for working through
-<code>auto</code> rows.</p>
-<div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb10"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/crd_aud_review.html">crd_aud_review</a></span><span class="op">(</span><span class="st">"background/citation_audit.csv"</span><span class="op">)</span></span></code></pre></div>
-<p>The app opens filtered to <code>auto</code> rows. For each row:</p>
-<ol style="list-style-type: decimal">
-<li>Click the row — full <code>paraphrase</code> and <code>quote</code>
-appear side by side below the table</li>
-<li>Read both — does the source support the claim?</li>
-<li>Set <code>verified</code> in the dropdown: <code>yes</code>,
-<code>no</code>, or <code>corrected</code>
-</li>
-<li>Add a <code>notes</code> entry if the claim needs correction or
-context</li>
-<li>Click <strong>Update row</strong>, move to the next</li>
-<li>Click <strong>Save to CSV</strong> when done — the plain-text CSV is
-updated, git history preserved</li>
-</ol>
-<p>The app also shows a live progress counter: <em>N reviewed · N auto ·
-N total</em>.</p>
+<p>The app opens filtered to <code>auto</code> rows. Click a row to see
+paraphrase and quote side by side. Set <code>verified</code> to
+<code>yes</code>, <code>no</code>, or <code>corrected</code>, add notes,
+click <strong>Update row</strong>, then <strong>Save to
+CSV</strong>.</p>
 <hr>
 </div>
 </div>
 <div class="section level2">
-<h2 id="the-three-outcomes-explained">The three outcomes explained<a class="anchor" aria-label="anchor" href="#the-three-outcomes-explained"></a>
+<h2 id="the-verified-values">The verified values<a class="anchor" aria-label="anchor" href="#the-verified-values"></a>
 </h2>
 <table class="table">
 <colgroup>
-<col width="26%">
-<col width="41%">
+<col width="25%">
 <col width="32%">
+<col width="42%">
 </colgroup>
 <thead><tr class="header">
-<th>Outcome</th>
-<th>What it means</th>
-<th>What to do</th>
+<th>Value</th>
+<th>Meaning</th>
+<th>Next action</th>
 </tr></thead>
 <tbody>
 <tr class="odd">
 <td><code>auto</code></td>
-<td>Source file found; passage scored above threshold</td>
-<td>Open review app, read quote vs paraphrase, set yes/no/corrected</td>
+<td>Source matched above threshold</td>
+<td>Read quote vs paraphrase; set yes/no/corrected</td>
 </tr>
 <tr class="even">
-<td><code>no_match</code></td>
-<td>Source file found but no paragraph matched</td>
-<td>Check source manually; if claim is valid, set <code>context</code>
-or <code>yes</code>; if wrong, set <code>corrected</code>
-</td>
+<td><code>abstract_match</code></td>
+<td>Zotero abstract matched — no full text</td>
+<td>Judge if abstract is sufficient; set context or get PDF</td>
 </tr>
 <tr class="odd">
+<td><code>no_match</code></td>
+<td>Source exists, no paragraph matched</td>
+<td>Check source manually; may be a wrong citation</td>
+</tr>
+<tr class="even">
+<td><code>yes</code></td>
+<td>Reviewed and confirmed accurate</td>
+<td>Done</td>
+</tr>
+<tr class="odd">
+<td><code>no</code></td>
+<td>Claim not supported by source</td>
+<td>Fix the claim in the Rmd</td>
+</tr>
+<tr class="even">
+<td><code>corrected</code></td>
+<td>Claim was wrong; you fixed it</td>
+<td>Done</td>
+</tr>
+<tr class="odd">
+<td><code>context</code></td>
+<td>Source provides background, not a direct factual claim</td>
+<td>Done</td>
+</tr>
+<tr class="even">
 <td><code>NA</code></td>
-<td>No source file attached in Zotero</td>
-<td>Attach PDF in Zotero → re-run <code><a href="../reference/crd_aud_verify_all.html">crd_aud_verify_all()</a></code>
-</td>
+<td>No source file and no abstract in Zotero</td>
+<td>Attach PDF to unlock</td>
 </tr>
 </tbody>
 </table>
-<p><strong><code>no_match</code> is not an error.</strong> It occurs
-when:</p>
-<ul>
-<li>The report’s phrasing diverges substantially from the source (a sign
-the claim may have been paraphrased beyond what the source says — worth
-checking)</li>
-<li>The source provides context rather than a direct quotable
-finding</li>
-<li>Multiple sources are cited together (<code>[@a; @b]</code>) and the
-paraphrase blends both</li>
-</ul>
 <hr>
 </div>
 <div class="section level2">
 <h2 id="claim-type-screening">Claim type screening<a class="anchor" aria-label="anchor" href="#claim-type-screening"></a>
 </h2>
-<p><code><a href="../reference/crd_aud_scr_risk.html">crd_aud_scr_risk()</a></code> populates the <code>claim_type</code>
-column to prioritise your review effort. Statistics (numbers,
-percentages, years) carry the highest hallucination risk; context
-citations the lowest.</p>
-<div class="sourceCode" id="cb10"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="va">d3</span> <span class="op">&lt;-</span> <span class="fu">readr</span><span class="fu">::</span><span class="fu"><a href="https://readr.tidyverse.org/reference/read_delim.html" class="external-link">read_csv</a></span><span class="op">(</span><span class="va">audit_file</span>, show_col_types <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span>
-<span><span class="va">d3</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/crd_aud_scr_risk.html">crd_aud_scr_risk</a></span><span class="op">(</span><span class="va">d3</span><span class="op">)</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/base/table.html" class="external-link">table</a></span><span class="op">(</span><span class="va">d3</span><span class="op">$</span><span class="va">claim_type</span><span class="op">)</span></span>
+<p><code><a href="../reference/crd_aud_scr_risk.html">crd_aud_scr_risk()</a></code> populates <code>claim_type</code> to
+prioritise your review effort. Numeric claims carry the highest
+hallucination risk.</p>
+<div class="sourceCode" id="cb11"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">d4</span> <span class="op">&lt;-</span> <span class="fu">readr</span><span class="fu">::</span><span class="fu"><a href="https://readr.tidyverse.org/reference/read_delim.html" class="external-link">read_csv</a></span><span class="op">(</span><span class="va">audit_file</span>, show_col_types <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span>
+<span><span class="va">d4</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/crd_aud_scr_risk.html">crd_aud_scr_risk</a></span><span class="op">(</span><span class="va">d4</span><span class="op">)</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/base/table.html" class="external-link">table</a></span><span class="op">(</span><span class="va">d4</span><span class="op">$</span><span class="va">claim_type</span><span class="op">)</span></span>
 <span><span class="co">#&gt; </span></span>
 <span><span class="co">#&gt; statistic </span></span>
-<span><span class="co">#&gt;        11</span></span></code></pre></div>
-<p>For domain-specific terms, pass an extra pattern:</p>
-<div class="sourceCode" id="cb11"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="co"># Flag species names as statistics for a salmonid report</span></span>
-<span><span class="va">d3</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/crd_aud_scr_risk.html">crd_aud_scr_risk</a></span><span class="op">(</span><span class="va">d3</span>, statistic_extra <span class="op">=</span> <span class="st">"chinook|sockeye|coho|pink|chum"</span><span class="op">)</span></span></code></pre></div>
-<p>Review <code>statistic</code> rows first.</p>
+<span><span class="co">#&gt;         9</span></span></code></pre></div>
 <hr>
 </div>
 <div class="section level2">
@@ -479,58 +441,72 @@ citations the lowest.</p>
 <code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://newgraphenvironment.github.io/cred/">cred</a></span><span class="op">)</span></span>
 <span></span>
 <span><span class="co"># ── One-time setup ──────────────────────────────────────────────────────────</span></span>
-<span><span class="co"># Generate the audit CSV from project root (chapter Rmd files only)</span></span>
 <span><span class="fu"><a href="../reference/crd_aud_write.html">crd_aud_write</a></span><span class="op">(</span>rmd_dir <span class="op">=</span> <span class="st">"."</span>, out_file <span class="op">=</span> <span class="st">"background/citation_audit.csv"</span><span class="op">)</span></span>
 <span></span>
 <span><span class="co"># ── After adding new Rmd content ────────────────────────────────────────────</span></span>
-<span><span class="co"># Merge new citations without losing manual edits</span></span>
 <span><span class="fu"><a href="../reference/crd_aud_upd.html">crd_aud_upd</a></span><span class="op">(</span><span class="st">"background/citation_audit.csv"</span><span class="op">)</span></span>
 <span></span>
-<span><span class="co"># ── Auto-fill from Zotero ───────────────────────────────────────────────────</span></span>
-<span><span class="co"># Zotero must be open for BBT citation keys; not needed for the SQLite lookup</span></span>
+<span><span class="co"># ── Auto-fill from source files ─────────────────────────────────────────────</span></span>
 <span><span class="fu"><a href="../reference/crd_aud_verify_all.html">crd_aud_verify_all</a></span><span class="op">(</span><span class="st">"background/citation_audit.csv"</span><span class="op">)</span></span>
+<span></span>
+<span><span class="co"># ── Abstract fallback for remaining NA rows ──────────────────────────────────</span></span>
+<span><span class="fu"><a href="../reference/crd_aud_verify_abstract.html">crd_aud_verify_abstract</a></span><span class="op">(</span><span class="st">"background/citation_audit.csv"</span><span class="op">)</span></span>
 <span></span>
 <span><span class="co"># ── Check progress ──────────────────────────────────────────────────────────</span></span>
 <span><span class="fu"><a href="../reference/crd_aud_summary.html">crd_aud_summary</a></span><span class="op">(</span><span class="st">"background/citation_audit.csv"</span><span class="op">)</span></span>
 <span></span>
 <span><span class="co"># ── Review session ──────────────────────────────────────────────────────────</span></span>
-<span><span class="co"># Sort auto rows to the top, open the review app</span></span>
 <span><span class="fu"><a href="../reference/crd_aud_sort.html">crd_aud_sort</a></span><span class="op">(</span><span class="st">"background/citation_audit.csv"</span>, by <span class="op">=</span> <span class="st">"status"</span><span class="op">)</span></span>
 <span><span class="fu"><a href="../reference/crd_aud_review.html">crd_aud_review</a></span><span class="op">(</span><span class="st">"background/citation_audit.csv"</span><span class="op">)</span></span>
 <span></span>
-<span><span class="co"># ── Restore report order when done ─────────────────────────────────────────</span></span>
+<span><span class="co"># ── Restore report order when done ──────────────────────────────────────────</span></span>
 <span><span class="fu"><a href="../reference/crd_aud_sort.html">crd_aud_sort</a></span><span class="op">(</span><span class="st">"background/citation_audit.csv"</span>, by <span class="op">=</span> <span class="st">"report"</span><span class="op">)</span></span></code></pre></div>
-<div class="section level3">
-<h3 id="attaching-missing-pdfs">Attaching missing PDFs<a class="anchor" aria-label="anchor" href="#attaching-missing-pdfs"></a>
-</h3>
-<p><code><a href="../reference/crd_aud_summary.html">crd_aud_summary()</a></code> lists NA sources ranked by claim count
-— one attachment can unlock many rows. In Zotero:</p>
-<ol style="list-style-type: decimal">
-<li>Find the item (use the <code>citation_key</code> to search)</li>
-<li>Right-click → <strong>Add Attachment → Attach File</strong>
-</li>
-<li>Re-run <code><a href="../reference/crd_aud_verify_all.html">crd_aud_verify_all()</a></code> — newly attached files are
-picked up automatically</li>
-</ol>
-</div>
 <div class="section level3">
 <h3 id="how-source-matching-works">How source matching works<a class="anchor" aria-label="anchor" href="#how-source-matching-works"></a>
 </h3>
-<p>The token scoring approach is simple and fast:</p>
+<p>Both PDF/docx matching and abstract matching use the same token
+overlap algorithm:</p>
 <ol style="list-style-type: decimal">
-<li>Strip <code>@citekey</code> markers and markdown punctuation from
-the <code>paraphrase</code>
+<li>Strip R inline expressions, <code>@citekeys</code>, and markdown
+punctuation from <code>paraphrase</code>
 </li>
-<li>Split into tokens (≥ 4 characters)</li>
-<li>Score each paragraph/page: proportion of query tokens found in the
+<li>Extract word tokens (≥ 4 characters) and numeric tokens separately —
+numbers are the most discriminative signals</li>
+<li>Score each paragraph: proportion of query tokens found in the
 passage</li>
 <li>Accept the top-scoring passage if score ≥ <code>min_score</code>
 (default 0.2)</li>
 </ol>
-<p>Lower <code>min_score</code> to cast a wider net at the cost of
-weaker matches; raise it to require stricter agreement. The default 0.2
-(20% token overlap) works well for specific factual claims with numbers
-and key terms.</p>
+<p><strong>What 0.2 means:</strong> 1 in 5 query tokens must appear in
+the passage. With a 15-token query, 3 tokens need to match. Deliberately
+permissive — a false positive costs seconds of review; a false negative
+means searching the PDF yourself.</p>
+<table class="table">
+<thead><tr class="header">
+<th>Situation</th>
+<th>Suggested <code>min_score</code>
+</th>
+</tr></thead>
+<tbody>
+<tr class="odd">
+<td>Short or generic paraphrases — many false positives</td>
+<td>0.3 – 0.4</td>
+</tr>
+<tr class="even">
+<td>Default — specific factual claims</td>
+<td>0.2</td>
+</tr>
+<tr class="odd">
+<td>Long dense sources where good matches score low</td>
+<td>0.1 – 0.15</td>
+</tr>
+</tbody>
+</table>
+<div class="sourceCode" id="cb13"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="../reference/crd_aud_verify_all.html">crd_aud_verify_all</a></span><span class="op">(</span><span class="st">"citation_audit.csv"</span>, min_score <span class="op">=</span> <span class="fl">0.2</span><span class="op">)</span>       <span class="co"># default</span></span>
+<span><span class="fu"><a href="../reference/crd_aud_verify_abstract.html">crd_aud_verify_abstract</a></span><span class="op">(</span><span class="st">"citation_audit.csv"</span>, min_score <span class="op">=</span> <span class="fl">0.2</span><span class="op">)</span>  <span class="co"># same threshold</span></span></code></pre></div>
+<p>Re-run with <code>overwrite_verified = TRUE</code> to reprocess
+machine-assigned rows without touching human-reviewed ones.</p>
 </div>
 </div>
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>
