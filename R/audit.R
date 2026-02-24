@@ -60,7 +60,8 @@ crd_aud_write <- function(
       claim_type      = NA_character_,
       page_or_section = NA_character_,
       verified        = NA_character_,
-      notes           = NA_character_
+      notes           = NA_character_,
+      sort_index      = seq_len(dplyr::n())
     )
 
   readr::write_excel_csv(result, out_file, na = "")
@@ -104,12 +105,19 @@ crd_aud_upd <- function(
     exclude  = exclude
   )
 
+  manual_cols_all <- c(manual_cols, "sort_index")
   merged <- dplyr::left_join(
     fresh,
     dplyr::select(existing, "section", "citation_key", "paraphrase",
-                  dplyr::any_of(manual_cols)),
+                  dplyr::any_of(manual_cols_all)),
     by = c("section", "citation_key", "paraphrase")
   )
+  # Restore sort_index from existing where present; new rows keep their fresh value
+  if ("sort_index.x" %in% names(merged)) {
+    merged$sort_index <- dplyr::coalesce(merged$sort_index.y, merged$sort_index.x)
+    merged$sort_index.x <- NULL
+    merged$sort_index.y <- NULL
+  }
 
   readr::write_excel_csv(merged, out_file, na = "")
   n_new <- nrow(merged) - sum(!is.na(existing$verified))
@@ -345,6 +353,63 @@ crd_aud_fill_src <- function(
   n_nomatch  <- sum(audit$verified[idx] == "no_match", na.rm = TRUE)
   message("Done — ", n_filled, " filled, ", n_nomatch, " no_match")
   invisible(audit)
+}
+
+#' Sort an audit CSV for review and write it back
+#'
+#' Rearranges the rows of an audit CSV to support different review workflows,
+#' then writes the result back to the same file. The `sort_index` column
+#' (set at write time) always allows restoration to report order.
+#'
+#' @section Verified status order for `by = "status"`:
+#' Rows are grouped: `NA` (unseen) → `"no_match"` → `"auto"` →
+#' `"corrected"` → `"no"` → `"context"` → `"yes"`. Within each group,
+#' rows are ordered by `sort_index`. This puts the most-needing-review
+#' rows first.
+#'
+#' @param audit_file `character(1)` path to the audit CSV.
+#' @param by `character(1)` sort strategy. One of:
+#'   - `"report"` — restore to original report order (`sort_index`).
+#'   - `"status"` — group by verification status, worst-first, then
+#'     `sort_index` within each group.
+#'   - `"key"` — alphabetical by `citation_key`, then `sort_index`.
+#' @return Invisibly returns the sorted [tibble][tibble::tibble].
+#' @export
+#' @examples
+#' \dontrun{
+#' # Group unverified rows first for review
+#' crd_aud_sort("background/citation_audit.csv", by = "status")
+#'
+#' # Restore report order when done
+#' crd_aud_sort("background/citation_audit.csv", by = "report")
+#' }
+crd_aud_sort <- function(audit_file, by = c("report", "status", "key")) {
+  chk::chk_file(audit_file)
+  by <- match.arg(by)
+
+  d <- readr::read_csv(audit_file, show_col_types = FALSE)
+
+  if (!"sort_index" %in% names(d)) {
+    stop("`sort_index` column not found. Re-generate the audit CSV with ",
+         "crd_aud_write() to add it.")
+  }
+
+  status_levels <- c(NA, "no_match", "auto", "corrected", "no", "context", "yes")
+
+  d <- switch(by,
+    report = dplyr::arrange(d, .data$sort_index),
+    status = {
+      d$status_order <- match(d$verified, status_levels[!is.na(status_levels)])
+      d$status_order <- ifelse(is.na(d$verified), 0L, d$status_order)
+      dplyr::arrange(d, .data$status_order, .data$sort_index) |>
+        dplyr::select(-"status_order")
+    },
+    key = dplyr::arrange(d, .data$citation_key, .data$sort_index)
+  )
+
+  readr::write_excel_csv(d, audit_file, na = "")
+  message("Sorted by '", by, "' and wrote ", nrow(d), " rows to ", audit_file)
+  invisible(d)
 }
 
 # --- internal helpers --------------------------------------------------------
