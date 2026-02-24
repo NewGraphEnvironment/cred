@@ -158,6 +158,111 @@ crd_aud_scr_risk <- function(audit) {
   audit
 }
 
+#' Fill audit CSV quote and location columns from a source document
+#'
+#' For each unverified row matching `citation_key`, searches `src` (a tibble
+#' from [crd_docx_ext_txt()] or [crd_pdf_ext_txt()]) for the best-matching
+#' passage using the `paraphrase` column as the query. Fills:
+#' - `quote` — best-matching passage text
+#' - `page_or_section` — `doc_index` (docx) or `page` (pdf) of the match
+#' - `verified` — `"auto"` when a match meets `min_score`; `"no_match"` otherwise
+#'
+#' Rows where `verified` is already non-blank are skipped unless
+#' `overwrite_verified = TRUE`. The updated CSV is written back to `audit_file`.
+#'
+#' @param audit_file `character(1)` path to the audit CSV produced by
+#'   [crd_aud_write()].
+#' @param src `data.frame` as returned by [crd_docx_ext_txt()] or
+#'   [crd_pdf_ext_txt()]. Source type is inferred from column names
+#'   (`doc_index` = docx, `page` = pdf).
+#' @param citation_key `character(1)` citation key to process. Rows whose
+#'   `citation_key` column equals this value are searched.
+#' @param n_results `integer(1)` number of top passages to consider per row.
+#'   Only the top-scoring passage is written to `quote`. Default `1L`.
+#' @param min_score `numeric(1)` minimum token-match score to accept as a
+#'   match. Default `0.2`.
+#' @param overwrite_verified `logical(1)` if `TRUE`, re-fill rows even if
+#'   `verified` is already set. Default `FALSE`.
+#' @return Invisibly returns the updated audit [tibble][tibble::tibble].
+#' @export
+#' @examples
+#' \dontrun{
+#' doc <- crd_docx_ext_txt("background/price_etal2026.docx")
+#' crd_aud_fill_src("background/citation_audit.csv", doc,
+#'                  citation_key = "price_etal2026rebuildinggiis")
+#' }
+crd_aud_fill_src <- function(
+    audit_file,
+    src,
+    citation_key,
+    n_results           = 1L,
+    min_score           = 0.2,
+    overwrite_verified  = FALSE) {
+
+  chk::chk_file(audit_file)
+  chk::chk_data(src)
+  chk::chk_string(citation_key)
+  chk::chk_whole_number(n_results)
+  chk::chk_number(min_score)
+  chk::chk_flag(overwrite_verified)
+
+  # Detect source type
+  if ("doc_index" %in% names(src)) {
+    src_type <- "docx"
+    loc_col  <- "doc_index"
+  } else if ("page" %in% names(src)) {
+    src_type <- "pdf"
+    loc_col  <- "page"
+  } else {
+    stop("`src` must have a `doc_index` (docx) or `page` (pdf) column.")
+  }
+
+  audit <- readr::read_csv(audit_file, show_col_types = FALSE)
+
+  target_rows <- audit$citation_key == citation_key & !is.na(audit$citation_key)
+  if (!overwrite_verified) {
+    already_done <- !is.na(audit$verified) & audit$verified != ""
+    target_rows  <- target_rows & !already_done
+  }
+
+  n_target <- sum(target_rows)
+  if (n_target == 0L) {
+    message("No unverified rows found for citation_key = ", citation_key)
+    return(invisible(audit))
+  }
+
+  message("Filling ", n_target, " rows for ", citation_key, " ...")
+
+  idx <- which(target_rows)
+  for (i in idx) {
+    para <- audit$paraphrase[i]
+    if (is.na(para) || para == "") {
+      audit$verified[i] <- "no_match"
+      next
+    }
+
+    res <- if (src_type == "docx") {
+      crd_docx_srch_clm(src, para, n_results = n_results, min_score = min_score)
+    } else {
+      crd_pdf_srch_clm(src, para, n_results = n_results, min_score = min_score)
+    }
+
+    if (nrow(res) == 0L) {
+      audit$verified[i]        <- "no_match"
+    } else {
+      audit$quote[i]           <- res[[if (src_type == "docx") "text" else "passage"]][1L]
+      audit$page_or_section[i] <- as.character(res[[loc_col]][1L])
+      audit$verified[i]        <- "auto"
+    }
+  }
+
+  readr::write_excel_csv(audit, audit_file, na = "")
+  n_filled   <- sum(audit$verified[idx] == "auto",   na.rm = TRUE)
+  n_nomatch  <- sum(audit$verified[idx] == "no_match", na.rm = TRUE)
+  message("Done — ", n_filled, " filled, ", n_nomatch, " no_match")
+  invisible(audit)
+}
+
 # --- internal helpers --------------------------------------------------------
 
 .section_name <- function(f) {
