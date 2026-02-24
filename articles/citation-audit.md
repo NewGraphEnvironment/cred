@@ -119,7 +119,7 @@ writeLines(c(
 crd_aud_write(rmd_dir = rmd_dir, out_file = audit_file)
 #> Scanning: 0100-habitat.Rmd
 #> Scanning: 0200-beaver.Rmd
-#> Wrote 5 rows to /tmp/RtmpjKexm6/audit_1cf35eec27d5.csv
+#> Wrote 5 rows to /tmp/RtmpSX2kPK/audit_1c7b19430c5c.csv
 ```
 
 Nine rows across two chapters. The `verified` column is blank — no
@@ -208,7 +208,7 @@ most actionable are at the top. The `"status"` order is:
 
 ``` r
 crd_aud_sort(audit_file, by = "status")
-#> Sorted by 'status' and wrote 5 rows to /tmp/RtmpjKexm6/audit_1cf35eec27d5.csv
+#> Sorted by 'status' and wrote 5 rows to /tmp/RtmpSX2kPK/audit_1c7b19430c5c.csv
 ```
 
 `sort_index` is assigned at write time and never changes, so
@@ -226,7 +226,7 @@ Zotero to unlock the most NA rows.
 ``` r
 crd_aud_summary(audit_file)
 #> === Citation Audit Summary ===
-#> File: /tmp/RtmpjKexm6/audit_1cf35eec27d5.csv 
+#> File: /tmp/RtmpSX2kPK/audit_1c7b19430c5c.csv 
 #> Total rows: 5 
 #> 
 #> -- Status breakdown --

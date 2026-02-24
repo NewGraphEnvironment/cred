@@ -231,7 +231,7 @@ deliberate: we want to see the <code>no_match</code> outcome.</p>
 <span><span class="fu"><a href="../reference/crd_aud_write.html">crd_aud_write</a></span><span class="op">(</span>rmd_dir <span class="op">=</span> <span class="va">rmd_dir</span>, out_file <span class="op">=</span> <span class="va">audit_file</span><span class="op">)</span></span>
 <span><span class="co">#&gt; Scanning: 0100-habitat.Rmd</span></span>
 <span><span class="co">#&gt; Scanning: 0200-beaver.Rmd</span></span>
-<span><span class="co">#&gt; Wrote 5 rows to /tmp/RtmpjKexm6/audit_1cf35eec27d5.csv</span></span></code></pre></div>
+<span><span class="co">#&gt; Wrote 5 rows to /tmp/RtmpSX2kPK/audit_1c7b19430c5c.csv</span></span></code></pre></div>
 <div class="datatables html-widget html-fill-item" id="htmlwidget-ac96cb3ee4656e2e9ec3" style="width:100%;height:auto;"></div>
 <script type="application/json" data-for="htmlwidget-ac96cb3ee4656e2e9ec3">{"x":{"filter":"none","vertical":false,"caption":"<caption>Audit scaffold — 9 rows, verified column blank.<\/caption>","data":[["habitat","habitat","habitat","beaver","beaver"],["smith2020SalmonHabitat","smith2020SalmonHabitat","doe2021NoFile","jones2019BeaverEcology","jones2019BeaverEcology"],["[@smith2020SalmonHabitat].","higher than mainstem conditions [@smith2020SalmonHabitat].","and limits rearing area during summer low flows [@doe2021NoFile].","[@jones2019BeaverEcology].","juvenile survival [@jones2019BeaverEcology]."],[null,null,null,null,null]],"container":"<table class=\"display\">\n  <thead>\n    <tr>\n      <th>section<\/th>\n      <th>citation_key<\/th>\n      <th>paraphrase<\/th>\n      <th>verified<\/th>\n    <\/tr>\n  <\/thead>\n<\/table>","options":{"pageLength":9,"scrollX":true,"dom":"t","columnDefs":[{"width":"90px","targets":0},{"width":"180px","targets":1},{"width":"380px","targets":2},{"width":"70px","targets":3},{"name":"section","targets":0},{"name":"citation_key","targets":1},{"name":"paraphrase","targets":2},{"name":"verified","targets":3}],"order":[],"autoWidth":false,"orderClasses":false,"lengthMenu":[9,10,25,50,100]}},"evals":[],"jsHooks":[]}</script><p>Nine rows across two chapters. The <code>verified</code> column is
 blank — no matching has happened yet.</p>
@@ -323,7 +323,7 @@ are at the top. The <code>"status"</code> order is:</p>
 <code>NA</code></p>
 <div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/crd_aud_sort.html">crd_aud_sort</a></span><span class="op">(</span><span class="va">audit_file</span>, by <span class="op">=</span> <span class="st">"status"</span><span class="op">)</span></span>
-<span><span class="co">#&gt; Sorted by 'status' and wrote 5 rows to /tmp/RtmpjKexm6/audit_1cf35eec27d5.csv</span></span></code></pre></div>
+<span><span class="co">#&gt; Sorted by 'status' and wrote 5 rows to /tmp/RtmpSX2kPK/audit_1c7b19430c5c.csv</span></span></code></pre></div>
 <p><code>sort_index</code> is assigned at write time and never changes,
 so <code>crd_aud_sort(by = "report")</code> always restores the original
 chapter order.</p>
@@ -338,7 +338,7 @@ NA rows.</p>
 <div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/crd_aud_summary.html">crd_aud_summary</a></span><span class="op">(</span><span class="va">audit_file</span><span class="op">)</span></span>
 <span><span class="co">#&gt; === Citation Audit Summary ===</span></span>
-<span><span class="co">#&gt; File: /tmp/RtmpjKexm6/audit_1cf35eec27d5.csv </span></span>
+<span><span class="co">#&gt; File: /tmp/RtmpSX2kPK/audit_1c7b19430c5c.csv </span></span>
 <span><span class="co">#&gt; Total rows: 5 </span></span>
 <span><span class="co">#&gt; </span></span>
 <span><span class="co">#&gt; -- Status breakdown --</span></span>
