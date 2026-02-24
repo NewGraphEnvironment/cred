@@ -394,7 +394,8 @@ crd_aud_sort <- function(audit_file, by = c("report", "status", "key")) {
          "crd_aud_write() to add it.")
   }
 
-  status_levels <- c(NA, "no_match", "auto", "corrected", "no", "context", "yes")
+  # auto first — has quotes to check; NA last — nothing to review without source
+  status_levels <- c("auto", "no_match", "corrected", "no", "context", "yes", NA)
 
   d <- switch(by,
     report = dplyr::arrange(d, .data$sort_index),
