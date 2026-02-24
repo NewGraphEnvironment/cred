@@ -1,10 +1,10 @@
-# Fill quote and verified for NA rows using Zotero abstract text
+# queries the local Zotero database for the abstract of each cited item and scores it against the `paraphrase` using token overlap. Rows that score at or above `min_score` receive `verified = "abstract_match"` and the abstract text as their `quote`.
 
-For rows where `verified` is `NA` (no source file attached in Zotero),
-queries the local Zotero database for the abstract of each cited item
-and scores it against the `paraphrase` using token overlap. Rows that
-score at or above `min_score` receive `verified = "abstract_match"` and
-the abstract text as their `quote`.
+Abstract matching confirms the citation is plausibly in the right domain
+but cannot verify a specific quote from the body of the paper. A hit
+means the cited source covers the general topic of the claim; a miss
+does not mean the citation is wrong — the claim may simply not appear in
+the abstract.
 
 ## Usage
 
@@ -41,14 +41,6 @@ crd_aud_verify_abstract(
 ## Value
 
 The updated audit data frame, invisibly. Writes to `audit_file`.
-
-## Details
-
-Abstract matching confirms the citation is plausibly in the right domain
-but cannot verify a specific quote from the body of the paper. A hit
-means the cited source covers the general topic of the claim; a miss
-does not mean the citation is wrong — the claim may simply not appear in
-the abstract.
 
 ## Examples
 

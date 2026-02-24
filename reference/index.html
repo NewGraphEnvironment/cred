@@ -46,6 +46,13 @@
 
       <dl><dt>
 
+          <code><a href="crd_aud_eval_inline.html">crd_aud_eval_inline()</a></code>
+
+        </dt>
+        <dd>Fill quote and verified for NA rows using Zotero abstract text</dd>
+
+        <dt>
+
           <code><a href="crd_aud_fill_src.html">crd_aud_fill_src()</a></code>
 
         </dt>
@@ -98,7 +105,7 @@
           <code><a href="crd_aud_verify_abstract.html">crd_aud_verify_abstract()</a></code>
 
         </dt>
-        <dd>Fill quote and verified for NA rows using Zotero abstract text</dd>
+        <dd>queries the local Zotero database for the abstract of each cited item and scores it against the <code>paraphrase</code> using token overlap. Rows that score at or above <code>min_score</code> receive <code>verified = "abstract_match"</code> and the abstract text as their <code>quote</code>.</dd>
 
         <dt>
 
