@@ -7,6 +7,8 @@ Description: Tools for extracting, auditing, and verifying inline citations
     in bookdown R Markdown documents. Supports systematic detection of
     hallucinated statistics or misattributed findings introduced during
     LLM-assisted drafting.
+URL: https://newgraphenvironment.github.io/cred/, https://github.com/NewGraphEnvironment/cred
+BugReports: https://github.com/NewGraphEnvironment/cred/issues
 License: MIT + file LICENSE
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
