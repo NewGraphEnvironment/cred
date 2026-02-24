@@ -478,6 +478,127 @@ crd_aud_summary <- function(audit_file) {
   ))
 }
 
+#' Format an audit CSV as a readable Excel workbook
+#'
+#' Writes a `.xlsx` version of the audit CSV with formatting optimised for
+#' manual review: fixed row height (so rows don't expand to full paragraph
+#' height), wide columns for `paraphrase` and `quote`, frozen header row,
+#' auto-filter, and colour-coded `verified` status cells.
+#'
+#' Open the `.xlsx` in Excel or Numbers. Click any `paraphrase` or `quote`
+#' cell to read the full text in the formula bar. Set `verified` to
+#' `yes` / `no` / `corrected` directly in the workbook, then save and
+#' re-import edits to the CSV manually, or continue editing the CSV directly.
+#'
+#' @param audit_file `character(1)` path to the audit CSV produced by
+#'   [crd_aud_write()].
+#' @param out_file `character(1)` output `.xlsx` path. Default replaces
+#'   the `.csv` extension with `.xlsx` in the same directory.
+#' @return Invisibly returns `out_file`.
+#' @export
+#' @examples
+#' \dontrun{
+#' crd_aud_fmt_xlsx("background/citation_audit.csv")
+#' }
+crd_aud_fmt_xlsx <- function(audit_file, out_file = NULL) {
+  chk::chk_file(audit_file)
+
+  if (!requireNamespace("openxlsx", quietly = TRUE)) {
+    stop("Package 'openxlsx' is required. Install with: pak::pak('openxlsx')")
+  }
+
+  if (is.null(out_file)) {
+    out_file <- sub("\\.csv$", ".xlsx", audit_file)
+  }
+
+  d <- readr::read_csv(audit_file, show_col_types = FALSE)
+
+  wb <- openxlsx::createWorkbook()
+  openxlsx::addWorksheet(wb, "citation_audit")
+
+  # --- column widths (Excel units ≈ chars) ---
+  col_widths <- c(
+    section         = 14,
+    citation_key    = 28,
+    paraphrase      = 52,
+    quote           = 52,
+    claim_type      = 12,
+    page_or_section = 14,
+    verified        = 11,
+    notes           = 30,
+    sort_index      =  9
+  )
+  # Apply in column order of d
+  widths <- vapply(names(d), function(n) {
+    if (n %in% names(col_widths)) col_widths[[n]] else 14
+  }, numeric(1))
+  openxlsx::setColWidths(wb, 1, cols = seq_along(d), widths = widths)
+
+  # --- styles ---
+  header_style <- openxlsx::createStyle(
+    fontName   = "Aptos Narrow",
+    fontSize   = 11,
+    fontColour = "white",
+    fgFill     = "#1a1a1a",
+    halign     = "left",
+    textDecoration = "bold",
+    wrapText   = TRUE
+  )
+  wrap_style <- openxlsx::createStyle(
+    fontName = "Aptos Narrow",
+    fontSize = 10,
+    wrapText = TRUE,
+    valign   = "top"
+  )
+  # verified colour map
+  status_colours <- c(
+    "auto"      = "#FFF2CC",  # yellow  — awaiting review
+    "yes"       = "#D9EAD3",  # green   — confirmed
+    "no"        = "#F4CCCC",  # red     — not supported
+    "corrected" = "#FCE5CD",  # orange  — fixed in Rmd
+    "no_match"  = "#E2EFDA",  # light green — no match found
+    "context"   = "#CFE2F3"   # blue    — context citation
+  )
+
+  # --- write data ---
+  openxlsx::writeData(wb, 1, d, headerStyle = header_style)
+
+  # body wrap style for all cells
+  openxlsx::addStyle(wb, 1, wrap_style,
+    rows = seq(2, nrow(d) + 1), cols = seq_along(d), gridExpand = TRUE
+  )
+
+  # colour verified column
+  verified_col <- which(names(d) == "verified")
+  for (status in names(status_colours)) {
+    rows_match <- which(d$verified == status) + 1L  # +1 for header
+    if (length(rows_match) == 0L) next
+    cell_style <- openxlsx::createStyle(
+      fontName = "Aptos Narrow",
+      fontSize = 10,
+      fgFill   = status_colours[[status]],
+      wrapText = TRUE,
+      valign   = "top"
+    )
+    openxlsx::addStyle(wb, 1, cell_style,
+      rows = rows_match, cols = verified_col, gridExpand = FALSE
+    )
+  }
+
+  # --- fixed row height (prevents auto-expand to paragraph height) ---
+  # Header taller; data rows fixed at 42pt — readable without being huge
+  openxlsx::setRowHeights(wb, 1, rows = 1L, heights = 22)
+  openxlsx::setRowHeights(wb, 1, rows = seq(2, nrow(d) + 1), heights = 42)
+
+  # --- freeze header + auto-filter ---
+  openxlsx::freezePane(wb, 1, firstRow = TRUE)
+  openxlsx::addFilter(wb, 1, row = 1, cols = seq_along(d))
+
+  openxlsx::saveWorkbook(wb, out_file, overwrite = TRUE)
+  message("Wrote formatted workbook to ", out_file)
+  invisible(out_file)
+}
+
 # --- internal helpers --------------------------------------------------------
 
 .section_name <- function(f) {
