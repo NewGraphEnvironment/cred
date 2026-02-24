@@ -279,7 +279,7 @@ crd_aud_review <- function(audit_file, launch.browser = TRUE) {
 
     # Save to CSV
     shiny::observeEvent(input$save_btn, {
-      readr::write_excel_csv(dat(), audit_file, na = "")
+      readr::write_csv(dat(), audit_file, na = "")
       unsaved(FALSE)
       last_save(Sys.time())
       message("Saved ", nrow(dat()), " rows to ", audit_file)

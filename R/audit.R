@@ -64,7 +64,7 @@ crd_aud_write <- function(
       sort_index      = seq_len(dplyr::n())
     )
 
-  readr::write_excel_csv(result, out_file, na = "")
+  readr::write_csv(result, out_file, na = "")
   message("Wrote ", nrow(result), " rows to ", out_file)
   invisible(result)
 }
@@ -119,7 +119,7 @@ crd_aud_upd <- function(
     merged$sort_index.y <- NULL
   }
 
-  readr::write_excel_csv(merged, out_file, na = "")
+  readr::write_csv(merged, out_file, na = "")
   n_new <- nrow(merged) - sum(!is.na(existing$verified))
   message("Updated ", out_file, " — ", nrow(merged), " rows (", n_new, " new/unverified)")
   invisible(merged)
@@ -368,7 +368,7 @@ crd_aud_fill_src <- function(
     }
   }
 
-  readr::write_excel_csv(audit, audit_file, na = "")
+  readr::write_csv(audit, audit_file, na = "")
   n_filled   <- sum(audit$verified[idx] == "auto",   na.rm = TRUE)
   n_nomatch  <- sum(audit$verified[idx] == "no_match", na.rm = TRUE)
   message("Done — ", n_filled, " filled, ", n_nomatch, " no_match")
@@ -428,7 +428,7 @@ crd_aud_sort <- function(audit_file, by = c("report", "status", "key")) {
     key = dplyr::arrange(d, .data$citation_key, .data$sort_index)
   )
 
-  readr::write_excel_csv(d, audit_file, na = "")
+  readr::write_csv(d, audit_file, na = "")
   message("Sorted by '", by, "' and wrote ", nrow(d), " rows to ", audit_file)
   invisible(d)
 }
