@@ -14,7 +14,8 @@ crd_aud_scr_risk(audit, statistic_extra = NULL)
 - audit:
 
   `data.frame` with at least `paraphrase` and `claim_type` columns, as
-  produced by [`crd_aud_write()`](crd_aud_write.md).
+  produced by
+  [`crd_aud_write()`](https://newgraphenvironment.github.io/cred/reference/crd_aud_write.md).
 
 - statistic_extra:
 

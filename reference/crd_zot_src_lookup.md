@@ -3,7 +3,7 @@
 Queries the local Zotero SQLite database to find PDF or Word document
 attachments for a vector of Better BibTeX citation keys. Returns a
 tibble suitable for passing to
-[`crd_aud_verify_all()`](crd_aud_verify_all.md).
+[`crd_aud_verify_all()`](https://newgraphenvironment.github.io/cred/reference/crd_aud_verify_all.md).
 
 ## Usage
 

@@ -1,11 +1,12 @@
 # Verify all citation keys in an audit CSV against their source documents
 
 Convenience wrapper around
-[`crd_zot_src_lookup()`](crd_zot_src_lookup.md) and
-[`crd_aud_fill_src()`](crd_aud_fill_src.md). For each citation key in
-the audit CSV that has a resolvable Zotero attachment, loads the source
-document once and fills `quote`, `page_or_section`, and `verified`
-columns for all matching rows.
+[`crd_zot_src_lookup()`](https://newgraphenvironment.github.io/cred/reference/crd_zot_src_lookup.md)
+and
+[`crd_aud_fill_src()`](https://newgraphenvironment.github.io/cred/reference/crd_aud_fill_src.md).
+For each citation key in the audit CSV that has a resolvable Zotero
+attachment, loads the source document once and fills `quote`,
+`page_or_section`, and `verified` columns for all matching rows.
 
 ## Usage
 
@@ -28,25 +29,28 @@ crd_aud_verify_all(
 - sources:
 
   `data.frame` as returned by
-  [`crd_zot_src_lookup()`](crd_zot_src_lookup.md), with columns
-  `citation_key`, `src_path`, `src_type`. If `NULL` (default), all
-  unique keys in `audit_file` are looked up automatically via
-  [`crd_zot_src_lookup()`](crd_zot_src_lookup.md).
+  [`crd_zot_src_lookup()`](https://newgraphenvironment.github.io/cred/reference/crd_zot_src_lookup.md),
+  with columns `citation_key`, `src_path`, `src_type`. If `NULL`
+  (default), all unique keys in `audit_file` are looked up automatically
+  via
+  [`crd_zot_src_lookup()`](https://newgraphenvironment.github.io/cred/reference/crd_zot_src_lookup.md).
 
 - zotero_dir:
 
   `character(1)` Zotero data directory, passed to
-  [`crd_zot_src_lookup()`](crd_zot_src_lookup.md) when `sources` is
-  `NULL`. Default `"~/Zotero"`.
+  [`crd_zot_src_lookup()`](https://newgraphenvironment.github.io/cred/reference/crd_zot_src_lookup.md)
+  when `sources` is `NULL`. Default `"~/Zotero"`.
 
 - min_score:
 
-  `numeric(1)` passed to [`crd_aud_fill_src()`](crd_aud_fill_src.md).
+  `numeric(1)` passed to
+  [`crd_aud_fill_src()`](https://newgraphenvironment.github.io/cred/reference/crd_aud_fill_src.md).
   Default `0.2`.
 
 - overwrite_verified:
 
-  `logical(1)` passed to [`crd_aud_fill_src()`](crd_aud_fill_src.md).
+  `logical(1)` passed to
+  [`crd_aud_fill_src()`](https://newgraphenvironment.github.io/cred/reference/crd_aud_fill_src.md).
   Default `FALSE`.
 
 ## Value

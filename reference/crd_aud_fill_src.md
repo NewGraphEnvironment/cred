@@ -1,9 +1,12 @@
 # Fill audit CSV quote and location columns from a source document
 
 For each unverified row matching `citation_key`, searches `src` (a
-tibble from [`crd_docx_ext_txt()`](crd_docx_ext_txt.md) or
-[`crd_pdf_ext_txt()`](crd_pdf_ext_txt.md)) for the best-matching passage
-using the `paraphrase` column as the query. Fills:
+tibble from
+[`crd_docx_ext_txt()`](https://newgraphenvironment.github.io/cred/reference/crd_docx_ext_txt.md)
+or
+[`crd_pdf_ext_txt()`](https://newgraphenvironment.github.io/cred/reference/crd_pdf_ext_txt.md))
+for the best-matching passage using the `paraphrase` column as the
+query. Fills:
 
 - `quote` — best-matching passage text
 
@@ -30,14 +33,16 @@ crd_aud_fill_src(
 - audit_file:
 
   `character(1)` path to the audit CSV produced by
-  [`crd_aud_write()`](crd_aud_write.md).
+  [`crd_aud_write()`](https://newgraphenvironment.github.io/cred/reference/crd_aud_write.md).
 
 - src:
 
   `data.frame` as returned by
-  [`crd_docx_ext_txt()`](crd_docx_ext_txt.md) or
-  [`crd_pdf_ext_txt()`](crd_pdf_ext_txt.md). Source type is inferred
-  from column names (`doc_index` = docx, `page` = pdf).
+  [`crd_docx_ext_txt()`](https://newgraphenvironment.github.io/cred/reference/crd_docx_ext_txt.md)
+  or
+  [`crd_pdf_ext_txt()`](https://newgraphenvironment.github.io/cred/reference/crd_pdf_ext_txt.md).
+  Source type is inferred from column names (`doc_index` = docx, `page`
+  = pdf).
 
 - citation_key:
 

@@ -1,9 +1,9 @@
 # Search a PDF for the best-matching passage to a paraphrase
 
 Uses the same token-scoring approach as
-[`crd_docx_srch_clm()`](crd_docx_srch_clm.md), applied to
-paragraph-split page text. Returns top matching passages with page
-numbers.
+[`crd_docx_srch_clm()`](https://newgraphenvironment.github.io/cred/reference/crd_docx_srch_clm.md),
+applied to paragraph-split page text. Returns top matching passages with
+page numbers.
 
 ## Usage
 
@@ -15,7 +15,8 @@ crd_pdf_srch_clm(pdf_txt, paraphrase, n_results = 3L, min_score = 0.2)
 
 - pdf_txt:
 
-  `data.frame` as returned by [`crd_pdf_ext_txt()`](crd_pdf_ext_txt.md).
+  `data.frame` as returned by
+  [`crd_pdf_ext_txt()`](https://newgraphenvironment.github.io/cred/reference/crd_pdf_ext_txt.md).
 
 - paraphrase:
 

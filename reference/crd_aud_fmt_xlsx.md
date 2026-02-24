@@ -16,7 +16,7 @@ crd_aud_fmt_xlsx(audit_file, out_file = NULL)
 - audit_file:
 
   `character(1)` path to the audit CSV produced by
-  [`crd_aud_write()`](crd_aud_write.md).
+  [`crd_aud_write()`](https://newgraphenvironment.github.io/cred/reference/crd_aud_write.md).
 
 - out_file:
 

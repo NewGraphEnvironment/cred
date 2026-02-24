@@ -23,13 +23,13 @@ call.
                                                   │
                                              Review app  ──►  yes / no / corrected
 
-| Step | Function                                                     | What it does                                                                                |
-|------|--------------------------------------------------------------|---------------------------------------------------------------------------------------------|
-| 1    | [`crd_aud_write()`](../reference/crd_aud_write.md)           | Scan Rmd files → extract citations with paraphrase context → write CSV scaffold             |
-| 2    | [`crd_aud_verify_all()`](../reference/crd_aud_verify_all.md) | Look up Zotero attachments → search each source → fill `quote` and `verified`               |
-| 3    | [`crd_aud_sort()`](../reference/crd_aud_sort.md)             | Sort `auto` rows first so reviewable rows are at the top                                    |
-| 4    | [`crd_aud_summary()`](../reference/crd_aud_summary.md)       | Print status snapshot and PDF attachment priority list                                      |
-| 5    | [`crd_aud_review()`](../reference/crd_aud_review.md)         | Launch interactive Shiny app — paraphrase vs quote side by side, dropdown to set `verified` |
+| Step | Function                                                                                             | What it does                                                                                |
+|------|------------------------------------------------------------------------------------------------------|---------------------------------------------------------------------------------------------|
+| 1    | [`crd_aud_write()`](https://newgraphenvironment.github.io/cred/reference/crd_aud_write.md)           | Scan Rmd files → extract citations with paraphrase context → write CSV scaffold             |
+| 2    | [`crd_aud_verify_all()`](https://newgraphenvironment.github.io/cred/reference/crd_aud_verify_all.md) | Look up Zotero attachments → search each source → fill `quote` and `verified`               |
+| 3    | [`crd_aud_sort()`](https://newgraphenvironment.github.io/cred/reference/crd_aud_sort.md)             | Sort `auto` rows first so reviewable rows are at the top                                    |
+| 4    | [`crd_aud_summary()`](https://newgraphenvironment.github.io/cred/reference/crd_aud_summary.md)       | Print status snapshot and PDF attachment priority list                                      |
+| 5    | [`crd_aud_review()`](https://newgraphenvironment.github.io/cred/reference/crd_aud_review.md)         | Launch interactive Shiny app — paraphrase vs quote side by side, dropdown to set `verified` |
 
 ------------------------------------------------------------------------
 
@@ -54,10 +54,11 @@ toy_zotero_dir <- system.file("extdata", package = "cred")
 
 ### Step 1 — Write the audit CSV
 
-[`crd_aud_write()`](../reference/crd_aud_write.md) scans all chapter Rmd
-files (names beginning with four digits), extracts every `@citekey` with
-the surrounding sentence as `paraphrase`, and writes a CSV scaffold with
-blank `verified`, `quote`, and `notes` columns.
+[`crd_aud_write()`](https://newgraphenvironment.github.io/cred/reference/crd_aud_write.md)
+scans all chapter Rmd files (names beginning with four digits), extracts
+every `@citekey` with the surrounding sentence as `paraphrase`, and
+writes a CSV scaffold with blank `verified`, `quote`, and `notes`
+columns.
 
 The toy Rmd files reflect common patterns in scientific reports:
 specific statistics, process findings, and one claim the source does not
@@ -66,8 +67,8 @@ support. The floodplain growth claim in the habitat chapter cites
 debris — not floodplain rearing. That mismatch is deliberate: it
 produces the `no_match` outcome we want to demonstrate. Each sentence is
 written on a single line so
-[`crd_aud_write()`](../reference/crd_aud_write.md) captures the full
-paraphrase context.
+[`crd_aud_write()`](https://newgraphenvironment.github.io/cred/reference/crd_aud_write.md)
+captures the full paraphrase context.
 
 ``` r
 rmd_dir    <- tempfile("rmd_")
@@ -107,7 +108,7 @@ writeLines(c(
 crd_aud_write(rmd_dir = rmd_dir, out_file = audit_file)
 #> Scanning: 0100-habitat.Rmd
 #> Scanning: 0200-beaver.Rmd
-#> Wrote 9 rows to /tmp/RtmpPxj0H5/audit_1c7657128d67.csv
+#> Wrote 9 rows to /tmp/RtmpZL446Z/audit_1c7f731ed8d8.csv
 ```
 
 Nine rows across two chapters. The `verified` column is blank — no
@@ -117,10 +118,10 @@ matching has happened yet.
 
 ### Step 2 — Look up Zotero source paths
 
-[`crd_zot_src_lookup()`](../reference/crd_zot_src_lookup.md) queries the
-Zotero SQLite database (read-only, immutable URI — safe to run while
-Zotero is open) and returns file paths for any attached PDFs or Word
-documents.
+[`crd_zot_src_lookup()`](https://newgraphenvironment.github.io/cred/reference/crd_zot_src_lookup.md)
+queries the Zotero SQLite database (read-only, immutable URI — safe to
+run while Zotero is open) and returns file paths for any attached PDFs
+or Word documents.
 
 ``` r
 keys    <- unique(d$citation_key)
@@ -136,17 +137,17 @@ sources[, c("citation_key", "src_type")]
 `doe2021NoFile` has no attachment — it was added to Zotero by DOI lookup
 (metadata only, no PDF downloaded). The warning is expected; the row
 will remain `NA` in the audit.
-[`crd_aud_summary()`](../reference/crd_aud_summary.md) will flag it as a
-priority to attach.
+[`crd_aud_summary()`](https://newgraphenvironment.github.io/cred/reference/crd_aud_summary.md)
+will flag it as a priority to attach.
 
 ------------------------------------------------------------------------
 
 ### Step 3 — Auto-fill quotes
 
-[`crd_aud_verify_all()`](../reference/crd_aud_verify_all.md) loads each
-source document once, then for every unverified row matching that key it
-scores paragraphs/pages against the `paraphrase` using token overlap. It
-fills:
+[`crd_aud_verify_all()`](https://newgraphenvironment.github.io/cred/reference/crd_aud_verify_all.md)
+loads each source document once, then for every unverified row matching
+that key it scores paragraphs/pages against the `paraphrase` using token
+overlap. It fills:
 
 - **`quote`** — the best-matching passage from the source
 - **`page_or_section`** — paragraph index (docx) or page number (pdf)
@@ -189,14 +190,15 @@ surface.
 
 ### Step 4 — Sort for review
 
-[`crd_aud_sort()`](../reference/crd_aud_sort.md) rearranges rows so the
-most actionable are at the top. The `"status"` order is:
+[`crd_aud_sort()`](https://newgraphenvironment.github.io/cred/reference/crd_aud_sort.md)
+rearranges rows so the most actionable are at the top. The `"status"`
+order is:
 
 `auto` → `no_match` → `corrected` → `no` → `context` → `yes` → `NA`
 
 ``` r
 crd_aud_sort(audit_file, by = "status")
-#> Sorted by 'status' and wrote 9 rows to /tmp/RtmpPxj0H5/audit_1c7657128d67.csv
+#> Sorted by 'status' and wrote 9 rows to /tmp/RtmpZL446Z/audit_1c7f731ed8d8.csv
 ```
 
 `sort_index` is assigned at write time and never changes, so
@@ -207,14 +209,14 @@ order.
 
 ### Step 5 — Summary
 
-[`crd_aud_summary()`](../reference/crd_aud_summary.md) prints a live
-status snapshot and — crucially — tells you which PDFs to attach in
-Zotero to unlock the most NA rows.
+[`crd_aud_summary()`](https://newgraphenvironment.github.io/cred/reference/crd_aud_summary.md)
+prints a live status snapshot and — crucially — tells you which PDFs to
+attach in Zotero to unlock the most NA rows.
 
 ``` r
 crd_aud_summary(audit_file)
 #> === Citation Audit Summary ===
-#> File: /tmp/RtmpPxj0H5/audit_1c7657128d67.csv 
+#> File: /tmp/RtmpZL446Z/audit_1c7f731ed8d8.csv 
 #> Total rows: 9 
 #> 
 #> -- Status breakdown --
@@ -238,16 +240,16 @@ crd_aud_summary(audit_file)
 
 In a real report with 200+ citations, the NA sources table is your
 action list: attach the top-ranked PDF, re-run
-[`crd_aud_verify_all()`](../reference/crd_aud_verify_all.md), and unlock
-several rows at once.
+[`crd_aud_verify_all()`](https://newgraphenvironment.github.io/cred/reference/crd_aud_verify_all.md),
+and unlock several rows at once.
 
 ------------------------------------------------------------------------
 
 ### Step 6 — Interactive review
 
-[`crd_aud_review()`](../reference/crd_aud_review.md) launches a local
-Shiny app in your browser. It is the recommended interface for working
-through `auto` rows.
+[`crd_aud_review()`](https://newgraphenvironment.github.io/cred/reference/crd_aud_review.md)
+launches a local Shiny app in your browser. It is the recommended
+interface for working through `auto` rows.
 
 ``` r
 crd_aud_review("background/citation_audit.csv")
@@ -271,11 +273,11 @@ total*.
 
 ## The three outcomes explained
 
-| Outcome    | What it means                                     | What to do                                                                                  |
-|------------|---------------------------------------------------|---------------------------------------------------------------------------------------------|
-| `auto`     | Source file found; passage scored above threshold | Open review app, read quote vs paraphrase, set yes/no/corrected                             |
-| `no_match` | Source file found but no paragraph matched        | Check source manually; if claim is valid, set `context` or `yes`; if wrong, set `corrected` |
-| `NA`       | No source file attached in Zotero                 | Attach PDF in Zotero → re-run [`crd_aud_verify_all()`](../reference/crd_aud_verify_all.md)  |
+| Outcome    | What it means                                     | What to do                                                                                                                         |
+|------------|---------------------------------------------------|------------------------------------------------------------------------------------------------------------------------------------|
+| `auto`     | Source file found; passage scored above threshold | Open review app, read quote vs paraphrase, set yes/no/corrected                                                                    |
+| `no_match` | Source file found but no paragraph matched        | Check source manually; if claim is valid, set `context` or `yes`; if wrong, set `corrected`                                        |
+| `NA`       | No source file attached in Zotero                 | Attach PDF in Zotero → re-run [`crd_aud_verify_all()`](https://newgraphenvironment.github.io/cred/reference/crd_aud_verify_all.md) |
 
 **`no_match` is not an error.** It occurs when:
 
@@ -290,10 +292,10 @@ total*.
 
 ## Claim type screening
 
-[`crd_aud_scr_risk()`](../reference/crd_aud_scr_risk.md) populates the
-`claim_type` column to prioritise your review effort. Statistics
-(numbers, percentages, years) carry the highest hallucination risk;
-context citations the lowest.
+[`crd_aud_scr_risk()`](https://newgraphenvironment.github.io/cred/reference/crd_aud_scr_risk.md)
+populates the `claim_type` column to prioritise your review effort.
+Statistics (numbers, percentages, years) carry the highest hallucination
+risk; context citations the lowest.
 
 ``` r
 d3 <- readr::read_csv(audit_file, show_col_types = FALSE)
@@ -346,12 +348,14 @@ crd_aud_sort("background/citation_audit.csv", by = "report")
 
 ### Attaching missing PDFs
 
-[`crd_aud_summary()`](../reference/crd_aud_summary.md) lists NA sources
-ranked by claim count — one attachment can unlock many rows. In Zotero:
+[`crd_aud_summary()`](https://newgraphenvironment.github.io/cred/reference/crd_aud_summary.md)
+lists NA sources ranked by claim count — one attachment can unlock many
+rows. In Zotero:
 
 1.  Find the item (use the `citation_key` to search)
 2.  Right-click → **Add Attachment → Attach File**
-3.  Re-run [`crd_aud_verify_all()`](../reference/crd_aud_verify_all.md)
+3.  Re-run
+    [`crd_aud_verify_all()`](https://newgraphenvironment.github.io/cred/reference/crd_aud_verify_all.md)
     — newly attached files are picked up automatically
 
 ### How source matching works

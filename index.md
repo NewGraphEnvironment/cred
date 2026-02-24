@@ -89,8 +89,9 @@ query never blocks a running Zotero process.
 
 Attachments must be stored locally (not just cloud-linked). If a
 citation key has no attachment, the row gets `verified = NA`.
-[`crd_aud_summary()`](reference/crd_aud_summary.md) lists these ranked
-by claim count — attach the highest-impact PDFs first.
+[`crd_aud_summary()`](https://newgraphenvironment.github.io/cred/reference/crd_aud_summary.md)
+lists these ranked by claim count — attach the highest-impact PDFs
+first.
 
 ## Learn more
 

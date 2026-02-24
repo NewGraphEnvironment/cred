@@ -16,7 +16,7 @@ crd_docx_srch_clm(docx_txt, paraphrase, n_results = 3L, min_score = 0.2)
 - docx_txt:
 
   `data.frame` as returned by
-  [`crd_docx_ext_txt()`](crd_docx_ext_txt.md).
+  [`crd_docx_ext_txt()`](https://newgraphenvironment.github.io/cred/reference/crd_docx_ext_txt.md).
 
 - paraphrase:
 

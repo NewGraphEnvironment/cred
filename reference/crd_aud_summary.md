@@ -21,7 +21,7 @@ crd_aud_summary(audit_file)
 - audit_file:
 
   `character(1)` path to the audit CSV produced by
-  [`crd_aud_write()`](crd_aud_write.md).
+  [`crd_aud_write()`](https://newgraphenvironment.github.io/cred/reference/crd_aud_write.md).
 
 ## Value
 
