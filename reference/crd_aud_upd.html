@@ -55,7 +55,8 @@ columns; rows no longer present in the Rmd are retained but flagged.</p>
 <span>  out_file <span class="op">=</span> <span class="st">"citation_audit.csv"</span>,</span>
 <span>  rmd_dir <span class="op">=</span> <span class="st">"."</span>,</span>
 <span>  pattern <span class="op">=</span> <span class="st">"^[0-9]{4}-.*\\.Rmd$"</span>,</span>
-<span>  exclude <span class="op">=</span> <span class="st">"(references|session-info|report-change-log)"</span></span>
+<span>  exclude <span class="op">=</span> <span class="st">"(references|session-info|report-change-log)"</span>,</span>
+<span>  min_similarity <span class="op">=</span> <span class="fl">0.4</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
 
@@ -80,6 +81,14 @@ Default <code>"^[0-9]{4}-.*\\.Rmd$"</code>.</p></dd>
 <dt id="arg-exclude">exclude<a class="anchor" aria-label="anchor" href="#arg-exclude"></a></dt>
 <dd><p><code>character(1)</code> regex for files to skip.
 Default skips references, session-info, and change-log chapters.</p></dd>
+
+
+<dt id="arg-min-similarity">min_similarity<a class="anchor" aria-label="anchor" href="#arg-min-similarity"></a></dt>
+<dd><p><code>numeric(1)</code> minimum token-overlap score (0–1) for
+fuzzy matching when a paraphrase changes between updates. Rows that fail
+the exact join are matched to existing rows with the same
+<code>(section, citation_key)</code> by token similarity. Set to <code>1</code> to disable
+fuzzy matching. Default <code>0.4</code>.</p></dd>
 
 </dl></div>
     <div class="section level2">
