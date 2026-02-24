@@ -65,9 +65,9 @@
 <code class="sourceCode R"><span><span class="fu">pak</span><span class="fu">::</span><span class="fu"><a href="https://pak.r-lib.org/reference/pak.html" class="external-link">pak</a></span><span class="op">(</span><span class="st">"NewGraphEnvironment/cred"</span><span class="op">)</span></span></code></pre></div>
 </div>
 <div class="section level2">
-<h2 id="the-workflow-in-five-steps">The workflow in five steps<a class="anchor" aria-label="anchor" href="#the-workflow-in-five-steps"></a>
+<h2 id="the-workflow-in-six-steps">The workflow in six steps<a class="anchor" aria-label="anchor" href="#the-workflow-in-six-steps"></a>
 </h2>
-<div class="sourceCode" id="cb2"><pre class="sourceCode R"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" tabindex="-1"></a>Rmd files  →  audit CSV  →  Zotero lookup  →  auto<span class="sc">-</span>fill quotes  →  sort  →  review</span></code></pre></div>
+<div class="sourceCode" id="cb2"><pre class="sourceCode R"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" tabindex="-1"></a>Rmd files  →  audit CSV  →  Zotero lookup  →  auto<span class="sc">-</span>fill quotes  →  sort  →  review app</span></code></pre></div>
 <p><strong>1. Generate the audit CSV</strong> — one row per citation, with the surrounding sentence as <code>paraphrase</code>:</p>
 <div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="reference/crd_aud_write.html">crd_aud_write</a></span><span class="op">(</span>rmd_dir <span class="op">=</span> <span class="st">"."</span>, out_file <span class="op">=</span> <span class="st">"background/citation_audit.csv"</span><span class="op">)</span></span></code></pre></div>
@@ -80,9 +80,11 @@
 <p><strong>4. Sort for your review session</strong> — <code>auto</code> rows (quotes ready to check) first, <code>NA</code> rows (no source file) last:</p>
 <div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="reference/crd_aud_sort.html">crd_aud_sort</a></span><span class="op">(</span><span class="st">"background/citation_audit.csv"</span>, by <span class="op">=</span> <span class="st">"status"</span><span class="op">)</span></span></code></pre></div>
-<p><strong>5. Open the CSV in Excel</strong>, read <code>quote</code> vs <code>paraphrase</code>, set <code>verified</code> to <code>yes</code> / <code>no</code> / <code>corrected</code>.</p>
-<p>When done reviewing, restore report order:</p>
+<p><strong>5. Launch the review app</strong> — paraphrase and quote side by side, dropdown to set <code>verified</code>, saves back to CSV:</p>
 <div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="reference/crd_aud_review.html">crd_aud_review</a></span><span class="op">(</span><span class="st">"background/citation_audit.csv"</span><span class="op">)</span></span></code></pre></div>
+<p><strong>6. Restore report order</strong> when done:</p>
+<div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="reference/crd_aud_sort.html">crd_aud_sort</a></span><span class="op">(</span><span class="st">"background/citation_audit.csv"</span>, by <span class="op">=</span> <span class="st">"report"</span><span class="op">)</span></span></code></pre></div>
 </div>
 <div class="section level2">
@@ -133,7 +135,7 @@
 <h2 id="keeping-the-csv-up-to-date">Keeping the CSV up to date<a class="anchor" aria-label="anchor" href="#keeping-the-csv-up-to-date"></a>
 </h2>
 <p>After adding new content to your Rmd files:</p>
-<div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># Merge new citations into existing CSV without losing manual edits</span></span>
 <span><span class="fu"><a href="reference/crd_aud_upd.html">crd_aud_upd</a></span><span class="op">(</span><span class="st">"background/citation_audit.csv"</span><span class="op">)</span></span></code></pre></div>
 </div>
@@ -146,7 +148,7 @@
 <div class="section level2">
 <h2 id="learn-more">Learn more<a class="anchor" aria-label="anchor" href="#learn-more"></a>
 </h2>
-<div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb10"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/utils/vignette.html" class="external-link">vignette</a></span><span class="op">(</span><span class="st">"citation-audit"</span>, package <span class="op">=</span> <span class="st">"cred"</span><span class="op">)</span></span></code></pre></div>
 <p>The vignette walks through the full workflow with toy source files (PDF + docx) and a minimal Zotero SQLite database that ship with the package.</p>
 </div>

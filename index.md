@@ -11,10 +11,10 @@ in a PDF or Word doc — so a human can focus on the judgment call.
 pak::pak("NewGraphEnvironment/cred")
 ```
 
-## The workflow in five steps
+## The workflow in six steps
 
 ``` R
-Rmd files  →  audit CSV  →  Zotero lookup  →  auto-fill quotes  →  sort  →  review
+Rmd files  →  audit CSV  →  Zotero lookup  →  auto-fill quotes  →  sort  →  review app
 ```
 
 **1. Generate the audit CSV** — one row per citation, with the
@@ -47,10 +47,14 @@ check) first, `NA` rows (no source file) last:
 crd_aud_sort("background/citation_audit.csv", by = "status")
 ```
 
-**5. Open the CSV in Excel**, read `quote` vs `paraphrase`, set
-`verified` to `yes` / `no` / `corrected`.
+**5. Launch the review app** — paraphrase and quote side by side,
+dropdown to set `verified`, saves back to CSV:
 
-When done reviewing, restore report order:
+``` r
+crd_aud_review("background/citation_audit.csv")
+```
+
+**6. Restore report order** when done:
 
 ``` r
 crd_aud_sort("background/citation_audit.csv", by = "report")
