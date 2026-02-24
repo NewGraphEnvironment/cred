@@ -327,10 +327,14 @@ crd_aud_fill_src <- function(
 
   audit <- readr::read_csv(audit_file, show_col_types = FALSE)
 
-  target_rows <- audit$citation_key == citation_key & !is.na(audit$citation_key)
+  # Human-reviewed statuses are never overwritten regardless of overwrite_verified
+  human_reviewed <- c("yes", "no", "corrected", "context")
+  target_rows <- audit$citation_key == citation_key & !is.na(audit$citation_key) &
+    !(audit$verified %in% human_reviewed)
   if (!overwrite_verified) {
-    already_done <- !is.na(audit$verified) & audit$verified != ""
-    target_rows  <- target_rows & !already_done
+    already_machine <- !is.na(audit$verified) & audit$verified != "" &
+      !(audit$verified %in% human_reviewed)
+    target_rows <- target_rows & !already_machine
   }
 
   n_target <- sum(target_rows)

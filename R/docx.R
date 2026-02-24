@@ -87,17 +87,37 @@ crd_docx_srch_clm <- function(docx_txt, paraphrase, n_results = 3L, min_score = 
 # --- internal helpers --------------------------------------------------------
 
 .paraphrase_tokens <- function(paraphrase) {
-  # Strip @citekeys, markdown syntax, numbers-only tokens, short words
-  clean <- gsub("@[A-Za-z][A-Za-z0-9_:./-]+", "", paraphrase)
-  clean <- gsub("[*_`#\\[\\]()]", "", clean)
-  tokens <- unlist(strsplit(tolower(clean), "[^a-z]+"))
-  tokens <- tokens[nchar(tokens) >= 4L]
-  unique(tokens)
+  # 1. Strip R inline expressions: `r ...`
+  clean <- gsub("`r[^`]+`", "", paraphrase)
+  # 2. Strip @citekeys
+  clean <- gsub("@[A-Za-z][A-Za-z0-9_:./-]+", "", clean)
+  # 3. Strip markdown punctuation
+  clean <- gsub("[*_`#\\[\\]()|]", "", clean)
+  clean <- gsub("[{}]", "", clean)
+
+  # 4. Extract numeric tokens (2+ digit sequences, possibly with commas/decimals/%)
+  num_tokens <- regmatches(clean, gregexpr("[0-9][0-9,\\.]*[0-9](%|\\+)?|[0-9]{2,}", clean))[[1]]
+  # Normalise: strip commas so "1,200" matches "1200" in text
+  num_tokens <- unique(gsub(",", "", num_tokens))
+
+  # 5. Extract word tokens (≥4 chars)
+  word_tokens <- unlist(strsplit(tolower(clean), "[^a-z]+"))
+  word_tokens <- unique(word_tokens[nchar(word_tokens) >= 4L])
+
+  unique(c(word_tokens, num_tokens))
 }
 
 .token_score <- function(text, tokens) {
   txt_lower <- tolower(text)
-  mean(vapply(tokens, function(tok) as.numeric(grepl(tok, txt_lower, fixed = TRUE)), numeric(1L)))
+  mean(vapply(tokens, function(tok) {
+    # Numeric tokens: require word boundary so "38" doesn't match "138"
+    pat <- if (grepl("^[0-9]", tok)) {
+      paste0("(?<![0-9])", tok, "(?![0-9])")
+    } else {
+      tok
+    }
+    as.numeric(grepl(pat, txt_lower, perl = TRUE))
+  }, numeric(1L)))
 }
 
 .empty_srch_result <- function() {
