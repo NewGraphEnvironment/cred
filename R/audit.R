@@ -158,6 +158,90 @@ crd_aud_scr_risk <- function(audit) {
   audit
 }
 
+#' Verify all citation keys in an audit CSV against their source documents
+#'
+#' Convenience wrapper around [crd_zot_src_lookup()] and [crd_aud_fill_src()].
+#' For each citation key in the audit CSV that has a resolvable Zotero
+#' attachment, loads the source document once and fills `quote`,
+#' `page_or_section`, and `verified` columns for all matching rows.
+#'
+#' Keys with no Zotero attachment are skipped with a warning. Keys already
+#' fully verified are skipped unless `overwrite_verified = TRUE`.
+#'
+#' @param audit_file `character(1)` path to the audit CSV.
+#' @param sources `data.frame` as returned by [crd_zot_src_lookup()], with
+#'   columns `citation_key`, `src_path`, `src_type`. If `NULL` (default),
+#'   all unique keys in `audit_file` are looked up automatically via
+#'   [crd_zot_src_lookup()].
+#' @param zotero_dir `character(1)` Zotero data directory, passed to
+#'   [crd_zot_src_lookup()] when `sources` is `NULL`. Default `"~/Zotero"`.
+#' @param min_score `numeric(1)` passed to [crd_aud_fill_src()].
+#'   Default `0.2`.
+#' @param overwrite_verified `logical(1)` passed to [crd_aud_fill_src()].
+#'   Default `FALSE`.
+#' @return Invisibly returns the final audit [tibble][tibble::tibble].
+#' @export
+#' @examples
+#' \dontrun{
+#' crd_aud_verify_all("background/citation_audit.csv")
+#' }
+crd_aud_verify_all <- function(
+    audit_file,
+    sources            = NULL,
+    zotero_dir         = "~/Zotero",
+    min_score          = 0.2,
+    overwrite_verified = FALSE) {
+
+  chk::chk_file(audit_file)
+  chk::chk_string(zotero_dir)
+  chk::chk_number(min_score)
+  chk::chk_flag(overwrite_verified)
+
+  audit <- readr::read_csv(audit_file, show_col_types = FALSE)
+  all_keys <- unique(audit$citation_key[!is.na(audit$citation_key)])
+
+  if (is.null(sources)) {
+    message("Looking up ", length(all_keys), " citation keys in Zotero ...")
+    sources <- crd_zot_src_lookup(all_keys, zotero_dir = zotero_dir)
+  } else {
+    chk::chk_data(sources)
+    chk::chk_has_name(sources, c("citation_key", "src_path", "src_type"))
+  }
+
+  if (nrow(sources) == 0L) {
+    message("No sources resolved — nothing to do.")
+    return(invisible(audit))
+  }
+
+  for (i in seq_len(nrow(sources))) {
+    key      <- sources$citation_key[i]
+    path     <- sources$src_path[i]
+    src_type <- sources$src_type[i]
+
+    message(sprintf("[%d/%d] Loading source for %s (%s) ...",
+                    i, nrow(sources), key, src_type))
+
+    src <- tryCatch(
+      if (src_type == "docx") crd_docx_ext_txt(path) else crd_pdf_ext_txt(path),
+      error = function(e) {
+        warning("Failed to load source for ", key, ": ", conditionMessage(e))
+        NULL
+      }
+    )
+    if (is.null(src)) next
+
+    crd_aud_fill_src(
+      audit_file         = audit_file,
+      src                = src,
+      citation_key       = key,
+      min_score          = min_score,
+      overwrite_verified = overwrite_verified
+    )
+  }
+
+  invisible(readr::read_csv(audit_file, show_col_types = FALSE))
+}
+
 #' Fill audit CSV quote and location columns from a source document
 #'
 #' For each unverified row matching `citation_key`, searches `src` (a tibble
