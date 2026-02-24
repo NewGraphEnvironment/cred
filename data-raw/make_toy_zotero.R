@@ -20,69 +20,68 @@ storage <- file.path(extdata, "storage")
 # ---------------------------------------------------------------------------
 pdf_path <- file.path(storage, "TOYPDF1", "salmon_habitat.pdf")
 
+# Each paragraph goes on its own page so pdftools extracts clean, unambiguous
+# page-level text. Putting multiple paragraphs on one page causes pdftools to
+# return truncated, left-clipped fragments from R's pdf() positioning engine.
+.page <- function(heading, body) {
+  plot.new()
+  text(0.5, 0.95, heading, font = 2, cex = 0.9, adj = 0.5)
+  text(0.05, 0.80, body, cex = 0.8, adj = c(0, 1))
+}
+
 pdf(pdf_path, width = 8.5, height = 11)
-par(mar = c(2, 3, 2, 3), family = "sans")
+par(mar = c(1, 1, 1, 1), family = "sans")
 
-# Page 1
+# Cover page
 plot.new()
-text(0.5, 0.97, "Smith et al. (2020)", font = 2, cex = 1.1, adj = 0.5)
-text(0.5, 0.93, "Habitat Quality Assessment for Chinook Salmon", font = 2, cex = 0.95, adj = 0.5)
-text(0.5, 0.88, "Interior British Columbia Streams", cex = 0.9, adj = 0.5)
+text(0.5, 0.6, "Smith et al. (2020)", font = 2, cex = 1.2, adj = 0.5)
+text(0.5, 0.52, "Habitat Quality Assessment for Chinook Salmon", cex = 1.0, adj = 0.5)
+text(0.5, 0.45, "Interior British Columbia Streams", cex = 0.9, adj = 0.5)
 
-# Paragraph 1 — spawning gravel / embeddedness
-text(0.5, 0.82, "1. Spawning Substrate", font = 2, cex = 0.85, adj = 0.5)
-text(0.5, 0.75,
-  paste(
-    "Spawning substrate embeddedness is the dominant predictor of",
-    "egg-to-fry survival for chinook salmon in interior BC streams.",
-    "Field surveys at 47 index sites found that reaches where",
-    "embeddedness exceeded 25% had egg-to-fry survival rates 62%",
-    "lower than adjacent low-embeddedness sites. Fine sediment inputs",
-    "from road crossings and livestock access were the primary drivers."
-  ),
-  cex = 0.78, adj = 0.5
+# Page 2 — spawning gravel / embeddedness
+.page("1. Spawning Substrate",
+  paste0(
+    "Spawning substrate embeddedness is the dominant predictor of egg-to-fry survival\n",
+    "for chinook salmon in interior BC streams. Field surveys at 47 index sites found\n",
+    "that reaches where embeddedness exceeded 25% had egg-to-fry survival rates 62%\n",
+    "lower than adjacent low-embeddedness sites. Fine sediment inputs from road\n",
+    "crossings and livestock access were the primary drivers."
+  )
 )
 
-# Paragraph 2 — riparian shade and temperature
-text(0.5, 0.60, "2. Riparian Shade and Stream Temperature", font = 2, cex = 0.85, adj = 0.5)
-text(0.5, 0.53,
-  paste(
-    "Riparian canopy removal raises maximum summer stream temperatures",
-    "by 3 to 7 degrees Celsius in small to medium channels. In reaches",
-    "where streamside conifers were harvested within 30 m of the",
-    "bankfull channel, daily maximum temperatures increased by an",
-    "average of 4.2 degrees C compared to unlogged reference reaches.",
-    "Temperature elevations of this magnitude exceed the upper thermal",
-    "tolerance of juvenile chinook during late-summer rearing."
-  ),
-  cex = 0.78, adj = 0.5
+# Page 3 — riparian shade and temperature
+.page("2. Riparian Shade and Stream Temperature",
+  paste0(
+    "Riparian canopy removal raises maximum summer stream temperatures by 3 to 7\n",
+    "degrees Celsius in small to medium channels. In reaches where streamside conifers\n",
+    "were harvested within 30 m of the bankfull channel, daily maximum temperatures\n",
+    "increased by an average of 4.2 degrees C compared to unlogged reference reaches.\n",
+    "Temperature elevations of this magnitude exceed the upper thermal tolerance of\n",
+    "juvenile chinook during late-summer rearing."
+  )
 )
 
-# Paragraph 3 — road crossings and fish passage
-text(0.5, 0.37, "3. Road Crossings and Fish Passage", font = 2, cex = 0.85, adj = 0.5)
-text(0.5, 0.28,
-  paste(
-    "Fish passage assessments at 1,200 road-stream crossings found",
-    "that 38 percent were rated as full or partial barriers to adult",
-    "chinook migration. Culverts with outlet drops exceeding 15 cm",
-    "or insufficient water depth during low flow accounted for 71%",
-    "of all barrier crossings. Barrier removal restored upstream",
-    "colonisation within 1 to 3 years of installation."
-  ),
-  cex = 0.78, adj = 0.5
+# Page 4 — road crossings and fish passage
+.page("3. Road Crossings and Fish Passage",
+  paste0(
+    "Fish passage assessments at 1,200 road-stream crossings found that 38 percent\n",
+    "were rated as full or partial barriers to adult chinook migration. Culverts with\n",
+    "outlet drops exceeding 15 cm or insufficient water depth during low flow accounted\n",
+    "for 71% of all barrier crossings. Barrier removal restored upstream colonisation\n",
+    "within 1 to 3 years of installation."
+  )
 )
 
-# Paragraph 4 — large woody debris (not floodplain — deliberately off-topic
-#               so a floodplain paraphrase produces no_match)
-text(0.5, 0.12, "4. Large Woody Debris", font = 2, cex = 0.85, adj = 0.5)
-text(0.5, 0.05,
-  paste(
-    "Juvenile chinook density in pool habitat was positively correlated",
-    "with large woody debris loading. Sites with more than 25 pieces of",
-    "wood per 100 m of channel had 2.8 times higher juvenile density",
-    "than sites with fewer than 5 pieces per 100 m."
-  ),
-  cex = 0.78, adj = 0.5
+# Page 5 — large woody debris (deliberately off-topic: no floodplain content,
+#           so a floodplain paraphrase scores below threshold → no_match)
+.page("4. Large Woody Debris",
+  paste0(
+    "Pool density and large woody debris loading were positively correlated across\n",
+    "all 47 assessment reaches. Sites with more than 25 pieces of wood per 100 m of\n",
+    "channel had 2.8 times more pool-associated fish than reaches with fewer than\n",
+    "5 pieces per 100 m. Wood recruitment from adjacent riparian conifers was the\n",
+    "primary driver of debris loading."
+  )
 )
 
 dev.off()

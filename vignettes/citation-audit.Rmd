@@ -89,16 +89,23 @@ toy_zotero_dir <- system.file("extdata", package = "cred")
 
 `crd_aud_write()` scans all chapter Rmd files (names beginning with four digits), extracts every `@citekey` with the surrounding sentence as `paraphrase`, and writes a CSV scaffold with blank `verified`, `quote`, and `notes` columns.
 
-The toy Rmd files reflect common patterns in scientific reports: specific statistics, process findings, and one claim the source does not support. The floodplain growth claim in the habitat chapter cites `smith2020SalmonHabitat`, but that PDF's paragraph 4 covers large woody debris — not floodplain rearing. That mismatch is deliberate: it produces the `no_match` outcome we want to demonstrate. Each sentence is written on a single line so `crd_aud_write()` captures the full paraphrase context.
+The toy Rmd files reflect three common paraphrase patterns:
+
+1. **Numeric claims** — statistics copied closely from the source ("62% lower", "38% were barriers"). These score highest because numbers are the most discriminative tokens.
+2. **Qualitative paraphrases** — same finding, different words, no numbers. These test whether token overlap still finds the right passage when an author rewrites rather than transcribes.
+3. **Wrong-paper citation** — a Pacific Salmon Treaty harvest claim cites `smith2020SalmonHabitat`, a freshwater habitat quality paper. It has no content about harvest allocation or treaty negotiations, so no passage scores above the threshold → `verified = "no_match"`. This is the failure mode `cred` is designed to surface: the citation key is real, the prose sounds plausible, but the source does not support the claim.
+
+Each sentence is on a single line so `crd_aud_write()` captures the full paraphrase.
 
 ```{r write-audit}
 rmd_dir    <- tempfile("rmd_")
 audit_file <- tempfile("audit_", fileext = ".csv")
 dir.create(rmd_dir)
 
-# Chapter 1 — habitat quality: 4 claims, 3 citation keys
-# smith2020 has a PDF attachment; doe2021 has metadata only (no PDF)
-# Each sentence is on one line so crd_aud_write() captures the full paraphrase.
+# Chapter 1 — habitat quality: 5 claims, 3 citation keys
+# smith2020 has a PDF attachment; doe2021 has metadata only (no PDF).
+# Mix of numeric claims (rows 1-3), a qualitative paraphrase (row 4),
+# an unsupported claim that produces no_match (row 5), and an NA row (row 6).
 writeLines(c(
   "# Habitat Quality {#habitat}",
   "",
@@ -108,12 +115,15 @@ writeLines(c(
   "",
   "Fish passage assessments at 1,200 road-stream crossings found that 38% were rated as full or partial barriers to adult chinook migration, primarily due to culverts with outlet drops exceeding 15 cm [@smith2020SalmonHabitat].",
   "",
-  "Floodplain rearing habitat supports juvenile chinook growth rates substantially higher than mainstem conditions during high-flow events [@smith2020SalmonHabitat].",
+  "Loss of streamside forest cover eliminates the shade that keeps summer water temperatures within the thermal tolerance of juvenile chinook, degrading rearing conditions in harvested riparian zones [@smith2020SalmonHabitat].",
+  "",
+  "The Pacific Salmon Treaty allocates harvest between Canada and the United States based on abundance indicators and conservation thresholds negotiated through the Pacific Salmon Commission [@smith2020SalmonHabitat].",
   "",
   "Stream temperature governs the spatial distribution of juvenile salmon and limits rearing area during summer low flows [@doe2021NoFile]."
 ), file.path(rmd_dir, "0100-habitat.Rmd"))
 
-# Chapter 2 — beaver ecology: 4 claims, all jones2019 (docx attachment)
+# Chapter 2 — beaver ecology: 5 claims, all jones2019 (docx attachment)
+# Row 5 is a qualitative paraphrase of the floodplain side-channel paragraph.
 writeLines(c(
   "# Beaver Ecology {#beaver}",
   "",
@@ -123,7 +133,9 @@ writeLines(c(
   "",
   "Archival records indicate that beaver pond habitat declined by approximately 60% between 1850 and 1950 due to commercial trapping pressure, reducing overwinter rearing capacity for juvenile salmonids [@jones2019BeaverEcology].",
   "",
-  "Juvenile chinook tagged in the main channel were detected in floodplain side channels during high-flow events, where they remained for 12 to 34 days and achieved growth rates 40% higher than fish remaining in the mainstem [@jones2019BeaverEcology]."
+  "Juvenile chinook tagged in the main channel were detected in floodplain side channels during high-flow events, where they remained for 12 to 34 days and achieved growth rates 40% higher than fish remaining in the mainstem [@jones2019BeaverEcology].",
+  "",
+  "Beaver-mediated floodplain connectivity allows juvenile chinook to access off-channel rearing areas during high flows, where growth rates substantially exceed those of fish confined to the mainstem channel [@jones2019BeaverEcology]."
 ), file.path(rmd_dir, "0200-beaver.Rmd"))
 
 crd_aud_write(rmd_dir = rmd_dir, out_file = audit_file)
@@ -135,7 +147,7 @@ DT::datatable(
   d[, c("section", "citation_key", "paraphrase", "verified")],
   rownames = FALSE,
   options  = list(
-    pageLength = 9, scrollX = TRUE, dom = "t",
+    pageLength = 5, scrollX = TRUE, dom = "tip",
     columnDefs = list(
       list(width = "90px",  targets = 0),
       list(width = "180px", targets = 1),
@@ -143,11 +155,11 @@ DT::datatable(
       list(width = "70px",  targets = 3)
     )
   ),
-  caption = "Audit scaffold — 9 rows, verified column blank."
+  caption = "Audit scaffold — 11 rows, verified column blank."
 )
 ```
 
-Nine rows across two chapters. The `verified` column is blank — no matching has happened yet.
+Eleven rows across two chapters — five per source plus the `doe2021NoFile` row. The `verified` column is blank — no matching has happened yet.
 
 ---
 
@@ -208,7 +220,7 @@ DT::datatable(
   escape   = FALSE,
   colnames = c("citation_key", "paraphrase", "quote", "p/§", "verified"),
   options  = list(
-    pageLength = 9, scrollX = TRUE, dom = "t",
+    pageLength = 5, scrollX = TRUE, dom = "tip",
     columnDefs = list(
       list(width = "160px", targets = 0),
       list(width = "270px", targets = 1),
@@ -227,7 +239,7 @@ DT::datatable(
 - **`no_match`** (light green) — the source file exists, but no paragraph scored above the threshold. This happens when the report's phrasing is too different from the source text. It needs manual verification.
 - **`NA`** (grey) — no source file is attached in Zotero. Nothing to match against.
 
-Notice row 4: the floodplain growth claim (`"Floodplain rearing habitat supports juvenile growth rates..."`) cites `smith2020SalmonHabitat`, but that PDF covers large woody debris in paragraph 4 — not floodplain rearing. The source simply doesn't contain the claim. This is exactly the kind of mismatch `cred` is designed to surface.
+Notice the Pacific Salmon Treaty row: it cites `smith2020SalmonHabitat`, a freshwater habitat quality paper, for a claim about international harvest allocation. No passage in the source covers treaty negotiations — `no_match` flags it immediately. This is exactly the kind of mismatch `cred` is designed to surface: the citation key is real, the prose sounds credible, but the source simply does not support the specific claim.
 
 ---
 
