@@ -4,32 +4,44 @@
 \alias{crd_aud_scr_risk}
 \title{Auto-score citation rows by hallucination risk}
 \usage{
-crd_aud_scr_risk(audit)
+crd_aud_scr_risk(audit, statistic_extra = NULL)
 }
 \arguments{
 \item{audit}{\code{data.frame} with at least \code{paraphrase} and \code{claim_type}
 columns, as produced by \code{\link[=crd_aud_write]{crd_aud_write()}}.}
+
+\item{statistic_extra}{\code{character(1)} optional additional regex pattern
+ORed into the statistic detector. Use this to flag domain-specific terms
+as statistics — e.g. \code{"chinook|sockeye|coho"} for salmonid reports, or
+\code{"glucose|insulin"} for medical papers. Default \code{NULL} (no extras).}
 }
 \value{
 The input \code{audit} with \code{claim_type} filled for blank rows.
 }
 \description{
-Populates the \code{claim_type} column where it is blank based on simple
+Populates the \code{claim_type} column where it is blank, based on simple
 heuristics applied to the \code{paraphrase} text:
-\itemize{
-\item \code{"statistic"} — contains a number, percentage, year (4-digit), or
-species name pattern.
-\item \code{"finding"} — contains words like "documented", "found", "showed",
-"demonstrated", "confirmed".
-\item \code{"context"} — everything else.
-}
 }
 \details{
+\itemize{
+\item \code{"statistic"} — contains a number, percentage, or 4-digit year
+(highest hallucination risk — verify these first).
+\item \code{"finding"} — contains words like "documented", "found", "showed",
+"demonstrated", "confirmed".
+\item \code{"context"} — everything else (lowest risk).
+}
+
 Existing non-blank \code{claim_type} values are never overwritten.
 }
 \examples{
-\dontrun{
-d <- readr::read_csv("background/citation_audit.csv")
-d <- crd_aud_scr_risk(d)
-}
+d <- data.frame(
+  paraphrase = c("Embeddedness exceeded 25\% at 38\% of sites.",
+                 "The study demonstrated reduced survival.",
+                 "See also the watershed context."),
+  claim_type = NA_character_
+)
+crd_aud_scr_risk(d)
+
+# Flag species names as statistics for a salmonid report
+crd_aud_scr_risk(d, statistic_extra = "chinook|sockeye|coho|pink|chum")
 }

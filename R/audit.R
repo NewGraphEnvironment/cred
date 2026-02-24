@@ -127,34 +127,51 @@ crd_aud_upd <- function(
 
 #' Auto-score citation rows by hallucination risk
 #'
-#' Populates the `claim_type` column where it is blank based on simple
+#' Populates the `claim_type` column where it is blank, based on simple
 #' heuristics applied to the `paraphrase` text:
-#' - `"statistic"` — contains a number, percentage, year (4-digit), or
-#'   species name pattern.
+#'
+#' - `"statistic"` — contains a number, percentage, or 4-digit year
+#'   (highest hallucination risk — verify these first).
 #' - `"finding"` — contains words like "documented", "found", "showed",
 #'   "demonstrated", "confirmed".
-#' - `"context"` — everything else.
+#' - `"context"` — everything else (lowest risk).
 #'
 #' Existing non-blank `claim_type` values are never overwritten.
 #'
 #' @param audit `data.frame` with at least `paraphrase` and `claim_type`
 #'   columns, as produced by [crd_aud_write()].
+#' @param statistic_extra `character(1)` optional additional regex pattern
+#'   ORed into the statistic detector. Use this to flag domain-specific terms
+#'   as statistics — e.g. `"chinook|sockeye|coho"` for salmonid reports, or
+#'   `"glucose|insulin"` for medical papers. Default `NULL` (no extras).
 #' @return The input `audit` with `claim_type` filled for blank rows.
 #' @export
 #' @examples
-#' \dontrun{
-#' d <- readr::read_csv("background/citation_audit.csv")
-#' d <- crd_aud_scr_risk(d)
-#' }
-crd_aud_scr_risk <- function(audit) {
+#' d <- data.frame(
+#'   paraphrase = c("Embeddedness exceeded 25% at 38% of sites.",
+#'                  "The study demonstrated reduced survival.",
+#'                  "See also the watershed context."),
+#'   claim_type = NA_character_
+#' )
+#' crd_aud_scr_risk(d)
+#'
+#' # Flag species names as statistics for a salmonid report
+#' crd_aud_scr_risk(d, statistic_extra = "chinook|sockeye|coho|pink|chum")
+crd_aud_scr_risk <- function(audit, statistic_extra = NULL) {
   chk::chk_data(audit)
   chk::check_names(audit, c("paraphrase", "claim_type"))
+  if (!is.null(statistic_extra)) chk::chk_string(statistic_extra)
 
   blank <- is.na(audit$claim_type) | audit$claim_type == ""
   p <- audit$paraphrase
 
-  statistic_pat <- "[0-9]+|%|\\b(19|20)[0-9]{2}\\b|chinook|sockeye|coho|pink|chum"
-  finding_pat   <- "\\b(document|found|show|demonstrat|confirm|report|estimat|measur)\\w*\\b"
+  base_stat_pat <- "[0-9]+|%|\\b(19|20)[0-9]{2}\\b"
+  statistic_pat <- if (!is.null(statistic_extra)) {
+    paste0(base_stat_pat, "|", statistic_extra)
+  } else {
+    base_stat_pat
+  }
+  finding_pat <- "\\b(document|found|show|demonstrat|confirm|report|estimat|measur)\\w*\\b"
 
   audit$claim_type[blank & grepl(statistic_pat, p, ignore.case = TRUE)] <- "statistic"
   blank2 <- is.na(audit$claim_type) | audit$claim_type == ""
