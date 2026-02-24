@@ -8,7 +8,8 @@ crd_aud_upd(
   out_file = "citation_audit.csv",
   rmd_dir = ".",
   pattern = "^[0-9]{4}-.*\\\\.Rmd$",
-  exclude = "(references|session-info|report-change-log)"
+  exclude = "(references|session-info|report-change-log)",
+  min_similarity = 0.4
 )
 }
 \arguments{
@@ -22,6 +23,12 @@ Default \code{"^[0-9]{4}-.*\\\\.Rmd$"}.}
 
 \item{exclude}{\code{character(1)} regex for files to skip.
 Default skips references, session-info, and change-log chapters.}
+
+\item{min_similarity}{\code{numeric(1)} minimum token-overlap score (0–1) for
+fuzzy matching when a paraphrase changes between updates. Rows that fail
+the exact join are matched to existing rows with the same
+\verb{(section, citation_key)} by token similarity. Set to \code{1} to disable
+fuzzy matching. Default \code{0.4}.}
 }
 \value{
 Invisibly returns the updated \link[tibble:tibble]{tibble}.
