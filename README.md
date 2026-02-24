@@ -93,6 +93,35 @@ citation key has no attachment, the row gets `verified = NA`.
 `crd_aud_summary()` lists these ranked by claim count — attach the
 highest-impact PDFs first.
 
+## How matching works
+
+For each unverified row, `cred` scores every paragraph in the source
+document by the fraction of query tokens found in it:
+
+    score = tokens from paraphrase found in paragraph / total tokens in paraphrase
+
+The default threshold is **0.2** — 1 in 5 query tokens must appear in
+the candidate paragraph. This is deliberately permissive: a false
+positive (wrong paragraph shown as `auto`) costs a few seconds of
+review; a false negative (right paragraph called `no_match`) means
+searching the PDF yourself.
+
+`min_score` is exposed in every matching function:
+
+``` r
+crd_aud_verify_all("citation_audit.csv", min_score = 0.2)  # default
+```
+
+| Situation                                       | Suggested `min_score` |
+|-------------------------------------------------|-----------------------|
+| Generic paraphrases — many false positives      | 0.3 – 0.4             |
+| Default — specific factual claims with numbers  | 0.2                   |
+| Long dense sources where good matches score low | 0.1 – 0.15            |
+
+After adjusting, re-run with `overwrite_verified = TRUE` to reprocess
+machine-assigned rows without touching human-reviewed ones (`yes`, `no`,
+`corrected`, `context`).
+
 ## Learn more
 
 ``` r

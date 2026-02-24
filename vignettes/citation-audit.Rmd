@@ -368,9 +368,25 @@ crd_aud_sort("background/citation_audit.csv", by = "report")
 
 The token scoring approach is simple and fast:
 
-1. Strip `@citekey` markers and markdown punctuation from the `paraphrase`
-2. Split into tokens (≥ 4 characters)
+1. Strip R inline expressions (`` `r ...` ``), `@citekey` markers, and markdown punctuation from the `paraphrase`
+2. Extract word tokens (≥ 4 characters) and numeric tokens (digit sequences, percentages) separately — numbers are the most discriminative signals for factual claims
 3. Score each paragraph/page: proportion of query tokens found in the passage
 4. Accept the top-scoring passage if score ≥ `min_score` (default 0.2)
 
-Lower `min_score` to cast a wider net at the cost of weaker matches; raise it to require stricter agreement. The default 0.2 (20% token overlap) works well for specific factual claims with numbers and key terms.
+**What 0.2 means:** 1 in 5 query tokens must appear in the candidate paragraph. With a 15-token query, 3 tokens need to match. This is deliberately permissive — a false positive (wrong paragraph shown as `auto`) costs you a few seconds of review; a false negative (right paragraph called `no_match`) means you search the PDF yourself.
+
+**`min_score` is a parameter in every matching function:**
+
+```r
+crd_aud_verify_all("citation_audit.csv", min_score = 0.2)   # default
+crd_pdf_srch_clm(pdf_txt, paraphrase, min_score = 0.2)
+crd_docx_srch_clm(docx_txt, paraphrase, min_score = 0.2)
+```
+
+| Situation | Suggested `min_score` |
+|---|---|
+| Short or generic paraphrases — many false positives | 0.3 – 0.4 |
+| Default — specific factual claims with some numbers | 0.2 |
+| Long dense sources where good matches score low | 0.1 – 0.15 |
+
+After adjusting, re-run `crd_aud_verify_all(..., overwrite_verified = TRUE)` to reprocess all machine-assigned rows without touching human-reviewed ones (`yes`, `no`, `corrected`, `context`).
