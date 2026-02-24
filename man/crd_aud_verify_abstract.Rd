@@ -2,7 +2,10 @@
 % Please edit documentation in R/audit.R
 \name{crd_aud_verify_abstract}
 \alias{crd_aud_verify_abstract}
-\title{Fill quote and verified for NA rows using Zotero abstract text}
+\title{queries the local Zotero database for the abstract of each cited item and
+scores it against the \code{paraphrase} using token overlap. Rows that score at
+or above \code{min_score} receive \code{verified = "abstract_match"} and the abstract
+text as their \code{quote}.}
 \usage{
 crd_aud_verify_abstract(
   audit_file,
@@ -27,13 +30,6 @@ Default \code{"~/Zotero"}.}
 The updated audit data frame, invisibly. Writes to \code{audit_file}.
 }
 \description{
-For rows where \code{verified} is \code{NA} (no source file attached in Zotero),
-queries the local Zotero database for the abstract of each cited item and
-scores it against the \code{paraphrase} using token overlap. Rows that score at
-or above \code{min_score} receive \code{verified = "abstract_match"} and the abstract
-text as their \code{quote}.
-}
-\details{
 Abstract matching confirms the citation is plausibly in the right domain
 but cannot verify a specific quote from the body of the paper. A hit means
 the cited source covers the general topic of the claim; a miss does not

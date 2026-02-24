@@ -502,6 +502,96 @@ crd_aud_summary <- function(audit_file) {
 #' Fill quote and verified for NA rows using Zotero abstract text
 #'
 #' For rows where `verified` is `NA` (no source file attached in Zotero),
+#' Evaluate inline R expressions in audit paraphrases
+#'
+#' Paraphrases extracted from Rmd source often contain unevaluated inline R
+#' expressions such as `` `r format(optimum_morice, big.mark = ",")` ``.
+#' These make paraphrase vs quote comparison difficult in the review app, and
+#' prevent [crd_aud_score()] from detecting numeric mismatches.
+#'
+#' `crd_aud_eval_inline()` evaluates each expression in `env` and stores the
+#' result in a `paraphrase_eval` column. On evaluation failure the expression
+#' is left as-is and a warning is issued. `paraphrase` is never modified —
+#' `paraphrase_eval` is display-only.
+#'
+#' @param audit_file `character(1)` path to the audit CSV.
+#' @param env `environment` in which to evaluate inline R expressions.
+#'   Default `parent.frame()` — call from a session where project variables
+#'   are defined and they will be found automatically.
+#' @param overwrite `logical(1)` if `TRUE`, re-evaluate rows that already have
+#'   `paraphrase_eval`. Default `FALSE`.
+#' @return The updated audit data frame, invisibly. Writes to `audit_file`.
+#' @export
+#' @examples
+#' \dontrun{
+#' # In a session where project variables are loaded:
+#' optimum_morice <- 18175
+#' crd_aud_eval_inline("background/citation_audit.csv")
+#' }
+crd_aud_eval_inline <- function(audit_file,
+                                env       = parent.frame(),
+                                overwrite = FALSE) {
+  chk::chk_file(audit_file)
+  chk::chk_flag(overwrite)
+
+  d <- readr::read_csv(audit_file, show_col_types = FALSE)
+
+  if (!"paraphrase_eval" %in% names(d)) {
+    d$paraphrase_eval <- NA_character_
+  }
+
+  needs_eval <- is.na(d$paraphrase_eval) | overwrite
+  needs_eval <- needs_eval & stringr::str_detect(
+    d$paraphrase, "`r ", negate = FALSE
+  )
+  needs_eval[is.na(d$paraphrase)] <- FALSE
+
+  n_target <- sum(needs_eval, na.rm = TRUE)
+  if (n_target == 0L) {
+    message("No rows with inline R expressions to evaluate.")
+    return(invisible(d))
+  }
+
+  eval_one <- function(text) {
+    if (is.na(text) || !stringr::str_detect(text, "`r ")) return(text)
+    spans <- stringr::str_extract_all(text, "`r [^`]+`")[[1]]
+    for (span in spans) {
+      expr <- stringr::str_remove_all(span, "^`r |`$")
+      val  <- tryCatch(
+        as.character(eval(parse(text = expr), envir = env)),
+        error = function(e) {
+          warning("Could not evaluate: ", expr, " — ", conditionMessage(e),
+                  call. = FALSE)
+          span
+        }
+      )
+      text <- stringr::str_replace_all(text, stringr::fixed(span), val)
+    }
+    text
+  }
+
+  d$paraphrase_eval[needs_eval] <- vapply(
+    d$paraphrase[needs_eval], eval_one, character(1L)
+  )
+
+  # Rows without inline R get paraphrase_eval = paraphrase
+  no_inline <- !stringr::str_detect(d$paraphrase, "`r ") & is.na(d$paraphrase_eval)
+  no_inline[is.na(d$paraphrase)] <- FALSE
+  d$paraphrase_eval[no_inline] <- d$paraphrase[no_inline]
+
+  n_ok   <- sum(needs_eval & !stringr::str_detect(d$paraphrase_eval, "`r ", negate = FALSE), na.rm = TRUE)
+  n_fail <- n_target - n_ok
+  message(
+    "Evaluated inline R in ", n_ok, " row(s)",
+    if (n_fail > 0L) paste0(" (", n_fail, " expression(s) could not be resolved)") else ""
+  )
+
+  readr::write_csv(d, audit_file, na = "")
+  invisible(d)
+}
+
+# ---------------------------------------------------------------------------
+
 #' queries the local Zotero database for the abstract of each cited item and
 #' scores it against the `paraphrase` using token overlap. Rows that score at
 #' or above `min_score` receive `verified = "abstract_match"` and the abstract
