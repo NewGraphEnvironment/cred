@@ -111,7 +111,7 @@ writeLines(c(
 crd_aud_write(rmd_dir = rmd_dir, out_file = audit_file)
 #> Scanning: 0100-habitat.Rmd
 #> Scanning: 0200-beaver.Rmd
-#> Wrote 9 rows to /tmp/RtmphdlDWd/audit_1d612953b561.csv
+#> Wrote 9 rows to /tmp/RtmpQAwWn9/audit_1cb02bfef7a3.csv
 ```
 
 Nine rows across two chapters. The `verified` column is blank — no
@@ -228,7 +228,7 @@ review app shows these columns colour-coded when present.
 
 ``` r
 crd_aud_sort(audit_file, by = "status")
-#> Sorted by 'status' and wrote 9 rows to /tmp/RtmphdlDWd/audit_1d612953b561.csv
+#> Sorted by 'status' and wrote 9 rows to /tmp/RtmpQAwWn9/audit_1cb02bfef7a3.csv
 ```
 
 ------------------------------------------------------------------------
@@ -238,7 +238,7 @@ crd_aud_sort(audit_file, by = "status")
 ``` r
 crd_aud_summary(audit_file)
 #> === Citation Audit Summary ===
-#> File: /tmp/RtmphdlDWd/audit_1d612953b561.csv 
+#> File: /tmp/RtmpQAwWn9/audit_1cb02bfef7a3.csv 
 #> Total rows: 9 
 #> 
 #> -- Status breakdown --

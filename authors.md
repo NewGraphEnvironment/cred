@@ -7,7 +7,7 @@
 ## Citation
 
 Source:
-[`DESCRIPTION`](https://github.com/NewGraphEnvironment/cred/blob/master/DESCRIPTION)
+[`DESCRIPTION`](https://github.com/NewGraphEnvironment/cred/blob/main/DESCRIPTION)
 
 Irvine A (2026). *cred: Citation Review and Evidence Documentation*. R
 package version 0.0.0.9000,

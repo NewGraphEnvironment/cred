@@ -62,7 +62,7 @@
       <img src="../logo.png" class="logo" alt=""><h1>Citation Audit Workflow</h1>
             
       
-      <small class="dont-index">Source: <a href="https://github.com/NewGraphEnvironment/cred/blob/master/vignettes/citation-audit.Rmd" class="external-link"><code>vignettes/citation-audit.Rmd</code></a></small>
+      <small class="dont-index">Source: <a href="https://github.com/NewGraphEnvironment/cred/blob/main/vignettes/citation-audit.Rmd" class="external-link"><code>vignettes/citation-audit.Rmd</code></a></small>
       <div class="d-none name"><code>citation-audit.Rmd</code></div>
     </div>
 
@@ -234,7 +234,7 @@ quality paper. No passage covers harvest allocation →
 <span><span class="fu"><a href="../reference/crd_aud_write.html">crd_aud_write</a></span><span class="op">(</span>rmd_dir <span class="op">=</span> <span class="va">rmd_dir</span>, out_file <span class="op">=</span> <span class="va">audit_file</span><span class="op">)</span></span>
 <span><span class="co">#&gt; Scanning: 0100-habitat.Rmd</span></span>
 <span><span class="co">#&gt; Scanning: 0200-beaver.Rmd</span></span>
-<span><span class="co">#&gt; Wrote 9 rows to /tmp/RtmphdlDWd/audit_1d612953b561.csv</span></span></code></pre></div>
+<span><span class="co">#&gt; Wrote 9 rows to /tmp/RtmpQAwWn9/audit_1cb02bfef7a3.csv</span></span></code></pre></div>
 <div class="datatables html-widget html-fill-item" id="htmlwidget-ac96cb3ee4656e2e9ec3" style="width:100%;height:auto;"></div>
 <script type="application/json" data-for="htmlwidget-ac96cb3ee4656e2e9ec3">{"x":{"filter":"none","vertical":false,"caption":"<caption>Audit scaffold — 9 rows, verified column blank.<\/caption>","data":[["habitat","habitat","habitat","habitat","habitat","beaver","beaver","beaver","beaver"],["smith2020SalmonHabitat","smith2020SalmonHabitat","smith2020SalmonHabitat","smith2020SalmonHabitat","doe2021NoFile","jones2019BeaverEcology","jones2019BeaverEcology","jones2019BeaverEcology","jones2019BeaverEcology"],["Reaches where spawning substrate embeddedness exceeded 25% had egg-to-fry survival rates 62% lower than adjacent low-embeddedness sites [@smith2020SalmonHabitat].","Fish passage assessments at 1,200 road-stream crossings found that 38% were rated as full or partial barriers to adult chinook migration [@smith2020SalmonHabitat].","Loss of streamside forest cover eliminates the shade that keeps summer water temperatures within the thermal tolerance of juvenile chinook, degrading rearing conditions in harvested riparian zones [@smith2020SalmonHabitat].","The Pacific Salmon Treaty allocates harvest between Canada and the United States based on abundance indicators and conservation thresholds negotiated through the Pacific Salmon Commission [@smith2020SalmonHabitat].","Stream temperature governs the spatial distribution of juvenile salmon and limits rearing area during summer low flows [@doe2021NoFile].","Electrofishing surveys recorded juvenile salmonid densities 3.4 times higher in beaver pond habitat than in adjacent free-flowing reaches [@jones2019BeaverEcology].","Archival records indicate that beaver pond habitat declined by approximately 60% between 1850 and 1950 due to commercial trapping pressure [@jones2019BeaverEcology].","Beaver dams create ponded habitat with stable thermal regimes that substantially increase overwinter survival of juvenile salmonids by providing shelter from winter spates [@jones2019BeaverEcology].","Beaver-mediated floodplain connectivity allows juvenile chinook to access off-channel rearing areas during high flows, where growth rates substantially exceed those of fish confined to the mainstem channel [@jones2019BeaverEcology]."],[null,null,null,null,null,null,null,null,null]],"container":"<table class=\"display\">\n  <thead>\n    <tr>\n      <th>section<\/th>\n      <th>citation_key<\/th>\n      <th>paraphrase<\/th>\n      <th>verified<\/th>\n    <\/tr>\n  <\/thead>\n<\/table>","options":{"pageLength":9,"scrollX":true,"dom":"t","initComplete":"function(settings, json) {\n$(this.api().table().node()).css('font-size', '11px');\n}","columnDefs":[{"width":"70px","targets":0},{"width":"110px","targets":1},{"width":"420px","targets":2},{"width":"60px","targets":3},{"name":"section","targets":0},{"name":"citation_key","targets":1},{"name":"paraphrase","targets":2},{"name":"verified","targets":3}],"order":[],"autoWidth":false,"orderClasses":false,"lengthMenu":[9,10,25,50,100]}},"evals":["options.initComplete"],"jsHooks":[]}</script><p>Nine rows across two chapters. The <code>verified</code> column is
 blank — no matching has run yet.</p>
@@ -371,7 +371,7 @@ present.</p>
 </h3>
 <div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/crd_aud_sort.html">crd_aud_sort</a></span><span class="op">(</span><span class="va">audit_file</span>, by <span class="op">=</span> <span class="st">"status"</span><span class="op">)</span></span>
-<span><span class="co">#&gt; Sorted by 'status' and wrote 9 rows to /tmp/RtmphdlDWd/audit_1d612953b561.csv</span></span></code></pre></div>
+<span><span class="co">#&gt; Sorted by 'status' and wrote 9 rows to /tmp/RtmpQAwWn9/audit_1cb02bfef7a3.csv</span></span></code></pre></div>
 <hr>
 </div>
 <div class="section level3">
@@ -380,7 +380,7 @@ present.</p>
 <div class="sourceCode" id="cb10"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/crd_aud_summary.html">crd_aud_summary</a></span><span class="op">(</span><span class="va">audit_file</span><span class="op">)</span></span>
 <span><span class="co">#&gt; === Citation Audit Summary ===</span></span>
-<span><span class="co">#&gt; File: /tmp/RtmphdlDWd/audit_1d612953b561.csv </span></span>
+<span><span class="co">#&gt; File: /tmp/RtmpQAwWn9/audit_1cb02bfef7a3.csv </span></span>
 <span><span class="co">#&gt; Total rows: 9 </span></span>
 <span><span class="co">#&gt; </span></span>
 <span><span class="co">#&gt; -- Status breakdown --</span></span>
