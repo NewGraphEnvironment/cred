@@ -148,8 +148,7 @@ crd_aud_upd <- function(
 #' }
 crd_aud_scr_risk <- function(audit) {
   chk::chk_data(audit)
-  chk::chk_has_name(audit, "paraphrase")
-  chk::chk_has_name(audit, "claim_type")
+  chk::check_names(audit, c("paraphrase", "claim_type"))
 
   blank <- is.na(audit$claim_type) | audit$claim_type == ""
   p <- audit$paraphrase
@@ -213,7 +212,7 @@ crd_aud_verify_all <- function(
     sources <- crd_zot_src_lookup(all_keys, zotero_dir = zotero_dir)
   } else {
     chk::chk_data(sources)
-    chk::chk_has_name(sources, c("citation_key", "src_path", "src_type"))
+    chk::check_names(sources, c("citation_key", "src_path", "src_type"))
   }
 
   if (nrow(sources) == 0L) {
@@ -411,6 +410,72 @@ crd_aud_sort <- function(audit_file, by = c("report", "status", "key")) {
   readr::write_excel_csv(d, audit_file, na = "")
   message("Sorted by '", by, "' and wrote ", nrow(d), " rows to ", audit_file)
   invisible(d)
+}
+
+#' Summarise an audit CSV by verification status
+#'
+#' Prints a three-part snapshot to the console:
+#' 1. Overall row counts by `verified` status.
+#' 2. Sources with `NA` status (no Zotero attachment) ranked by claim count —
+#'    your PDF attachment priority list.
+#' 3. Sources with `"no_match"` status (attachment exists but paraphrase did
+#'    not match) ranked by claim count.
+#'
+#' @param audit_file `character(1)` path to the audit CSV produced by
+#'   [crd_aud_write()].
+#' @return Invisibly returns a named list with tibbles `status`,
+#'   `na_sources`, and `no_match_sources`.
+#' @export
+#' @examples
+#' \dontrun{
+#' crd_aud_summary("background/citation_audit.csv")
+#' }
+crd_aud_summary <- function(audit_file) {
+  chk::chk_file(audit_file)
+
+  d <- readr::read_csv(audit_file, show_col_types = FALSE)
+
+  status_counts <- d |>
+    dplyr::mutate(status = ifelse(is.na(.data$verified), "(NA)", .data$verified)) |>
+    dplyr::count(.data$status) |>
+    dplyr::arrange(dplyr::desc(.data$n))
+
+  na_sources <- d |>
+    dplyr::filter(is.na(.data$verified)) |>
+    dplyr::count(.data$citation_key, sort = TRUE)
+
+  no_match_sources <- d |>
+    dplyr::filter(!is.na(.data$verified), .data$verified == "no_match") |>
+    dplyr::count(.data$citation_key, sort = TRUE)
+
+  cat("=== Citation Audit Summary ===\n")
+  cat("File:", audit_file, "\n")
+  cat("Total rows:", nrow(d), "\n\n")
+
+  cat("-- Status breakdown --\n")
+  print(status_counts, n = Inf)
+
+  cat("\n-- NA sources (no Zotero attachment) ranked by claim count --\n")
+  cat("   Attach PDFs for these to unlock auto-verification.\n")
+  if (nrow(na_sources) == 0L) {
+    cat("  (none)\n")
+  } else {
+    print(na_sources, n = Inf)
+  }
+
+  cat("\n-- no_match sources ranked by claim count --\n")
+  cat("   Attachment found but paraphrase did not score above threshold.\n")
+  if (nrow(no_match_sources) == 0L) {
+    cat("  (none)\n")
+  } else {
+    print(no_match_sources, n = Inf)
+  }
+
+  invisible(list(
+    status           = status_counts,
+    na_sources       = na_sources,
+    no_match_sources = no_match_sources
+  ))
 }
 
 # --- internal helpers --------------------------------------------------------
