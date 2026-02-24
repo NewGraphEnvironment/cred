@@ -362,7 +362,7 @@ crd_aud_summary(audit_file)
 ### Step 6 — Interactive review
 
 ```r
-crd_aud_review("background/citation_audit.csv")
+crd_aud_review("qa/citation_audit.csv")
 ```
 
 The app opens filtered to `auto` rows. Click a row to see paraphrase and quote side by side. Set `verified` to `yes`, `no`, or `corrected`, add notes, click **Update row**, then **Save to CSV**.
@@ -396,36 +396,113 @@ table(d5$claim_type)
 
 ---
 
-## Working with your real report
+## Setting up your report
+
+### Directory convention
+
+Put the audit CSV and pipeline script in a `qa/` directory at your report root:
+
+```
+my-report/
+├── 0100-introduction.Rmd
+├── 0200-methods.Rmd
+├── scripts/
+│   └── citation_audit.R      # repeatable pipeline
+└── qa/
+    └── citation_audit.csv     # the audit (git-tracked)
+```
+
+### The pipeline script
+
+Create `scripts/citation_audit.R` — this is the one file you (or an LLM) run every time. It handles first run vs. update automatically:
 
 ```r
+# scripts/citation_audit.R — repeatable citation audit pipeline
 library(cred)
 
-# ── One-time setup ──────────────────────────────────────────────────────────
-crd_aud_write(rmd_dir = ".", out_file = "background/citation_audit.csv")
+audit_file <- "qa/citation_audit.csv"
 
-# ── After adding new Rmd content ────────────────────────────────────────────
-crd_aud_upd("background/citation_audit.csv")
+# Step 1 — Extract or update citations from Rmd chapters
+if (file.exists(audit_file)) {
+  crd_aud_upd(audit_file)
+} else {
+  crd_aud_write(out_file = audit_file)
+}
 
-# ── Auto-fill from source files ─────────────────────────────────────────────
-crd_aud_verify_all("background/citation_audit.csv")
+# Step 2 — Auto-fill quotes from Zotero source files
+crd_aud_verify_all(audit_file)
 
-# ── Abstract fallback for remaining NA rows ──────────────────────────────────
-crd_aud_verify_abstract("background/citation_audit.csv")
+# Step 3 — Abstract fallback for NA rows
+crd_aud_verify_abstract(audit_file)
 
-# ── Score rows for review priority ─────────────────────────────────────────
-crd_aud_score("background/citation_audit.csv")
+# Step 4 — Score for review priority
+crd_aud_score(audit_file)
 
-# ── Check progress ──────────────────────────────────────────────────────────
-crd_aud_summary("background/citation_audit.csv")
-
-# ── Review session ──────────────────────────────────────────────────────────
-crd_aud_sort("background/citation_audit.csv", by = "status")
-crd_aud_review("background/citation_audit.csv")
-
-# ── Restore report order when done ──────────────────────────────────────────
-crd_aud_sort("background/citation_audit.csv", by = "report")
+# Step 5 — Summary
+crd_aud_summary(audit_file)
 ```
+
+Run the full pipeline after adding new citations or attaching new PDFs in Zotero. Run just the quick update after editing existing text:
+
+```r
+# Quick — re-extract and re-score only (seconds, no Zotero lookup)
+crd_aud_upd("qa/citation_audit.csv")
+crd_aud_score("qa/citation_audit.csv")
+```
+
+### When to commit
+
+The CSV is current state; git history is the audit trail.
+
+| After... | Commit? | Why |
+|----------|---------|-----|
+| Full pipeline run | Yes | Captures auto/no_match/abstract_match state |
+| Shiny review session (Save to CSV) | Yes | Preserves human judgments |
+| Quick `crd_aud_upd()` after Rmd edits | Yes | Records paraphrase changes + fuzzy matches |
+
+A good commit message: `qa: update citation audit after intro rewrite` or `qa: review 12 auto rows, 3 corrected`.
+
+### How `crd_aud_upd()` preserves your work
+
+When you reword a sentence in the Rmd, the paraphrase text changes. `crd_aud_upd()` handles this in two passes:
+
+1. **Exact join** on `(section, citation_key, paraphrase)` — unchanged rows carry forward all manual columns
+2. **Fuzzy fallback** — unmatched rows are compared by token similarity to existing rows with the same `(section, citation_key)`. If overlap >= 0.4, manual columns (verified, quote, notes, scores) carry forward to the new text
+
+The console reports what happened: `94 rows (13 new/unverified, 1 fuzzy-matched)`.
+
+### Programmatic review (without the Shiny app)
+
+You can read, edit, and write the CSV directly — useful when an LLM is helping with review or when you want to mark rows without opening the app:
+
+```r
+library(readr)
+d <- read_csv("qa/citation_audit.csv", show_col_types = FALSE)
+
+# Mark a row as reviewed
+d$verified[5] <- "yes"
+d$notes[5] <- "confirmed — numbers match Table 3 in source"
+
+# Mark a common-knowledge claim
+d$verified[12] <- "context"
+d$notes[12] <- "common knowledge, citation removed from Rmd"
+
+write_csv(d, "qa/citation_audit.csv", na = "")
+```
+
+Protected statuses (`yes`, `no`, `corrected`, `context`) are never overwritten by any automated function. Once you set them, they persist through all future pipeline runs.
+
+### Interactive review
+
+```r
+crd_aud_review("qa/citation_audit.csv")
+```
+
+The app opens filtered to `auto` rows. Click a row to see paraphrase and quote side by side. Set `verified`, add notes, click **Update row**, then **Save to CSV**. Use text filters to search paraphrase and quote content.
+
+### Known limitation: inline R expressions
+
+Paraphrases with inline R code (`` `r some_value` ``) appear as raw R in the CSV because the expressions aren't evaluated outside the bookdown render. `crd_aud_score()` tries to evaluate simple expressions via `paraphrase_eval`, but most depend on objects created during knitting and can't be resolved. Rows with unresolved inline R often score `1 (num_mismatch)` — this is expected, not a real mismatch. Review these manually.
 
 ### How source matching works
 

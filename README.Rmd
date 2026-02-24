@@ -18,52 +18,46 @@ knitr::opts_chunk$set(collapse = TRUE, comment = "#>")
 pak::pak("NewGraphEnvironment/cred")
 ```
 
-## The workflow in six steps
+## The workflow
 
 ```
-Rmd files  →  audit CSV  →  Zotero lookup  →  auto-fill quotes  →  sort  →  review app
+Rmd files  →  audit CSV  →  Zotero lookup  →  auto-fill quotes  →  score  →  review app
 ```
 
 **1. Generate the audit CSV** — one row per citation, with the surrounding sentence as `paraphrase`:
 
 ```r
-crd_aud_write(rmd_dir = ".", out_file = "background/citation_audit.csv")
+crd_aud_write(rmd_dir = ".", out_file = "qa/citation_audit.csv")
 ```
 
 **2. Auto-fill quotes from source documents** — queries your local Zotero database for PDF/docx attachments, searches each one for the best-matching passage, fills `quote`, `page_or_section`, and `verified = "auto"`:
 
 ```r
-crd_aud_verify_all("background/citation_audit.csv")
+crd_aud_verify_all("qa/citation_audit.csv")
 ```
 
 **2b. Abstract fallback for remaining NA rows** — for citations with no local file, scores the Zotero abstract against the paraphrase. Sets `verified = "abstract_match"` if the abstract is in the same domain as the claim. Useful when you have many references added by DOI lookup without attached PDFs:
 
 ```r
-crd_aud_verify_abstract("background/citation_audit.csv")
+crd_aud_verify_abstract("qa/citation_audit.csv")
 ```
 
-**3. Check progress** — see status breakdown and which PDFs to attach in Zotero to unlock more rows:
+**3. Score for review priority** — adds `review_score` (1–6) and `review_flag`. Lower scores are more suspect:
 
 ```r
-crd_aud_summary("background/citation_audit.csv")
+crd_aud_score("qa/citation_audit.csv")
 ```
 
-**4. Sort for your review session** — `auto` rows (quotes ready to check) first, `NA` rows (no source file) last:
+**4. Check progress** — status breakdown and which PDFs to attach:
 
 ```r
-crd_aud_sort("background/citation_audit.csv", by = "status")
+crd_aud_summary("qa/citation_audit.csv")
 ```
 
-**5. Launch the review app** — paraphrase and quote side by side, dropdown to set `verified`, saves back to CSV:
+**5. Launch the review app** — paraphrase and quote side by side, dropdown to set `verified`, text search filters, saves back to CSV:
 
 ```r
-crd_aud_review("background/citation_audit.csv")
-```
-
-**6. Restore report order** when done:
-
-```r
-crd_aud_sort("background/citation_audit.csv", by = "report")
+crd_aud_review("qa/citation_audit.csv")
 ```
 
 ## What each `verified` value means
@@ -81,12 +75,14 @@ crd_aud_sort("background/citation_audit.csv", by = "report")
 
 ## Keeping the CSV up to date
 
-After adding new content to your Rmd files:
+After editing Rmd files:
 
 ```r
-# Merge new citations into existing CSV without losing manual edits
-crd_aud_upd("background/citation_audit.csv")
+# Merge new citations; preserves manual edits via exact + fuzzy join
+crd_aud_upd("qa/citation_audit.csv")
 ```
+
+Exact match on `(section, citation_key, paraphrase)` first. Reworded sentences fall back to token-similarity matching (default threshold 0.4), so minor edits don't lose your review work. Git history tracks the audit trail.
 
 ## Zotero integration
 

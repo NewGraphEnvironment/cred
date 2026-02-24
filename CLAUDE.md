@@ -14,9 +14,11 @@ the specific claim made.
 
 R/
 ├── audit.R      — CSV lifecycle: crd_aud_write, crd_aud_verify_all, crd_aud_verify_abstract,
-│                  crd_aud_upd, crd_aud_sort, crd_aud_summary, crd_aud_scr_risk, crd_aud_fmt_xlsx
+│                  crd_aud_upd (fuzzy join), crd_aud_score, crd_aud_sort, crd_aud_summary,
+│                  crd_aud_scr_risk, crd_aud_fmt_xlsx
 ├── zotero.R     — SQLite helpers: crd_zot_src_lookup, crd_zot_abstract_lookup
 ├── review.R     — Shiny review app: crd_aud_review (launch_browser param, not launch.browser)
+│                  text filters for paraphrase/quote search
 ├── rmd.R        — crd_aud_write internals: parse @citekey + surrounding sentence
 ├── sentence.R   — sentence extraction helpers
 ├── pdf.R        — PDF text extraction + paragraph splitting (pdftools)
@@ -24,10 +26,11 @@ R/
                    (internal matching functions reused by abstract matching)
 
 tests/testthat/
-├── test-audit.R
+├── test-audit.R     — crd_aud_fill_src, crd_aud_upd (exact + fuzzy join)
 ├── test-docx.R
 ├── test-matching.R
 ├── test-rmd.R
+├── test-score.R     — crd_aud_score, .score_row, scoring internals
 └── test-sentence.R
 
 inst/extdata/              — toy data for vignette
@@ -65,6 +68,8 @@ tokens separately
 - `.token_score(query_tokens, paragraph)` — proportion of query tokens found in paragraph
 - Default `min_score = 0.2` (1 in 5 tokens must match)
 - `overwrite_verified = FALSE` by default — never reprocesses human-reviewed rows
+- These same functions are reused by `crd_aud_upd()` for fuzzy join fallback
+  (min_similarity = 0.4 threshold on paraphrase-to-paraphrase matching)
 
 ## Zotero Integration
 
@@ -97,10 +102,11 @@ Enforces snake_case via object_name_linter. Excludes renv and data-raw.
 
 ## Open Issues
 
-- #2 — crd_zot_pull_quotes(): pre-draft passage retrieval — pull candidate quotes
-from Zotero sources before writing, so LLM paraphrases from context (RAG pattern)
-- #3 — crd_hook_install(): git pre-commit hook — warn on NA rows, block commit
-on no_match rows unless overridden
+- #2 — crd_zot_pull_quotes(): pre-draft passage retrieval (RAG pattern)
+- #3 — crd_hook_install(): git pre-commit hook
+- #9 — Abstract fallback for no_match rows
+- #11 — Show top-N candidate passages in review app
+- #13 — Review app detail panel error on duplicate (section, citation_key) rows
 
 ## Key Design Decisions
 
@@ -110,8 +116,10 @@ avoids embedding dependency and keeps results explainable
 domain plausibility only; abstract_match ≠ auto
 - Deliberately permissive default threshold (0.2) — false positive (wrong paragraph
 shown) costs seconds of review; false negative (right paragraph missed) costs manual PDF search
-- crd_aud_upd() for incremental updates — merges new rows into existing CSV without
-losing human edits; use after adding new Rmd content, not crd_aud_write()
+- crd_aud_upd() for incremental updates — exact join on (section, citation_key, paraphrase)
+with fuzzy fallback (min_similarity=0.4) when text changes; preserves human edits
+- crd_aud_score() adds review_score (1-6) and review_flag — lower = more suspect
+- CSV is current state, git history is the audit trail
 
 <\!-- BEGIN SOUL CONVENTIONS — DO NOT EDIT BELOW THIS LINE -->
 
