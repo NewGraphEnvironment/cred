@@ -181,6 +181,7 @@ dbExecute(con, "CREATE TABLE itemAttachments (
 
 dbExecute(con, "INSERT INTO fields VALUES (1, 'citationKey')")
 dbExecute(con, "INSERT INTO fields VALUES (2, 'title')")
+dbExecute(con, "INSERT INTO fields VALUES (3, 'abstractNote')")
 
 # Parent items
 dbExecute(con, "INSERT INTO items VALUES (1, 14, 1, 'PARENT001')")  # smith2020
@@ -199,6 +200,13 @@ dbExecute(con, "INSERT INTO itemDataValues VALUES (4, 'Habitat Quality Assessmen
 dbExecute(con, "INSERT INTO itemDataValues VALUES (5, 'Beaver Ecology and Salmonid Habitat Restoration')")
 dbExecute(con, "INSERT INTO itemDataValues VALUES (6, 'Stream Temperature and Salmon Distribution')")
 
+# Abstract values (fieldID 3 = abstractNote)
+# doe2021 abstract deliberately contains the tokens in the vignette/test NA paraphrase
+# so abstract matching moves that row from NA to abstract_match
+dbExecute(con, "INSERT INTO itemDataValues VALUES (7, 'Assessment of habitat quality limiting factors for chinook salmon in interior BC streams. Examines spawning substrate embeddedness, riparian shade and stream temperature, road crossing fish passage barriers, and large woody debris loading across 47 index sites.')")
+dbExecute(con, "INSERT INTO itemDataValues VALUES (8, 'Beaver reintroduction as a salmonid habitat restoration strategy. Documents effects on overwinter juvenile survival, peak flow attenuation, baseflow extension, and floodplain side-channel connectivity for chinook and other salmonids.')")
+dbExecute(con, "INSERT INTO itemDataValues VALUES (9, 'Stream temperature governs the spatial distribution of salmonid populations across Pacific Northwest watersheds. During summer low flows, elevated temperatures limits accessible rearing area for juvenile chinook and other salmonids, constraining population productivity in thermally marginal streams.')")
+
 # Link items to fields
 dbExecute(con, "INSERT INTO itemData VALUES (1, 1, 1)")
 dbExecute(con, "INSERT INTO itemData VALUES (2, 1, 2)")
@@ -206,6 +214,9 @@ dbExecute(con, "INSERT INTO itemData VALUES (3, 1, 3)")
 dbExecute(con, "INSERT INTO itemData VALUES (1, 2, 4)")
 dbExecute(con, "INSERT INTO itemData VALUES (2, 2, 5)")
 dbExecute(con, "INSERT INTO itemData VALUES (3, 2, 6)")
+dbExecute(con, "INSERT INTO itemData VALUES (1, 3, 7)")  # smith2020 abstract
+dbExecute(con, "INSERT INTO itemData VALUES (2, 3, 8)")  # jones2019 abstract
+dbExecute(con, "INSERT INTO itemData VALUES (3, 3, 9)")  # doe2021 abstract
 
 # Attachments (item 3 has none — simulates metadata-only entry)
 dbExecute(con, "INSERT INTO itemAttachments VALUES (

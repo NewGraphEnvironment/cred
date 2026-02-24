@@ -126,3 +126,75 @@ crd_zot_src_lookup <- function(citation_keys, zotero_dir = "~/Zotero") {
 
   result
 }
+
+#' Retrieve Zotero abstracts for a vector of citation keys
+#'
+#' Queries the local Zotero SQLite database for the `abstractNote` field of
+#' each supplied citation key. Returns a tibble with one row per key —
+#' including keys with no abstract (`abstract = NA`).
+#'
+#' @param citation_keys `character` vector of BBT citation keys.
+#'   `NA` values are silently dropped.
+#' @param zotero_dir `character(1)` path to the Zotero data directory.
+#'   Default `"~/Zotero"`.
+#' @return A [tibble][tibble::tibble] with columns:
+#'   - `citation_key` (`character`) — the input key.
+#'   - `abstract` (`character`) — abstract text, `NA` if not in database.
+#' @export
+#' @examples
+#' \dontrun{
+#' crd_zot_abstract_lookup(c("price_etal2026rebuildinggiis", "doe2021NoFile"))
+#' }
+crd_zot_abstract_lookup <- function(citation_keys, zotero_dir = "~/Zotero") {
+  chk::chk_character(citation_keys)
+  chk::chk_string(zotero_dir)
+
+  zotero_dir <- path.expand(zotero_dir)
+  if (!dir.exists(zotero_dir)) stop("Zotero directory not found: ", zotero_dir)
+
+  db_path <- file.path(zotero_dir, "zotero.sqlite")
+  if (!file.exists(db_path)) stop("zotero.sqlite not found in: ", zotero_dir)
+
+  if (!requireNamespace("RSQLite", quietly = TRUE)) {
+    stop("Package 'RSQLite' is required. Install with: pak::pak('RSQLite')")
+  }
+
+  db_uri <- paste0("file:", db_path, "?mode=ro&immutable=1")
+  keys <- unique(citation_keys[!is.na(citation_keys)])
+
+  con <- RSQLite::dbConnect(RSQLite::SQLite(), db_uri)
+  on.exit(RSQLite::dbDisconnect(con), add = TRUE)
+
+  placeholders <- paste(rep("?", length(keys)), collapse = ", ")
+  sql <- sprintf("
+    SELECT idv_key.value AS citation_key,
+           idv_abs.value AS abstract
+    FROM items i
+    JOIN itemData       id_key  ON i.itemID       = id_key.itemID
+    JOIN itemDataValues idv_key ON id_key.valueID = idv_key.valueID
+    JOIN fields         f_key   ON id_key.fieldID = f_key.fieldID
+    JOIN itemData       id_abs  ON i.itemID       = id_abs.itemID
+    JOIN itemDataValues idv_abs ON id_abs.valueID = idv_abs.valueID
+    JOIN fields         f_abs   ON id_abs.fieldID = f_abs.fieldID
+    WHERE f_key.fieldName = 'citationKey'
+    AND   f_abs.fieldName = 'abstractNote'
+    AND   idv_key.value   IN (%s)
+  ", placeholders)
+
+  raw <- RSQLite::dbGetQuery(con, sql, params = as.list(keys))
+
+  # Return all requested keys, NA for those not in DB
+  result <- tibble::tibble(citation_key = keys)
+  if (nrow(raw) > 0L) {
+    result <- tibble::as_tibble(merge(result, raw, by = "citation_key", all.x = TRUE))
+  } else {
+    result$abstract <- NA_character_
+  }
+
+  no_abstract <- result$citation_key[is.na(result$abstract)]
+  if (length(no_abstract) > 0L) {
+    warning("No abstract found in Zotero for: ", paste(no_abstract, collapse = ", "))
+  }
+
+  result
+}

@@ -34,6 +34,16 @@ best-matching passage, fills `quote`, `page_or_section`, and
 crd_aud_verify_all("background/citation_audit.csv")
 ```
 
+**2b. Abstract fallback for remaining NA rows** — for citations with no
+local file, scores the Zotero abstract against the paraphrase. Sets
+`verified = "abstract_match"` if the abstract is in the same domain as
+the claim. Useful when you have many references added by DOI lookup
+without attached PDFs:
+
+``` r
+crd_aud_verify_abstract("background/citation_audit.csv")
+```
+
 **3. Check progress** — see status breakdown and which PDFs to attach in
 Zotero to unlock more rows:
 
@@ -63,15 +73,16 @@ crd_aud_sort("background/citation_audit.csv", by = "report")
 
 ## What each `verified` value means
 
-| Value       | Meaning                                                    |
-|-------------|------------------------------------------------------------|
-| `auto`      | Machine-matched — awaiting your review                     |
-| `yes`       | Reviewed and confirmed accurate                            |
-| `no`        | Claim not supported by source                              |
-| `corrected` | Claim was wrong; you fixed it in the Rmd                   |
-| `no_match`  | Source exists but paraphrase did not score above threshold |
-| `context`   | Citation provides context, not a direct factual claim      |
-| `NA`        | No source file in Zotero — attach a PDF to unblock         |
+| Value | Meaning |
+|----|----|
+| `auto` | Machine-matched against source file — awaiting your review |
+| `abstract_match` | Matched against Zotero abstract — no full text available |
+| `yes` | Reviewed and confirmed accurate |
+| `no` | Claim not supported by source |
+| `corrected` | Claim was wrong; you fixed it in the Rmd |
+| `no_match` | Source exists but paraphrase did not score above threshold |
+| `context` | Citation provides context, not a direct factual claim |
+| `NA` | No source file and no abstract in Zotero |
 
 ## Keeping the CSV up to date
 

@@ -499,6 +499,94 @@ crd_aud_summary <- function(audit_file) {
   ))
 }
 
+#' Fill quote and verified for NA rows using Zotero abstract text
+#'
+#' For rows where `verified` is `NA` (no source file attached in Zotero),
+#' queries the local Zotero database for the abstract of each cited item and
+#' scores it against the `paraphrase` using token overlap. Rows that score at
+#' or above `min_score` receive `verified = "abstract_match"` and the abstract
+#' text as their `quote`.
+#'
+#' Abstract matching confirms the citation is plausibly in the right domain
+#' but cannot verify a specific quote from the body of the paper. A hit means
+#' the cited source covers the general topic of the claim; a miss does not
+#' mean the citation is wrong — the claim may simply not appear in the abstract.
+#'
+#' @param audit_file `character(1)` path to the audit CSV.
+#' @param zotero_dir `character(1)` path to the Zotero data directory.
+#'   Default `"~/Zotero"`.
+#' @param min_score `numeric(1)` token overlap threshold. Default `0.2`.
+#' @param overwrite_verified `logical(1)` if `TRUE`, reprocess existing
+#'   `"abstract_match"` rows. Never overwrites human-reviewed rows
+#'   (`yes`, `no`, `corrected`, `context`). Default `FALSE`.
+#' @return The updated audit data frame, invisibly. Writes to `audit_file`.
+#' @export
+#' @examples
+#' \dontrun{
+#' crd_aud_verify_abstract("background/citation_audit.csv")
+#' }
+crd_aud_verify_abstract <- function(audit_file,
+                                    zotero_dir        = "~/Zotero",
+                                    min_score         = 0.2,
+                                    overwrite_verified = FALSE) {
+  chk::chk_file(audit_file)
+  chk::chk_string(zotero_dir)
+  chk::chk_number(min_score)
+  chk::chk_flag(overwrite_verified)
+
+  audit <- readr::read_csv(audit_file, show_col_types = FALSE)
+
+  human_reviewed <- c("yes", "no", "corrected", "context")
+
+  target_rows <- (is.na(audit$verified) |
+    (overwrite_verified & !is.na(audit$verified) & audit$verified == "abstract_match")) &
+    !(audit$verified %in% human_reviewed | is.na(audit$citation_key))
+
+  if (!any(target_rows, na.rm = TRUE)) {
+    message("No NA rows to process.")
+    return(invisible(audit))
+  }
+
+  target_keys <- unique(audit$citation_key[target_rows])
+  abstracts   <- suppressWarnings(
+    crd_zot_abstract_lookup(target_keys, zotero_dir = zotero_dir)
+  )
+
+  n_matched    <- 0L
+  n_no_abstract <- 0L
+
+  for (key in target_keys) {
+    abs_row <- abstracts[abstracts$citation_key == key, , drop = FALSE]
+    if (nrow(abs_row) == 0L || is.na(abs_row$abstract)) {
+      n_no_abstract <- n_no_abstract + 1L
+      next
+    }
+    abstract_text <- abs_row$abstract
+
+    row_idx <- which(target_rows & !is.na(audit$citation_key) &
+                       audit$citation_key == key)
+    for (i in row_idx) {
+      tokens <- .paraphrase_tokens(audit$paraphrase[i])
+      if (length(tokens) == 0L) next
+      score <- .token_score(abstract_text, tokens)
+      if (score >= min_score) {
+        audit$quote[i]           <- abstract_text
+        audit$page_or_section[i] <- "abstract"
+        audit$verified[i]        <- "abstract_match"
+        n_matched <- n_matched + 1L
+      }
+    }
+  }
+
+  readr::write_csv(audit, audit_file, na = "")
+  message(
+    "Abstract matching: ", n_matched, " matched, ",
+    n_no_abstract, " keys with no abstract in Zotero."
+  )
+
+  invisible(audit)
+}
+
 #' Format an audit CSV as a readable Excel workbook
 #'
 #' Writes a `.xlsx` version of the audit CSV with formatting optimised for

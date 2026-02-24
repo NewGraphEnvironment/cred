@@ -4,13 +4,13 @@
 \alias{crd_aud_review}
 \title{Launch an interactive review app for the citation audit CSV}
 \usage{
-crd_aud_review(audit_file, launch.browser = TRUE)
+crd_aud_review(audit_file, launch_browser = TRUE)
 }
 \arguments{
 \item{audit_file}{\code{character(1)} path to the audit CSV produced by
 \code{\link[=crd_aud_write]{crd_aud_write()}}.}
 
-\item{launch.browser}{\code{logical(1)} open the app in the system browser.
+\item{launch_browser}{\code{logical(1)} open the app in the system browser.
 Default \code{TRUE}.}
 }
 \value{
