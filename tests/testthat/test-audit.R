@@ -92,6 +92,136 @@ test_that("crd_aud_fill_src skips already-verified rows", {
   unlink(tmp_csv)
 })
 
+# ---------------------------------------------------------------------------
+# crd_aud_upd tests
+# ---------------------------------------------------------------------------
+
+# Helper — write toy Rmd files and an initial audit CSV
+setup_upd_test <- function() {
+  rmd_dir <- tempfile("rmd_")
+  dir.create(rmd_dir)
+
+  writeLines(c(
+    "# Intro {#intro}",
+    "",
+    "Beaver dams reduce stream temperatures [@jones2019].",
+    "",
+    "Embeddedness exceeded 25% at most sites [@smith2020]."
+  ), file.path(rmd_dir, "0100-intro.Rmd"))
+
+  audit_file <- tempfile("audit_", fileext = ".csv")
+  suppressMessages(crd_aud_write(rmd_dir = rmd_dir, out_file = audit_file))
+
+  list(rmd_dir = rmd_dir, audit_file = audit_file)
+}
+
+test_that("crd_aud_upd preserves manual columns for unchanged rows", {
+  env <- setup_upd_test()
+
+  # Simulate manual review on the existing CSV
+  d <- readr::read_csv(env$audit_file, show_col_types = FALSE)
+  d$verified[1] <- "yes"
+  d$notes[1] <- "confirmed manually"
+  d$quote[1] <- "Beaver dams moderate summer stream temperatures."
+  readr::write_csv(d, env$audit_file, na = "")
+
+  # Re-run update — Rmd unchanged, so paraphrases match exactly
+  result <- suppressMessages(
+    crd_aud_upd(env$audit_file, rmd_dir = env$rmd_dir)
+  )
+
+  row1 <- result[result$citation_key == "jones2019", ]
+  expect_equal(row1$verified, "yes")
+  expect_equal(row1$notes, "confirmed manually")
+  expect_equal(row1$quote, "Beaver dams moderate summer stream temperatures.")
+
+  unlink(env$rmd_dir, recursive = TRUE)
+  unlink(env$audit_file)
+})
+
+test_that("crd_aud_upd adds new rows with blank manual columns", {
+  env <- setup_upd_test()
+
+  # Add a new citation to the Rmd
+  writeLines(c(
+    "# Intro {#intro}",
+    "",
+    "Beaver dams reduce stream temperatures [@jones2019].",
+    "",
+    "Embeddedness exceeded 25% at most sites [@smith2020].",
+    "",
+    "Road density correlates with habitat degradation [@doe2021HabitatLoss]."
+  ), file.path(env$rmd_dir, "0100-intro.Rmd"))
+
+  result <- suppressMessages(
+    crd_aud_upd(env$audit_file, rmd_dir = env$rmd_dir)
+  )
+
+  expect_equal(nrow(result), 3L)
+  new_row <- result[result$citation_key == "doe2021HabitatLoss", ]
+  expect_true(is.na(new_row$verified))
+  expect_true(is.na(new_row$quote))
+
+  unlink(env$rmd_dir, recursive = TRUE)
+  unlink(env$audit_file)
+})
+
+test_that("crd_aud_upd drops rows for deleted citations", {
+  env <- setup_upd_test()
+
+  # Remove one citation from the Rmd
+  writeLines(c(
+    "# Intro {#intro}",
+    "",
+    "Beaver dams reduce stream temperatures [@jones2019]."
+  ), file.path(env$rmd_dir, "0100-intro.Rmd"))
+
+  result <- suppressMessages(
+    crd_aud_upd(env$audit_file, rmd_dir = env$rmd_dir)
+  )
+
+  expect_equal(nrow(result), 1L)
+  expect_equal(result$citation_key, "jones2019")
+
+  unlink(env$rmd_dir, recursive = TRUE)
+  unlink(env$audit_file)
+})
+
+test_that("crd_aud_upd loses manual columns when paraphrase text changes", {
+  env <- setup_upd_test()
+
+  # Mark first row as reviewed
+  d <- readr::read_csv(env$audit_file, show_col_types = FALSE)
+  d$verified[1] <- "yes"
+  d$notes[1] <- "reviewed"
+  readr::write_csv(d, env$audit_file, na = "")
+
+  # Change the paraphrase text slightly
+  writeLines(c(
+    "# Intro {#intro}",
+    "",
+    "Beaver dams moderate summer water temperatures [@jones2019].",
+    "",
+    "Embeddedness exceeded 25% at most sites [@smith2020]."
+  ), file.path(env$rmd_dir, "0100-intro.Rmd"))
+
+  result <- suppressMessages(
+    crd_aud_upd(env$audit_file, rmd_dir = env$rmd_dir)
+  )
+
+  jones_row <- result[result$citation_key == "jones2019", ]
+  # Paraphrase changed — old review work lost (exact match join fails)
+  expect_true(is.na(jones_row$verified),
+    info = "Changed paraphrase should lose verified status with exact-match join")
+
+  unlink(env$rmd_dir, recursive = TRUE)
+  unlink(env$audit_file)
+})
+
+# ---------------------------------------------------------------------------
+# crd_aud_fill_src tests (existing)
+# ---------------------------------------------------------------------------
+
 test_that("crd_aud_fill_src type checks", {
   expect_error(crd_aud_fill_src(123, tibble::tibble(), "key"))
   expect_error(crd_aud_fill_src("nonexistent.csv", tibble::tibble(), "key"))

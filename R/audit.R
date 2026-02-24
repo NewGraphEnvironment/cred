@@ -105,9 +105,13 @@ crd_aud_upd <- function(
     exclude  = exclude
   )
 
+  # Drop manual columns from fresh so existing values take precedence on join
+  fresh_keys <- dplyr::select(fresh, "section", "citation_key", "paraphrase",
+                              "sort_index")
+
   manual_cols_all <- c(manual_cols, "sort_index")
   merged <- dplyr::left_join(
-    fresh,
+    fresh_keys,
     dplyr::select(existing, "section", "citation_key", "paraphrase",
                   dplyr::any_of(manual_cols_all)),
     by = c("section", "citation_key", "paraphrase")
@@ -117,6 +121,10 @@ crd_aud_upd <- function(
     merged$sort_index <- dplyr::coalesce(merged$sort_index.y, merged$sort_index.x)
     merged$sort_index.x <- NULL
     merged$sort_index.y <- NULL
+  }
+  # Ensure all manual columns exist (NA for new rows)
+  for (col in manual_cols) {
+    if (!col %in% names(merged)) merged[[col]] <- NA_character_
   }
 
   readr::write_csv(merged, out_file, na = "")
