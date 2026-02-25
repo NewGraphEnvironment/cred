@@ -192,7 +192,9 @@ badge <- function(val) {
   bg <- cols[val]
   if (!is.na(bg)) {
     sprintf("<span style='background:%s;padding:2px 5px;border-radius:3px;font-size:10px'>%s</span>", bg, val)
-  } else { val }
+  } else {
+    val
+  }
 }
 
 d2_show <- data.frame(
@@ -435,10 +437,14 @@ crd_aud_verify_all(audit_file)
 # Step 3 — Abstract fallback for NA rows
 crd_aud_verify_abstract(audit_file)
 
-# Step 4 — Score for review priority
+# Step 4 — Resolve inline R from rendered HTML
+# (only needed if paraphrases contain `r expr` spans)
+crd_aud_eval_html(audit_file, html_dir = "docs")
+
+# Step 5 — Score for review priority
 crd_aud_score(audit_file)
 
-# Step 5 — Summary
+# Step 6 — Summary
 crd_aud_summary(audit_file)
 ```
 
