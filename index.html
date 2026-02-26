@@ -68,30 +68,27 @@
 <div class="section level2">
 <h2 id="the-workflow">The workflow<a class="anchor" aria-label="anchor" href="#the-workflow"></a>
 </h2>
-<div class="sourceCode" id="cb2"><pre class="sourceCode R"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" tabindex="-1"></a>Rmd files  →  audit CSV  →  Zotero lookup  →  auto<span class="sc">-</span>fill quotes  →  score  →  review app</span></code></pre></div>
+<div class="sourceCode" id="cb2"><pre class="sourceCode R"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" tabindex="-1"></a>Rmd files  →  audit CSV  →  eval inline  →  verify  →  score  →  review app</span></code></pre></div>
 <p><strong>1. Generate the audit CSV</strong> — one row per citation, with the surrounding sentence as <code>paraphrase</code>:</p>
 <div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="reference/crd_aud_write.html">crd_aud_write</a></span><span class="op">(</span>rmd_dir <span class="op">=</span> <span class="st">"."</span>, out_file <span class="op">=</span> <span class="st">"qa/citation_audit.csv"</span><span class="op">)</span></span></code></pre></div>
-<p><strong>2. Auto-fill quotes from source documents</strong> — queries your local Zotero database for PDF/docx attachments, searches each one for the best-matching passage, fills <code>quote</code>, <code>page_or_section</code>, and <code>verified = "auto"</code>:</p>
+<p><strong>2. Resolve inline R expressions</strong> — if paraphrases contain inline R spans (e.g., backtick-r-var-backtick), evaluate them in your current session. Source your project’s setup chunks first so the variables exist:</p>
 <div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="fu"><a href="reference/crd_aud_verify_all.html">crd_aud_verify_all</a></span><span class="op">(</span><span class="st">"qa/citation_audit.csv"</span><span class="op">)</span></span></code></pre></div>
-<p><strong>2b. Abstract fallback for remaining NA rows</strong> — for citations with no local file, scores the Zotero abstract against the paraphrase. Sets <code>verified = "abstract_match"</code> if the abstract is in the same domain as the claim. Useful when you have many references added by DOI lookup without attached PDFs:</p>
-<div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="fu"><a href="reference/crd_aud_verify_abstract.html">crd_aud_verify_abstract</a></span><span class="op">(</span><span class="st">"qa/citation_audit.csv"</span><span class="op">)</span></span></code></pre></div>
-<p><strong>2c. Resolve inline R expressions</strong> — if paraphrases contain inline R spans (e.g., backtick-r-var-backtick), evaluate them in your current session. Source your project’s setup chunks first so the variables exist:</p>
-<div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/source.html" class="external-link">source</a></span><span class="op">(</span><span class="st">"scripts/packages.R"</span><span class="op">)</span></span>
 <span><span class="kw"><a href="https://rdrr.io/r/base/source.html" class="external-link">source</a></span><span class="op">(</span><span class="st">"scripts/functions.R"</span><span class="op">)</span></span>
 <span><span class="fu"><a href="reference/crd_aud_eval_inline.html">crd_aud_eval_inline</a></span><span class="op">(</span><span class="st">"qa/citation_audit.csv"</span><span class="op">)</span></span></code></pre></div>
-<p>The raw paraphrase is preserved; resolved values go in <code>paraphrase_eval</code>. Scoring uses <code>paraphrase_eval</code> when available.</p>
-<p><strong>3. Score for review priority</strong> — adds <code>review_score</code> (1–6) and <code>review_flag</code>. Lower scores are more suspect:</p>
+<p>The raw paraphrase is preserved; resolved values go in <code>paraphrase_eval</code>. Scoring and matching use <code>paraphrase_eval</code> when available.</p>
+<p><strong>3. Auto-fill quotes from source documents</strong> — queries your local Zotero database for PDF/docx attachments, searches each one for the best-matching passage, fills <code>quote</code>, <code>page_or_section</code>, and <code>verified = "auto"</code>. Top-3 candidate passages are stored as JSON in <code>candidate_quotes</code>:</p>
+<div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="reference/crd_aud_verify_all.html">crd_aud_verify_all</a></span><span class="op">(</span><span class="st">"qa/citation_audit.csv"</span><span class="op">)</span></span></code></pre></div>
+<p><strong>4. Abstract fallback for remaining NA rows</strong> — for citations with no local file, scores the Zotero abstract against the paraphrase. Sets <code>verified = "abstract_match"</code> if the abstract is in the same domain as the claim:</p>
+<div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="reference/crd_aud_verify_abstract.html">crd_aud_verify_abstract</a></span><span class="op">(</span><span class="st">"qa/citation_audit.csv"</span><span class="op">)</span></span></code></pre></div>
+<p><strong>5. Score for review priority</strong> — adds <code>review_score</code> (1–6) and <code>review_flag</code>. Lower scores are more suspect:</p>
 <div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="reference/crd_aud_score.html">crd_aud_score</a></span><span class="op">(</span><span class="st">"qa/citation_audit.csv"</span><span class="op">)</span></span></code></pre></div>
-<p><strong>4. Check progress</strong> — status breakdown and which PDFs to attach:</p>
+<p><strong>6. Launch the review app</strong> — paraphrase and quote side by side, collapsible panel showing alternative candidate passages, dropdown to set <code>verified</code>, text search filters, saves back to CSV:</p>
 <div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="fu"><a href="reference/crd_aud_summary.html">crd_aud_summary</a></span><span class="op">(</span><span class="st">"qa/citation_audit.csv"</span><span class="op">)</span></span></code></pre></div>
-<p><strong>5. Launch the review app</strong> — paraphrase and quote side by side, dropdown to set <code>verified</code>, text search filters, saves back to CSV:</p>
-<div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="reference/crd_aud_review.html">crd_aud_review</a></span><span class="op">(</span><span class="st">"qa/citation_audit.csv"</span><span class="op">)</span></span></code></pre></div>
 </div>
 <div class="section level2">
@@ -146,7 +143,7 @@
 <h2 id="keeping-the-csv-up-to-date">Keeping the CSV up to date<a class="anchor" aria-label="anchor" href="#keeping-the-csv-up-to-date"></a>
 </h2>
 <p>After editing Rmd files:</p>
-<div class="sourceCode" id="cb10"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># Merge new citations; preserves manual edits via exact + fuzzy join</span></span>
 <span><span class="fu"><a href="reference/crd_aud_upd.html">crd_aud_upd</a></span><span class="op">(</span><span class="st">"qa/citation_audit.csv"</span><span class="op">)</span></span></code></pre></div>
 <p>Exact match on <code>(section, citation_key, paraphrase)</code> first. Reworded sentences fall back to token-similarity matching (default threshold 0.4), so minor edits don’t lose your review work. Git history tracks the audit trail.</p>
@@ -161,10 +158,10 @@
 <h2 id="how-matching-works">How matching works<a class="anchor" aria-label="anchor" href="#how-matching-works"></a>
 </h2>
 <p>For each unverified row, <code>cred</code> scores every paragraph in the source document by the fraction of query tokens found in it:</p>
-<div class="sourceCode" id="cb11"><pre class="sourceCode R"><code class="sourceCode r"><span id="cb11-1"><a href="#cb11-1" tabindex="-1"></a>score <span class="ot">=</span> tokens from paraphrase found <span class="cf">in</span> paragraph <span class="sc">/</span> total tokens <span class="cf">in</span> paraphrase</span></code></pre></div>
+<div class="sourceCode" id="cb10"><pre class="sourceCode R"><code class="sourceCode r"><span id="cb10-1"><a href="#cb10-1" tabindex="-1"></a>score <span class="ot">=</span> tokens from paraphrase found <span class="cf">in</span> paragraph <span class="sc">/</span> total tokens <span class="cf">in</span> paraphrase</span></code></pre></div>
 <p>The default threshold is <strong>0.2</strong> — 1 in 5 query tokens must appear in the candidate paragraph. This is deliberately permissive: a false positive (wrong paragraph shown as <code>auto</code>) costs a few seconds of review; a false negative (right paragraph called <code>no_match</code>) means searching the PDF yourself.</p>
 <p><code>min_score</code> is exposed in every matching function:</p>
-<div class="sourceCode" id="cb12"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb11"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="reference/crd_aud_verify_all.html">crd_aud_verify_all</a></span><span class="op">(</span><span class="st">"citation_audit.csv"</span>, min_score <span class="op">=</span> <span class="fl">0.2</span><span class="op">)</span>  <span class="co"># default</span></span></code></pre></div>
 <table class="table">
 <colgroup>
@@ -196,7 +193,7 @@
 <div class="section level2">
 <h2 id="learn-more">Learn more<a class="anchor" aria-label="anchor" href="#learn-more"></a>
 </h2>
-<div class="sourceCode" id="cb13"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb12"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/utils/vignette.html" class="external-link">vignette</a></span><span class="op">(</span><span class="st">"citation-audit"</span>, package <span class="op">=</span> <span class="st">"cred"</span><span class="op">)</span></span></code></pre></div>
 <p>The vignette walks through the full workflow with toy source files (PDF + docx) and a minimal Zotero SQLite database that ship with the package.</p>
 </div>

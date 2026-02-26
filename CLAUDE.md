@@ -18,12 +18,12 @@ crd_aud_verify_abstract, │ crd_aud_upd (fuzzy join), crd_aud_eval_inline
 crd_aud_scr_risk, crd_aud_fmt_xlsx ├── zotero.R — SQLite helpers:
 crd_zot_src_lookup, crd_zot_abstract_lookup ├── review.R — Shiny review
 app: crd_aud_review (launch_browser param, not launch.browser) │ text
-filters for paraphrase/quote search ├── rmd.R — crd_aud_write internals:
-parse @citekey + surrounding sentence ├── sentence.R — sentence
-extraction helpers ├── pdf.R — PDF text extraction + paragraph splitting
-(pdftools) └── docx.R — Word doc extraction (officer) +
-.paraphrase_tokens(), .token_score() (internal matching functions reused
-by abstract matching)
+filters for paraphrase/quote search, collapsible candidate passages
+panel ├── rmd.R — crd_aud_write internals: parse @citekey + surrounding
+sentence ├── sentence.R — sentence extraction helpers ├── pdf.R — PDF
+text extraction + paragraph splitting (pdftools) └── docx.R — Word doc
+extraction (officer) + .paraphrase_tokens(), .token_score() (internal
+matching functions reused by abstract matching)
 
 tests/testthat/ ├── test-audit.R — crd_aud_fill_src, crd_aud_upd
 (exact + fuzzy join) ├── test-docx.R ├── test-matching.R ├── test-rmd.R
@@ -63,6 +63,8 @@ verification paths: - `.paraphrase_tokens(text)` — strips R expressions,
 numeric tokens separately - `.token_score(query_tokens, paragraph)` —
 proportion of query tokens found in paragraph - Default
 `min_score = 0.2` (1 in 5 tokens must match) -
+[`crd_aud_fill_src()`](https://newgraphenvironment.github.io/cred/reference/crd_aud_fill_src.md)
+stores top-3 candidates as JSON in `candidate_quotes` column -
 `overwrite_verified = FALSE` by default — never reprocesses
 human-reviewed rows - These same functions are reused by
 [`crd_aud_upd()`](https://newgraphenvironment.github.io/cred/reference/crd_aud_upd.md)
@@ -109,9 +111,6 @@ Excludes renv and data-raw.
 - \#2 — crd_zot_pull_quotes(): pre-draft passage retrieval (RAG pattern)
 - \#3 — crd_hook_install(): git pre-commit hook
 - \#9 — Abstract fallback for no_match rows
-- \#11 — Show top-N candidate passages in review app
-- \#13 — Review app detail panel error on duplicate (section,
-  citation_key) rows
 
 ## Key Design Decisions
 

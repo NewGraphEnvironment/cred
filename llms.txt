@@ -14,7 +14,7 @@ pak::pak("NewGraphEnvironment/cred")
 ## The workflow
 
 ``` R
-Rmd files  →  audit CSV  →  Zotero lookup  →  auto-fill quotes  →  score  →  review app
+Rmd files  →  audit CSV  →  eval inline  →  verify  →  score  →  review app
 ```
 
 **1. Generate the audit CSV** — one row per citation, with the
@@ -24,26 +24,7 @@ surrounding sentence as `paraphrase`:
 crd_aud_write(rmd_dir = ".", out_file = "qa/citation_audit.csv")
 ```
 
-**2. Auto-fill quotes from source documents** — queries your local
-Zotero database for PDF/docx attachments, searches each one for the
-best-matching passage, fills `quote`, `page_or_section`, and
-`verified = "auto"`:
-
-``` r
-crd_aud_verify_all("qa/citation_audit.csv")
-```
-
-**2b. Abstract fallback for remaining NA rows** — for citations with no
-local file, scores the Zotero abstract against the paraphrase. Sets
-`verified = "abstract_match"` if the abstract is in the same domain as
-the claim. Useful when you have many references added by DOI lookup
-without attached PDFs:
-
-``` r
-crd_aud_verify_abstract("qa/citation_audit.csv")
-```
-
-**2c. Resolve inline R expressions** — if paraphrases contain inline R
+**2. Resolve inline R expressions** — if paraphrases contain inline R
 spans (e.g., backtick-r-var-backtick), evaluate them in your current
 session. Source your project’s setup chunks first so the variables
 exist:
@@ -55,23 +36,38 @@ crd_aud_eval_inline("qa/citation_audit.csv")
 ```
 
 The raw paraphrase is preserved; resolved values go in
-`paraphrase_eval`. Scoring uses `paraphrase_eval` when available.
+`paraphrase_eval`. Scoring and matching use `paraphrase_eval` when
+available.
 
-**3. Score for review priority** — adds `review_score` (1–6) and
+**3. Auto-fill quotes from source documents** — queries your local
+Zotero database for PDF/docx attachments, searches each one for the
+best-matching passage, fills `quote`, `page_or_section`, and
+`verified = "auto"`. Top-3 candidate passages are stored as JSON in
+`candidate_quotes`:
+
+``` r
+crd_aud_verify_all("qa/citation_audit.csv")
+```
+
+**4. Abstract fallback for remaining NA rows** — for citations with no
+local file, scores the Zotero abstract against the paraphrase. Sets
+`verified = "abstract_match"` if the abstract is in the same domain as
+the claim:
+
+``` r
+crd_aud_verify_abstract("qa/citation_audit.csv")
+```
+
+**5. Score for review priority** — adds `review_score` (1–6) and
 `review_flag`. Lower scores are more suspect:
 
 ``` r
 crd_aud_score("qa/citation_audit.csv")
 ```
 
-**4. Check progress** — status breakdown and which PDFs to attach:
-
-``` r
-crd_aud_summary("qa/citation_audit.csv")
-```
-
-**5. Launch the review app** — paraphrase and quote side by side,
-dropdown to set `verified`, text search filters, saves back to CSV:
+**6. Launch the review app** — paraphrase and quote side by side,
+collapsible panel showing alternative candidate passages, dropdown to
+set `verified`, text search filters, saves back to CSV:
 
 ``` r
 crd_aud_review("qa/citation_audit.csv")
