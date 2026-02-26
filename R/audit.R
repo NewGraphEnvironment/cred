@@ -1,5 +1,21 @@
 # audit.R — audit CSV creation, updating, and risk scoring
 
+# Canonical column order for audit CSVs. Human-edited columns first for
+# readable git diffs; long text and JSON columns last.
+.audit_col_order <- c(
+  "section", "citation_key", "verified", "notes",
+  "review_score", "review_flag", "claim_type",
+  "paraphrase", "paraphrase_eval", "quote",
+  "page_or_section", "candidate_quotes", "sort_index"
+)
+
+# Reorder columns to canonical order. Unknown columns appended at end.
+.reorder_cols <- function(d) {
+  present <- intersect(.audit_col_order, names(d))
+  extra   <- setdiff(names(d), .audit_col_order)
+  d[, c(present, extra), drop = FALSE]
+}
+
 #' Write a citation audit CSV scaffold from a directory of Rmd files
 #'
 #' Scans all chapter Rmd files (those beginning with four digits), extracts
@@ -64,6 +80,7 @@ crd_aud_write <- function(
       sort_index      = seq_len(dplyr::n())
     )
 
+  result <- .reorder_cols(result)
   readr::write_csv(result, out_file, na = "")
   message("Wrote ", nrow(result), " rows to ", out_file)
   invisible(result)
@@ -182,6 +199,7 @@ crd_aud_upd <- function(
     }
   }
 
+  merged <- .reorder_cols(merged)
   readr::write_csv(merged, out_file, na = "")
   n_new <- sum(is.na(merged$verified))
   parts <- paste0(nrow(merged), " rows (", n_new, " new/unverified")
@@ -450,6 +468,7 @@ crd_aud_fill_src <- function(
     }
   }
 
+  audit <- .reorder_cols(audit)
   readr::write_csv(audit, audit_file, na = "")
   n_filled   <- sum(audit$verified[idx] == "auto",   na.rm = TRUE)
   n_nomatch  <- sum(audit$verified[idx] == "no_match", na.rm = TRUE)
@@ -610,6 +629,7 @@ crd_aud_eval_inline <- function(audit_file,
     if (n_fail > 0L) paste0(" (", n_fail, " expression(s) could not be resolved)") else ""
   )
 
+  d <- .reorder_cols(d)
   readr::write_csv(d, audit_file, na = "")
   invisible(d)
 }
@@ -710,6 +730,7 @@ crd_aud_score <- function(audit_file,
     d$review_flag[i]  <- result$flag
   }
 
+  d <- .reorder_cols(d)
   readr::write_csv(d, audit_file, na = "")
 
   score_tbl <- table(d$review_score[needs_score])
@@ -896,6 +917,7 @@ crd_aud_verify_abstract <- function(audit_file,
     }
   }
 
+  audit <- .reorder_cols(audit)
   readr::write_csv(audit, audit_file, na = "")
   message(
     "Abstract matching: ", n_matched, " matched, ",
