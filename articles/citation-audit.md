@@ -106,10 +106,17 @@ Run from the same R session where your book builds.
 crd_aud_review("qa/citation_audit.csv")
 ```
 
-The app shows paraphrase and quote side by side. Set `verified` to
-`yes`, `no`, `corrected`, or `context`, add notes, click **Update row**,
-then **Save to CSV**. Text filters let you search paraphrase and quote
-content.
+![](review-app-table.png)
+
+Filter by status, citation key, or section. Click any row to open the
+detail panel:
+
+![](review-app-detail.png)
+
+The detail panel shows paraphrase and quote side by side. Click **Other
+candidates** to expand alternative passages with their scores. Set
+`verified` to `yes`, `no`, `corrected`, or `context`, add notes, click
+**Update row**, then **Save to CSV**.
 
 ------------------------------------------------------------------------
 
