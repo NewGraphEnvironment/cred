@@ -20,9 +20,6 @@
 - [`crd_aud_scr_risk()`](https://newgraphenvironment.github.io/cred/reference/crd_aud_scr_risk.md)
   : Auto-score citation rows by hallucination risk
 
-- [`crd_aud_sort()`](https://newgraphenvironment.github.io/cred/reference/crd_aud_sort.md)
-  : Sort an audit CSV for review and write it back
-
 - [`crd_aud_summary()`](https://newgraphenvironment.github.io/cred/reference/crd_aud_summary.md)
   : Summarise an audit CSV by verification status
 
