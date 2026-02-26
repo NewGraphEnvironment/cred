@@ -8,7 +8,7 @@ crd_aud_fill_src(
   audit_file,
   src,
   citation_key,
-  n_results = 1L,
+  n_results = 3L,
   min_score = 0.2,
   overwrite_verified = FALSE
 )
@@ -24,8 +24,9 @@ crd_aud_fill_src(
 \item{citation_key}{\code{character(1)} citation key to process. Rows whose
 \code{citation_key} column equals this value are searched.}
 
-\item{n_results}{\code{integer(1)} number of top passages to consider per row.
-Only the top-scoring passage is written to \code{quote}. Default \code{1L}.}
+\item{n_results}{\code{integer(1)} number of top passages to return per row.
+The top-scoring passage is written to \code{quote}; all candidates are stored
+as JSON in \code{candidate_quotes}. Default \code{3L}.}
 
 \item{min_score}{\code{numeric(1)} minimum token-match score to accept as a
 match. Default \code{0.2}.}

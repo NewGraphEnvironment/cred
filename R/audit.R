@@ -102,7 +102,8 @@ crd_aud_upd <- function(
   chk::chk_dir(rmd_dir)
 
   existing <- readr::read_csv(out_file, show_col_types = FALSE)
-  manual_cols <- c("quote", "claim_type", "page_or_section", "verified", "notes")
+  manual_cols <- c("quote", "claim_type", "page_or_section", "verified", "notes",
+                   "candidate_quotes")
 
   fresh <- crd_aud_write(
     rmd_dir  = rmd_dir,
@@ -172,7 +173,9 @@ crd_aud_upd <- function(
       best <- which.max(scores)
       if (scores[best] >= min_similarity) {
         for (col in manual_cols) {
-          merged[[col]][i] <- cand[[col]][best]
+          if (col %in% names(cand)) {
+            merged[[col]][i] <- cand[[col]][best]
+          }
         }
         n_fuzzy <- n_fuzzy + 1L
       }
@@ -347,8 +350,9 @@ crd_aud_verify_all <- function(
 #'   (`doc_index` = docx, `page` = pdf).
 #' @param citation_key `character(1)` citation key to process. Rows whose
 #'   `citation_key` column equals this value are searched.
-#' @param n_results `integer(1)` number of top passages to consider per row.
-#'   Only the top-scoring passage is written to `quote`. Default `1L`.
+#' @param n_results `integer(1)` number of top passages to return per row.
+#'   The top-scoring passage is written to `quote`; all candidates are stored
+#'   as JSON in `candidate_quotes`. Default `3L`.
 #' @param min_score `numeric(1)` minimum token-match score to accept as a
 #'   match. Default `0.2`.
 #' @param overwrite_verified `logical(1)` if `TRUE`, re-fill rows even if
@@ -365,7 +369,7 @@ crd_aud_fill_src <- function(
     audit_file,
     src,
     citation_key,
-    n_results           = 1L,
+    n_results           = 3L,
     min_score           = 0.2,
     overwrite_verified  = FALSE) {
 
@@ -389,6 +393,11 @@ crd_aud_fill_src <- function(
 
   audit <- readr::read_csv(audit_file, show_col_types = FALSE)
 
+  # Ensure candidate_quotes column exists
+  if (!"candidate_quotes" %in% names(audit)) {
+    audit$candidate_quotes <- NA_character_
+  }
+
   # Human-reviewed statuses are never overwritten regardless of overwrite_verified
   human_reviewed <- c("yes", "no", "corrected", "context")
   target_rows <- audit$citation_key == citation_key & !is.na(audit$citation_key) &
@@ -407,6 +416,7 @@ crd_aud_fill_src <- function(
 
   message("Filling ", n_target, " rows for ", citation_key, " ...")
 
+  text_col <- if (src_type == "docx") "text" else "passage"
   idx <- which(target_rows)
   for (i in idx) {
     para <- audit$paraphrase[i]
@@ -424,9 +434,19 @@ crd_aud_fill_src <- function(
     if (nrow(res) == 0L) {
       audit$verified[i]        <- "no_match"
     } else {
-      audit$quote[i]           <- res[[if (src_type == "docx") "text" else "passage"]][1L]
+      audit$quote[i]           <- res[[text_col]][1L]
       audit$page_or_section[i] <- as.character(res[[loc_col]][1L])
       audit$verified[i]        <- "auto"
+
+      # Store all candidates as JSON
+      candidates <- data.frame(
+        rank     = seq_len(nrow(res)),
+        score    = round(res$score, 3),
+        location = as.character(res[[loc_col]]),
+        text     = res[[text_col]],
+        stringsAsFactors = FALSE
+      )
+      audit$candidate_quotes[i] <- jsonlite::toJSON(candidates, auto_unbox = TRUE)
     }
   }
 

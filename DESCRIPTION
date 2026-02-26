@@ -27,6 +27,7 @@ VignetteBuilder: knitr
 Imports:
     chk,
     dplyr,
+    jsonlite,
     officer,
     pdftools,
     readr,
