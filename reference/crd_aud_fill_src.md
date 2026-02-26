@@ -22,7 +22,7 @@ crd_aud_fill_src(
   audit_file,
   src,
   citation_key,
-  n_results = 1L,
+  n_results = 3L,
   min_score = 0.2,
   overwrite_verified = FALSE
 )
@@ -51,8 +51,9 @@ crd_aud_fill_src(
 
 - n_results:
 
-  `integer(1)` number of top passages to consider per row. Only the
-  top-scoring passage is written to `quote`. Default `1L`.
+  `integer(1)` number of top passages to return per row. The top-scoring
+  passage is written to `quote`; all candidates are stored as JSON in
+  `candidate_quotes`. Default `3L`.
 
 - min_score:
 

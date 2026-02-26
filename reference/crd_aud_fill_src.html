@@ -21,7 +21,7 @@ verified — "auto" when a match meets min_score; "no_match" otherwise
 
     <a class="navbar-brand me-2" href="../index.html">cred</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.0.0.9000</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.1.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -64,7 +64,7 @@ passage using the <code>paraphrase</code> column as the query. Fills:</p><ul><li
 <span>  <span class="va">audit_file</span>,</span>
 <span>  <span class="va">src</span>,</span>
 <span>  <span class="va">citation_key</span>,</span>
-<span>  n_results <span class="op">=</span> <span class="fl">1L</span>,</span>
+<span>  n_results <span class="op">=</span> <span class="fl">3L</span>,</span>
 <span>  min_score <span class="op">=</span> <span class="fl">0.2</span>,</span>
 <span>  overwrite_verified <span class="op">=</span> <span class="cn">FALSE</span></span>
 <span><span class="op">)</span></span></code></pre></div>
@@ -91,8 +91,9 @@ passage using the <code>paraphrase</code> column as the query. Fills:</p><ul><li
 
 
 <dt id="arg-n-results">n_results<a class="anchor" aria-label="anchor" href="#arg-n-results"></a></dt>
-<dd><p><code>integer(1)</code> number of top passages to consider per row.
-Only the top-scoring passage is written to <code>quote</code>. Default <code>1L</code>.</p></dd>
+<dd><p><code>integer(1)</code> number of top passages to return per row.
+The top-scoring passage is written to <code>quote</code>; all candidates are stored
+as JSON in <code>candidate_quotes</code>. Default <code>3L</code>.</p></dd>
 
 
 <dt id="arg-min-score">min_score<a class="anchor" aria-label="anchor" href="#arg-min-score"></a></dt>
