@@ -230,11 +230,17 @@ If a variable doesn't exist, it warns and leaves that expression as-is. Run from
 crd_aud_review("qa/citation_audit.csv")
 ```
 
-```{r review-screenshot, echo = FALSE, out.width = "100%", eval = file.exists(system.file("figures/review_app.png", package = "cred"))}
-knitr::include_graphics(system.file("figures/review_app.png", package = "cred"))
+```{r review-table, echo = FALSE, out.width = "100%"}
+knitr::include_graphics("review-app-table.png")
 ```
 
-The app shows paraphrase and quote side by side. Set `verified` to `yes`, `no`, `corrected`, or `context`, add notes, click **Update row**, then **Save to CSV**. Text filters let you search paraphrase and quote content.
+Filter by status, citation key, or section. Click any row to open the detail panel:
+
+```{r review-detail, echo = FALSE, out.width = "100%"}
+knitr::include_graphics("review-app-detail.png")
+```
+
+The detail panel shows paraphrase and quote side by side. Click **Other candidates** to expand alternative passages with their scores. Set `verified` to `yes`, `no`, `corrected`, or `context`, add notes, click **Update row**, then **Save to CSV**.
 
 ---
 
