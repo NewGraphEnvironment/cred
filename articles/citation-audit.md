@@ -63,20 +63,39 @@ assigned review priority.
 
 ### Resolving inline R expressions
 
-Bookdown paraphrases sometimes contain inline R code that only evaluates
-during rendering.
+One of the toy rows contains inline R — the paraphrase references
+variables that would normally come from data pipelines during bookdown
+rendering. Before resolving, the CSV shows the raw expression:
+
+    #> Tagged juvenile chinook accessed floodplain side channels at `r n_sites` beaver dam sites, achieving growth rates `r growth_pct`% higher than mainstem fish [@jones2019BeaverEcology].
+
 [`crd_aud_eval_inline()`](https://newgraphenvironment.github.io/cred/reference/crd_aud_eval_inline.md)
-resolves these in your current R session and stores the result in
-`paraphrase_eval`, which
-[`crd_aud_score()`](https://newgraphenvironment.github.io/cred/reference/crd_aud_score.md)
-uses for scoring.
+evaluates these in your current R session. Define the variables, then
+call it:
 
 ``` r
-# Variables must exist in your session first
+# In a real project these come from your data pipeline
+n_sites    <- 3
+growth_pct <- 40
+
+crd_aud_eval_inline(audit_file, overwrite = TRUE)
+#> Evaluated inline R in 1 row(s)
+```
+
+Now `paraphrase_eval` has the resolved text while `paraphrase` is
+unchanged:
+
+    #> paraphrase:       Tagged juvenile chinook accessed floodplain side channels at `r n_sites` beaver dam sites, achieving growth rates `r growth_pct`% higher than mainstem fish [@jones2019BeaverEcology].
+    #> paraphrase_eval:  Tagged juvenile chinook accessed floodplain side channels at 3 beaver dam sites, achieving growth rates 40% higher than mainstem fish [@jones2019BeaverEcology].
+
+[`crd_aud_score()`](https://newgraphenvironment.github.io/cred/reference/crd_aud_score.md)
+uses `paraphrase_eval` when available, so the numbers can be compared
+against the quote. In your pipeline script, source your project setup
+first:
+
+``` r
 source("scripts/packages.R")
 source("scripts/functions.R")
-
-# Then resolve -- paraphrase is preserved, paraphrase_eval gets actual values
 crd_aud_eval_inline("qa/citation_audit.csv")
 ```
 
