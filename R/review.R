@@ -215,7 +215,7 @@ crd_aud_review <- function(audit_file, launch_browser = TRUE) {
     output$tbl <- DT::renderDT({
       d <- filtered()
       show_cols <- intersect(
-        c("section", "citation_key", "review_score", "review_flag",
+        c("row_id", "section", "citation_key", "review_score", "review_flag",
           "paraphrase", "quote", "verified", "page_or_section", "notes"),
         names(d)
       )
@@ -234,15 +234,16 @@ crd_aud_review <- function(audit_file, launch_browser = TRUE) {
           scrollX    = TRUE,
           dom        = "tip",
           columnDefs = list(
-            list(width = "80px",  targets = 0),   # section
-            list(width = "150px", targets = 1),   # citation_key
-            list(width = "45px",  targets = 2),   # review_score
-            list(width = "140px", targets = 3),   # review_flag
-            list(width = "270px", targets = 4),   # paraphrase
-            list(width = "270px", targets = 5),   # quote
-            list(width = "75px",  targets = 6),   # verified
-            list(width = "50px",  targets = 7),   # page_or_section
-            list(width = "150px", targets = 8)    # notes
+            list(width = "40px",  targets = 0),   # row_id
+            list(width = "80px",  targets = 1),   # section
+            list(width = "150px", targets = 2),   # citation_key
+            list(width = "45px",  targets = 3),   # review_score
+            list(width = "140px", targets = 4),   # review_flag
+            list(width = "270px", targets = 5),   # paraphrase
+            list(width = "270px", targets = 6),   # quote
+            list(width = "75px",  targets = 7),   # verified
+            list(width = "50px",  targets = 8),   # page_or_section
+            list(width = "150px", targets = 9)    # notes
           )
         )
       ) |>
@@ -265,13 +266,13 @@ crd_aud_review <- function(audit_file, launch_browser = TRUE) {
       dt
     }, server = TRUE)
 
-    # Selected row (matched back to full data by sort_index)
+    # Selected row (matched back to full data by row_id)
     sel_row <- shiny::reactive({
       s <- input$tbl_rows_selected
       if (is.null(s) || length(s) == 0L) return(NULL)
       frow <- filtered()[s, , drop = FALSE]
-      if (!"sort_index" %in% names(frow)) return(frow[1L, , drop = FALSE])
-      matches <- dat()[dat()$sort_index == frow$sort_index[1L], , drop = FALSE]
+      if (!"row_id" %in% names(frow)) return(frow[1L, , drop = FALSE])
+      matches <- dat()[dat()$row_id == frow$row_id[1L], , drop = FALSE]
       matches[1L, , drop = FALSE]
     })
 
@@ -383,8 +384,8 @@ crd_aud_review <- function(audit_file, launch_browser = TRUE) {
       if (is.null(row) || nrow(row) == 0L) return()
 
       d   <- dat()
-      idx <- if ("sort_index" %in% names(d)) {
-        which(d$sort_index == row$sort_index)
+      idx <- if ("row_id" %in% names(d)) {
+        which(d$row_id == row$row_id)
       } else {
         which(d$citation_key == row$citation_key &
               d$paraphrase   == row$paraphrase)[1L]
