@@ -66,6 +66,13 @@ crd_aud_review <- function(audit_file, launch_browser = TRUE) {
                  text-transform:uppercase; letter-spacing:.04em; margin-bottom:5px; }
       .no-quote { color:#aaa; font-style:italic; }
       hr { margin: 10px 0; }
+      .cand-toggle { cursor:pointer; color:#337ab7; font-size:12px;
+                     margin-top:8px; user-select:none; }
+      .cand-toggle:hover { text-decoration:underline; }
+      .cand-item { background:#fafafa; border:1px solid #e0e0e0; border-radius:3px;
+                   padding:6px 10px; margin-bottom:6px; font-size:12px; }
+      .cand-meta { color:#888; font-size:11px; margin-bottom:3px; }
+      .cand-text { white-space:pre-wrap; word-break:break-word; line-height:1.5; }
     "))),
 
     # Top bar
@@ -262,9 +269,10 @@ crd_aud_review <- function(audit_file, launch_browser = TRUE) {
     sel_row <- shiny::reactive({
       s <- input$tbl_rows_selected
       if (is.null(s) || length(s) == 0L) return(NULL)
-      frow <- filtered()[s, ]
-      if (!"sort_index" %in% names(frow)) return(frow)
-      dat()[dat()$sort_index == frow$sort_index, ]
+      frow <- filtered()[s, , drop = FALSE]
+      if (!"sort_index" %in% names(frow)) return(frow[1L, , drop = FALSE])
+      matches <- dat()[dat()$sort_index == frow$sort_index[1L], , drop = FALSE]
+      matches[1L, , drop = FALSE]
     })
 
     # Detail panel below table
@@ -284,6 +292,50 @@ crd_aud_review <- function(audit_file, launch_browser = TRUE) {
       loc <- if (!is.na(row$page_or_section))
         paste0(" \u00b7 p/\u00a7\u00a0", row$page_or_section) else ""
 
+      # Build candidates panel if available
+      cand_panel <- NULL
+      if ("candidate_quotes" %in% names(row) &&
+          !is.na(row$candidate_quotes) &&
+          nzchar(row$candidate_quotes)) {
+        cands <- tryCatch(
+          jsonlite::fromJSON(row$candidate_quotes),
+          error = function(e) NULL
+        )
+        if (!is.null(cands) && nrow(cands) > 1L) {
+          # Show rank 2+ (rank 1 is already in the quote panel)
+          alt <- cands[cands$rank > 1L, , drop = FALSE]
+          if (nrow(alt) > 0L) {
+            cand_items <- lapply(seq_len(nrow(alt)), function(j) {
+              shiny::div(class = "cand-item",
+                shiny::div(class = "cand-meta",
+                  paste0("Rank ", alt$rank[j],
+                         " \u00b7 score ", alt$score[j],
+                         " \u00b7 p/\u00a7\u00a0", alt$location[j])),
+                shiny::div(class = "cand-text", alt$text[j])
+              )
+            })
+            toggle_id <- paste0("cand_toggle_", sample.int(1e6, 1))
+            cand_panel <- shiny::tagList(
+              shiny::tags$div(
+                class = "cand-toggle",
+                onclick = paste0(
+                  "var el=document.getElementById('", toggle_id, "');",
+                  "el.style.display=el.style.display==='none'?'block':'none';",
+                  "this.textContent=el.style.display==='none'?",
+                  "'\u25b6 Other candidates (",  nrow(alt), ")':'\u25bc Other candidates (", nrow(alt), ")';"
+                ),
+                paste0("\u25b6 Other candidates (", nrow(alt), ")")
+              ),
+              shiny::tags$div(
+                id = toggle_id,
+                style = "display:none; margin-top:6px;",
+                cand_items
+              )
+            )
+          }
+        }
+      }
+
       shiny::tagList(
         shiny::fluidRow(
           shiny::column(6,
@@ -298,7 +350,8 @@ crd_aud_review <- function(audit_file, launch_browser = TRUE) {
           shiny::column(6,
             shiny::div(class = "col-lbl",
               paste0("Quote from source", loc, " \u2014 ", row$citation_key)),
-            quote_content
+            quote_content,
+            cand_panel
           )
         ),
         shiny::br(),
