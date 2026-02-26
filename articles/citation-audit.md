@@ -20,11 +20,11 @@ call.
 | Step | Function                                                                                                       | What it does                                                                |
 |------|----------------------------------------------------------------------------------------------------------------|-----------------------------------------------------------------------------|
 | 1    | [`crd_aud_write()`](https://newgraphenvironment.github.io/cred/reference/crd_aud_write.md)                     | Scan Rmd files, extract citations with paraphrase context, write CSV        |
-| 2    | [`crd_aud_verify_all()`](https://newgraphenvironment.github.io/cred/reference/crd_aud_verify_all.md)           | Look up Zotero attachments, search each source, fill `quote` and `verified` |
-| 2b   | [`crd_aud_verify_abstract()`](https://newgraphenvironment.github.io/cred/reference/crd_aud_verify_abstract.md) | For remaining NA rows, score against Zotero abstract text                   |
-| 2c   | [`crd_aud_eval_inline()`](https://newgraphenvironment.github.io/cred/reference/crd_aud_eval_inline.md)         | Resolve inline R expressions in paraphrases                                 |
-| 3    | [`crd_aud_score()`](https://newgraphenvironment.github.io/cred/reference/crd_aud_score.md)                     | Add `review_score` (1–6) and `review_flag`                                  |
-| 4    | [`crd_aud_review()`](https://newgraphenvironment.github.io/cred/reference/crd_aud_review.md)                   | Launch interactive Shiny app for human review                               |
+| 2    | [`crd_aud_eval_inline()`](https://newgraphenvironment.github.io/cred/reference/crd_aud_eval_inline.md)         | Resolve inline R expressions so matching has real numbers                   |
+| 3    | [`crd_aud_verify_all()`](https://newgraphenvironment.github.io/cred/reference/crd_aud_verify_all.md)           | Look up Zotero attachments, search each source, fill `quote` and `verified` |
+| 4    | [`crd_aud_verify_abstract()`](https://newgraphenvironment.github.io/cred/reference/crd_aud_verify_abstract.md) | For remaining NA rows, score against Zotero abstract text                   |
+| 5    | [`crd_aud_score()`](https://newgraphenvironment.github.io/cred/reference/crd_aud_score.md)                     | Add `review_score` (1–6) and `review_flag`                                  |
+| 6    | [`crd_aud_review()`](https://newgraphenvironment.github.io/cred/reference/crd_aud_review.md)                   | Launch interactive Shiny app for human review                               |
 
 ------------------------------------------------------------------------
 
@@ -65,13 +65,15 @@ assigned review priority.
 
 One of the toy rows contains inline R — the paraphrase references
 variables that would normally come from data pipelines during bookdown
-rendering. Before resolving, the CSV shows the raw expression:
-
-    #> Tagged juvenile chinook accessed floodplain side channels at `r n_sites` beaver dam sites, achieving growth rates `r growth_pct`% higher than mainstem fish [@jones2019BeaverEcology].
-
+rendering.
 [`crd_aud_eval_inline()`](https://newgraphenvironment.github.io/cred/reference/crd_aud_eval_inline.md)
-evaluates these in your current R session. Define the variables, then
-call it:
+(step 2) resolved these before verification ran. The raw paraphrase is
+always preserved; `paraphrase_eval` has the resolved version:
+
+    #> paraphrase:       Tagged juvenile chinook accessed floodplain side channels at `r n_sites` beaver dam sites, achieving growth rates `r growth_pct`% higher than mainstem fish [@jones2019BeaverEcology].
+    #> paraphrase_eval:  Tagged juvenile chinook accessed floodplain side channels at 3 beaver dam sites, achieving growth rates 40% higher than mainstem fish [@jones2019BeaverEcology].
+
+The call that produced this:
 
 ``` r
 # In a real project these come from your data pipeline
@@ -82,16 +84,10 @@ crd_aud_eval_inline(audit_file, overwrite = TRUE)
 #> Evaluated inline R in 1 row(s)
 ```
 
-Now `paraphrase_eval` has the resolved text while `paraphrase` is
-unchanged:
-
-    #> paraphrase:       Tagged juvenile chinook accessed floodplain side channels at `r n_sites` beaver dam sites, achieving growth rates `r growth_pct`% higher than mainstem fish [@jones2019BeaverEcology].
-    #> paraphrase_eval:  Tagged juvenile chinook accessed floodplain side channels at 3 beaver dam sites, achieving growth rates 40% higher than mainstem fish [@jones2019BeaverEcology].
-
 [`crd_aud_score()`](https://newgraphenvironment.github.io/cred/reference/crd_aud_score.md)
 uses `paraphrase_eval` when available, so the numbers can be compared
-against the quote. In your pipeline script, source your project setup
-first:
+against the quote. In your pipeline, source your project setup first so
+the variables exist:
 
 ``` r
 source("scripts/packages.R")
@@ -165,15 +161,15 @@ if (file.exists(audit_file)) {
   crd_aud_write(out_file = audit_file)
 }
 
-# Step 2 -- Auto-fill quotes from Zotero source files
-crd_aud_verify_all(audit_file)
-
-# Step 3 -- Abstract fallback for NA rows
-crd_aud_verify_abstract(audit_file)
-
-# Step 4 -- Resolve inline R (run from session with project variables loaded)
+# Step 2 -- Resolve inline R (run from session with project variables loaded)
 # source("scripts/packages.R"); source("scripts/functions.R")  # if needed
 crd_aud_eval_inline(audit_file)
+
+# Step 3 -- Auto-fill quotes from Zotero source files
+crd_aud_verify_all(audit_file)
+
+# Step 4 -- Abstract fallback for NA rows
+crd_aud_verify_abstract(audit_file)
 
 # Step 5 -- Score for review priority
 crd_aud_score(audit_file)

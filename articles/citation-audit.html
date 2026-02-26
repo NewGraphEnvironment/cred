@@ -111,30 +111,30 @@ CSV</td>
 </tr>
 <tr class="even">
 <td>2</td>
+<td><code><a href="../reference/crd_aud_eval_inline.html">crd_aud_eval_inline()</a></code></td>
+<td>Resolve inline R expressions so matching has real numbers</td>
+</tr>
+<tr class="odd">
+<td>3</td>
 <td><code><a href="../reference/crd_aud_verify_all.html">crd_aud_verify_all()</a></code></td>
 <td>Look up Zotero attachments, search each source, fill
 <code>quote</code> and <code>verified</code>
 </td>
 </tr>
-<tr class="odd">
-<td>2b</td>
+<tr class="even">
+<td>4</td>
 <td><code><a href="../reference/crd_aud_verify_abstract.html">crd_aud_verify_abstract()</a></code></td>
 <td>For remaining NA rows, score against Zotero abstract text</td>
 </tr>
-<tr class="even">
-<td>2c</td>
-<td><code><a href="../reference/crd_aud_eval_inline.html">crd_aud_eval_inline()</a></code></td>
-<td>Resolve inline R expressions in paraphrases</td>
-</tr>
 <tr class="odd">
-<td>3</td>
+<td>5</td>
 <td><code><a href="../reference/crd_aud_score.html">crd_aud_score()</a></code></td>
 <td>Add <code>review_score</code> (1–6) and
 <code>review_flag</code>
 </td>
 </tr>
 <tr class="even">
-<td>4</td>
+<td>6</td>
 <td><code><a href="../reference/crd_aud_review.html">crd_aud_review()</a></code></td>
 <td>Launch interactive Shiny app for human review</td>
 </tr>
@@ -186,10 +186,12 @@ scores first.</li>
 </h3>
 <p>One of the toy rows contains inline R — the paraphrase references
 variables that would normally come from data pipelines during bookdown
-rendering. Before resolving, the CSV shows the raw expression:</p>
-<pre><code><span><span class="co">#&gt; Tagged juvenile chinook accessed floodplain side channels at `r n_sites` beaver dam sites, achieving growth rates `r growth_pct`% higher than mainstem fish [@jones2019BeaverEcology].</span></span></code></pre>
-<p><code><a href="../reference/crd_aud_eval_inline.html">crd_aud_eval_inline()</a></code> evaluates these in your current R
-session. Define the variables, then call it:</p>
+rendering. <code><a href="../reference/crd_aud_eval_inline.html">crd_aud_eval_inline()</a></code> (step 2) resolved these
+before verification ran. The raw paraphrase is always preserved;
+<code>paraphrase_eval</code> has the resolved version:</p>
+<pre><code><span><span class="co">#&gt; paraphrase:       Tagged juvenile chinook accessed floodplain side channels at `r n_sites` beaver dam sites, achieving growth rates `r growth_pct`% higher than mainstem fish [@jones2019BeaverEcology].</span></span>
+<span><span class="co">#&gt; paraphrase_eval:  Tagged juvenile chinook accessed floodplain side channels at 3 beaver dam sites, achieving growth rates 40% higher than mainstem fish [@jones2019BeaverEcology].</span></span></code></pre>
+<p>The call that produced this:</p>
 <div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># In a real project these come from your data pipeline</span></span>
 <span><span class="va">n_sites</span>    <span class="op">&lt;-</span> <span class="fl">3</span></span>
@@ -197,14 +199,10 @@ session. Define the variables, then call it:</p>
 <span></span>
 <span><span class="fu"><a href="../reference/crd_aud_eval_inline.html">crd_aud_eval_inline</a></span><span class="op">(</span><span class="va">audit_file</span>, overwrite <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span>
 <span><span class="co">#&gt; Evaluated inline R in 1 row(s)</span></span></code></pre></div>
-<p>Now <code>paraphrase_eval</code> has the resolved text while
-<code>paraphrase</code> is unchanged:</p>
-<pre><code><span><span class="co">#&gt; paraphrase:       Tagged juvenile chinook accessed floodplain side channels at `r n_sites` beaver dam sites, achieving growth rates `r growth_pct`% higher than mainstem fish [@jones2019BeaverEcology].</span></span>
-<span><span class="co">#&gt; paraphrase_eval:  Tagged juvenile chinook accessed floodplain side channels at 3 beaver dam sites, achieving growth rates 40% higher than mainstem fish [@jones2019BeaverEcology].</span></span></code></pre>
 <p><code><a href="../reference/crd_aud_score.html">crd_aud_score()</a></code> uses <code>paraphrase_eval</code> when
 available, so the numbers can be compared against the quote. In your
-pipeline script, source your project setup first:</p>
-<div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
+pipeline, source your project setup first so the variables exist:</p>
+<div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/source.html" class="external-link">source</a></span><span class="op">(</span><span class="st">"scripts/packages.R"</span><span class="op">)</span></span>
 <span><span class="kw"><a href="https://rdrr.io/r/base/source.html" class="external-link">source</a></span><span class="op">(</span><span class="st">"scripts/functions.R"</span><span class="op">)</span></span>
 <span><span class="fu"><a href="../reference/crd_aud_eval_inline.html">crd_aud_eval_inline</a></span><span class="op">(</span><span class="st">"qa/citation_audit.csv"</span><span class="op">)</span></span></code></pre></div>
@@ -215,7 +213,7 @@ as-is. Run from the same R session where your book builds.</p>
 <div class="section level3">
 <h3 id="interactive-review">Interactive review<a class="anchor" aria-label="anchor" href="#interactive-review"></a>
 </h3>
-<div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/crd_aud_review.html">crd_aud_review</a></span><span class="op">(</span><span class="st">"qa/citation_audit.csv"</span><span class="op">)</span></span></code></pre></div>
 <p>The app shows paraphrase and quote side by side. Set
 <code>verified</code> to <code>yes</code>, <code>no</code>,
@@ -306,7 +304,7 @@ at your report root:</p>
 <p>Create <code>scripts/citation_audit.R</code> – this is the one file
 you (or an LLM) run every time. It handles first run vs. update
 automatically:</p>
-<div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># scripts/citation_audit.R -- repeatable citation audit pipeline</span></span>
 <span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://newgraphenvironment.github.io/cred/">cred</a></span><span class="op">)</span></span>
 <span></span>
@@ -319,15 +317,15 @@ automatically:</p>
 <span>  <span class="fu"><a href="../reference/crd_aud_write.html">crd_aud_write</a></span><span class="op">(</span>out_file <span class="op">=</span> <span class="va">audit_file</span><span class="op">)</span></span>
 <span><span class="op">}</span></span>
 <span></span>
-<span><span class="co"># Step 2 -- Auto-fill quotes from Zotero source files</span></span>
-<span><span class="fu"><a href="../reference/crd_aud_verify_all.html">crd_aud_verify_all</a></span><span class="op">(</span><span class="va">audit_file</span><span class="op">)</span></span>
-<span></span>
-<span><span class="co"># Step 3 -- Abstract fallback for NA rows</span></span>
-<span><span class="fu"><a href="../reference/crd_aud_verify_abstract.html">crd_aud_verify_abstract</a></span><span class="op">(</span><span class="va">audit_file</span><span class="op">)</span></span>
-<span></span>
-<span><span class="co"># Step 4 -- Resolve inline R (run from session with project variables loaded)</span></span>
+<span><span class="co"># Step 2 -- Resolve inline R (run from session with project variables loaded)</span></span>
 <span><span class="co"># source("scripts/packages.R"); source("scripts/functions.R")  # if needed</span></span>
 <span><span class="fu"><a href="../reference/crd_aud_eval_inline.html">crd_aud_eval_inline</a></span><span class="op">(</span><span class="va">audit_file</span><span class="op">)</span></span>
+<span></span>
+<span><span class="co"># Step 3 -- Auto-fill quotes from Zotero source files</span></span>
+<span><span class="fu"><a href="../reference/crd_aud_verify_all.html">crd_aud_verify_all</a></span><span class="op">(</span><span class="va">audit_file</span><span class="op">)</span></span>
+<span></span>
+<span><span class="co"># Step 4 -- Abstract fallback for NA rows</span></span>
+<span><span class="fu"><a href="../reference/crd_aud_verify_abstract.html">crd_aud_verify_abstract</a></span><span class="op">(</span><span class="va">audit_file</span><span class="op">)</span></span>
 <span></span>
 <span><span class="co"># Step 5 -- Score for review priority</span></span>
 <span><span class="fu"><a href="../reference/crd_aud_score.html">crd_aud_score</a></span><span class="op">(</span><span class="va">audit_file</span><span class="op">)</span></span>
@@ -337,7 +335,7 @@ automatically:</p>
 <p>Run the full pipeline after adding new citations or attaching new
 PDFs in Zotero. Run just the quick update after editing existing
 text:</p>
-<div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># Quick -- re-extract and re-score only (seconds, no Zotero lookup)</span></span>
 <span><span class="fu"><a href="../reference/crd_aud_upd.html">crd_aud_upd</a></span><span class="op">(</span><span class="st">"qa/citation_audit.csv"</span><span class="op">)</span></span>
 <span><span class="fu"><a href="../reference/crd_aud_score.html">crd_aud_score</a></span><span class="op">(</span><span class="st">"qa/citation_audit.csv"</span><span class="op">)</span></span></code></pre></div>
@@ -418,7 +416,7 @@ passage</li>
 <p><strong>What 0.2 means:</strong> 1 in 5 query tokens must appear in
 the passage. Deliberately permissive – a false positive costs seconds of
 review; a false negative means searching the PDF yourself.</p>
-<div class="sourceCode" id="cb10"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/crd_aud_verify_all.html">crd_aud_verify_all</a></span><span class="op">(</span><span class="st">"citation_audit.csv"</span>, min_score <span class="op">=</span> <span class="fl">0.2</span><span class="op">)</span>       <span class="co"># default</span></span>
 <span><span class="fu"><a href="../reference/crd_aud_verify_abstract.html">crd_aud_verify_abstract</a></span><span class="op">(</span><span class="st">"citation_audit.csv"</span>, min_score <span class="op">=</span> <span class="fl">0.2</span><span class="op">)</span>  <span class="co"># same threshold</span></span></code></pre></div>
 <p>Re-run with <code>overwrite_verified = TRUE</code> to reprocess
