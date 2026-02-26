@@ -25,12 +25,6 @@ cat("
 table { font-size: 12px; }
 th { background: #f0f0f0; color: #333; padding: 4px 8px; border-bottom: 2px solid #ccc; }
 td { padding: 4px 8px; vertical-align: top; }
-.status-auto      { background: #FFF2CC; }
-.status-yes       { background: #D9EAD3; }
-.status-no        { background: #F4CCCC; }
-.status-corrected { background: #FCE5CD; }
-.status-no_match  { background: #E2EFDA; }
-.status-na        { background: #f5f5f5; color: #999; }
 pre { font-size: 11px; }
 </style>
 ")
@@ -45,143 +39,84 @@ When a report is drafted with LLM assistance, a specific failure mode arises: th
 ## Workflow at a glance
 
 ```
-Rmd files  ──►  audit CSV  ──►  Zotero lookup  ──►  auto-fill quotes
-                                                           │
-                                              ┌────────────┼──────────────┐
-                                         auto-match   abstract-match   no match
-                                         (review)     (review)       (manual check)
+Rmd files  -->  audit CSV  -->  Zotero lookup  -->  auto-fill quotes  -->  score  -->  review
 ```
 
 | Step | Function | What it does |
 |------|----------|-------------|
-| 1 | `crd_aud_write()` | Scan Rmd files → extract citations with paraphrase context → write CSV scaffold |
-| 2 | `crd_aud_verify_all()` | Look up Zotero attachments → search each source → fill `quote` and `verified` |
+| 1 | `crd_aud_write()` | Scan Rmd files, extract citations with paraphrase context, write CSV |
+| 2 | `crd_aud_verify_all()` | Look up Zotero attachments, search each source, fill `quote` and `verified` |
 | 2b | `crd_aud_verify_abstract()` | For remaining NA rows, score against Zotero abstract text |
-| 3 | `crd_aud_score()` | Add `review_score` (1–6) and `review_flag` — prioritise review by hallucination risk |
-| 4 | `crd_aud_sort()` | Sort `auto` rows first so reviewable rows are at the top |
-| 5 | `crd_aud_summary()` | Print status snapshot and PDF attachment priority list |
-| 6 | `crd_aud_review()` | Launch interactive Shiny app — paraphrase vs quote side by side |
+| 2c | `crd_aud_eval_inline()` | Resolve inline R expressions in paraphrases |
+| 3 | `crd_aud_score()` | Add `review_score` (1--6) and `review_flag` |
+| 4 | `crd_aud_review()` | Launch interactive Shiny app for human review |
 
 ---
 
 ## Walkthrough with toy data
 
-`cred` ships realistic toy source documents and a minimal Zotero SQLite in `inst/extdata/`:
+`cred` ships toy source documents and a minimal Zotero SQLite in `inst/extdata/`. The walkthrough below runs all steps silently, then shows the scored results.
 
-```
-inst/extdata/
-├── zotero.sqlite              # 3 items: smith2020, jones2019, doe2021
-└── storage/
-    ├── TOYPDF1/salmon_habitat.pdf      # Smith et al. 2020 — 4 paragraphs
-    └── TOYDOC1/beaver_ecology.docx     # Jones 2019 — 4 paragraphs
-```
-
-`doe2021NoFile` has metadata and an abstract in Zotero but no attached file — the common case for references added by DOI lookup without downloading the PDF.
-
-```{r paths}
+```{r paths, include = FALSE}
 library(cred)
 
 toy_zotero_dir <- system.file("extdata", package = "cred")
 ```
 
----
-
-### Step 1 — Write the audit CSV
-
-`crd_aud_write()` scans chapter Rmd files, extracts every `@citekey` with the surrounding sentence as `paraphrase`, and writes a CSV scaffold.
-
-The toy Rmd files demonstrate three paraphrase patterns:
-
-1. **Numeric claims** — statistics cited closely from the source ("62% lower", "38% were barriers"). Numbers are the most discriminative tokens so these tend to score highest.
-2. **Qualitative paraphrases** — same finding, different words, no numbers. These test whether prose overlap alone is enough to find the right passage.
-3. **Wrong-paper citation** — a Pacific Salmon Treaty claim cites `smith2020SalmonHabitat`, a freshwater habitat quality paper. No passage covers harvest allocation → `verified = "no_match"`.
-
-```{r write-audit}
+```{r write-audit, include = FALSE}
 rmd_dir    <- tempfile("rmd_")
 audit_file <- tempfile("audit_", fileext = ".csv")
 dir.create(rmd_dir)
 
-# Chapter 1 — habitat quality
-# smith2020 has a PDF; doe2021 has metadata + abstract only (no file)
+# Chapter 1 -- habitat quality (smith2020 has a PDF; doe2021 has abstract only)
+# NOTE: these paraphrases are deliberately reworded from the source text.
+# The source says "egg-to-fry survival rates 62% lower" -- the paraphrase
+# says "egg-to-fry survival dropped by 62%". Same fact, different words.
+# This is what LLM-assisted writing actually produces.
 writeLines(c(
   "# Habitat Quality {#habitat}",
   "",
-  "Reaches where spawning substrate embeddedness exceeded 25% had egg-to-fry survival rates 62% lower than adjacent low-embeddedness sites [@smith2020SalmonHabitat].",
+  "Egg-to-fry survival dropped by 62% in reaches where spawning gravel embeddedness was above 25%, driven largely by fine sediment from road crossings [@smith2020SalmonHabitat].",
   "",
-  "Fish passage assessments at 1,200 road-stream crossings found that 38% were rated as full or partial barriers to adult chinook migration [@smith2020SalmonHabitat].",
+  "Of 1,200 road-stream crossings assessed in the study area, 38% were identified as full or partial barriers to adult chinook migration [@smith2020SalmonHabitat].",
   "",
-  "Loss of streamside forest cover eliminates the shade that keeps summer water temperatures within the thermal tolerance of juvenile chinook, degrading rearing conditions in harvested riparian zones [@smith2020SalmonHabitat].",
+  "Removing streamside trees raises water temperatures beyond what juvenile chinook can tolerate during summer rearing [@smith2020SalmonHabitat].",
   "",
   "The Pacific Salmon Treaty allocates harvest between Canada and the United States based on abundance indicators and conservation thresholds negotiated through the Pacific Salmon Commission [@smith2020SalmonHabitat].",
   "",
-  "Stream temperature governs the spatial distribution of juvenile salmon and limits rearing area during summer low flows [@doe2021NoFile]."
+  "Stream temperature is a primary control on where juvenile salmon can rear during low-flow periods [@doe2021NoFile]."
 ), file.path(rmd_dir, "0100-habitat.Rmd"))
 
-# Chapter 2 — beaver ecology (jones2019 docx)
+# Chapter 2 -- beaver ecology (jones2019 docx)
 writeLines(c(
   "# Beaver Ecology {#beaver}",
   "",
-  "Electrofishing surveys recorded juvenile salmonid densities 3.4 times higher in beaver pond habitat than in adjacent free-flowing reaches [@jones2019BeaverEcology].",
+  "Juvenile salmonid densities were 3.4 times greater in beaver ponds compared to free-flowing reaches based on electrofishing surveys [@jones2019BeaverEcology].",
   "",
-  "Archival records indicate that beaver pond habitat declined by approximately 60% between 1850 and 1950 due to commercial trapping pressure [@jones2019BeaverEcology].",
+  "Commercial trapping caused roughly 60% loss of beaver pond habitat from 1850 to 1950 across the study watershed [@jones2019BeaverEcology].",
   "",
-  "Beaver dams create ponded habitat with stable thermal regimes that substantially increase overwinter survival of juvenile salmonids by providing shelter from winter spates [@jones2019BeaverEcology].",
+  "Ponded habitat behind beaver dams buffers water temperatures and shelters juvenile salmonids through winter, increasing overwinter survival [@jones2019BeaverEcology].",
   "",
-  "Beaver-mediated floodplain connectivity allows juvenile chinook to access off-channel rearing areas during high flows, where growth rates substantially exceed those of fish confined to the mainstem channel [@jones2019BeaverEcology]."
+  "Beaver activity connects floodplain side channels where juvenile chinook grow faster than in the mainstem [@jones2019BeaverEcology]."
 ), file.path(rmd_dir, "0200-beaver.Rmd"))
 
 crd_aud_write(rmd_dir = rmd_dir, out_file = audit_file)
 ```
 
-```{r show-scaffold, echo = FALSE}
+```{r verify-all, include = FALSE}
 d <- readr::read_csv(audit_file, show_col_types = FALSE)
-DT::datatable(
-  d[, c("section", "citation_key", "paraphrase", "verified")],
-  rownames = FALSE,
-  options  = list(
-    pageLength = 9, scrollX = TRUE, dom = "t",
-    initComplete = DT::JS(
-      "function(settings, json) {",
-      "$(this.api().table().node()).css('font-size', '11px');",
-      "}"
-    ),
-    columnDefs = list(
-      list(width = "70px",  targets = 0),
-      list(width = "110px", targets = 1),
-      list(width = "420px", targets = 2),
-      list(width = "60px",  targets = 3)
-    )
-  ),
-  caption = "Audit scaffold — 9 rows, verified column blank."
-)
-```
-
-Nine rows across two chapters. The `verified` column is blank — no matching has run yet.
-
----
-
-### Step 2 — Look up Zotero source paths and auto-fill quotes
-
-`crd_zot_src_lookup()` queries the Zotero SQLite for attached PDFs and Word documents.
-
-```{r lookup}
 keys    <- unique(d$citation_key)
 sources <- crd_zot_src_lookup(keys, zotero_dir = toy_zotero_dir)
-sources[, c("citation_key", "src_type")]
+crd_aud_verify_all(audit_file = audit_file, sources = sources)
+crd_aud_verify_abstract(audit_file, zotero_dir = toy_zotero_dir)
+crd_aud_score(audit_file)
 ```
 
-`doe2021NoFile` has no attachment — the warning is expected. `crd_aud_verify_all()` then scores each source against its unverified rows:
+### Scored results
 
-```{r verify}
-crd_aud_verify_all(
-  audit_file = audit_file,
-  sources    = sources
-)
-```
+`crd_aud_write()` extracted 9 citation rows from 2 chapters. `crd_aud_verify_all()` searched each source document for the best-matching passage. `crd_aud_verify_abstract()` handled the row with no file. `crd_aud_score()` assigned review priority.
 
-```{r show-verified, echo = FALSE}
-d2 <- readr::read_csv(audit_file, show_col_types = FALSE)
-
+```{r badge-fn, echo = FALSE}
 badge <- function(val) {
   if (is.na(val)) return("<span style='color:#bbb'>NA</span>")
   cols <- c(
@@ -196,23 +131,28 @@ badge <- function(val) {
     val
   }
 }
+```
 
-d2_show <- data.frame(
-  key        = d2$citation_key,
-  paraphrase = d2$paraphrase,
-  quote      = ifelse(is.na(d2$quote), "", d2$quote),
-  loc        = ifelse(is.na(d2$page_or_section), "", d2$page_or_section),
-  verified   = sapply(d2$verified, badge),
+```{r show-scored, echo = FALSE}
+d_final <- readr::read_csv(audit_file, show_col_types = FALSE)
+
+d_show <- data.frame(
+  key        = d_final$citation_key,
+  paraphrase = d_final$paraphrase,
+  quote      = ifelse(is.na(d_final$quote), "", substr(d_final$quote, 1, 180)),
+  score      = d_final$review_score,
+  verified   = sapply(d_final$verified, badge),
   stringsAsFactors = FALSE
 )
 
 DT::datatable(
-  d2_show,
+  d_show,
   rownames = FALSE,
   escape   = FALSE,
-  colnames = c("key", "paraphrase", "quote", "p/§", "verified"),
+  colnames = c("key", "paraphrase", "quote", "score", "verified"),
   options  = list(
-    pageLength = 9, scrollX = TRUE, dom = "t",
+    pageLength = 5, scrollX = TRUE, dom = "tp",
+    order = list(list(3, "asc")),
     initComplete = DT::JS(
       "function(settings, json) {",
       "$(this.api().table().node()).css('font-size', '11px');",
@@ -222,184 +162,51 @@ DT::datatable(
       list(width = "110px", targets = 0),
       list(width = "240px", targets = 1),
       list(width = "240px", targets = 2),
-      list(width = "35px",  targets = 3),
+      list(width = "40px",  targets = 3),
       list(width = "90px",  targets = 4)
     )
   ),
-  caption = "After crd_aud_verify_all(): auto = matched, no_match = below threshold, NA = no source file."
+  caption = "Scored audit: lower review_score = more suspect. Page through to see all 9 rows."
 )
 ```
 
 **Reading the results:**
 
-- **`auto`** (yellow) — passage found, score ≥ threshold. Read paraphrase vs quote to judge.
-- **`no_match`** (light green) — source exists but no paragraph scored above the threshold. Notice the Pacific Salmon Treaty row: `smith2020SalmonHabitat` is a freshwater habitat paper with nothing about harvest negotiations. This is the core failure mode `cred` surfaces — real key, plausible prose, wrong source.
-- **`NA`** (grey) — no source file in Zotero. The `doe2021NoFile` row has nowhere to search.
-
-The qualitative paraphrases (rows 3 and 7–8) matched without any numbers — the shared prose vocabulary ("streamside", "thermal tolerance", "rearing", "ponded habitat", "overwinter survival") was enough to locate the right paragraphs.
-
----
-
-### Step 2b — Abstract matching for NA rows
-
-For rows that remain `NA`, `crd_aud_verify_abstract()` queries the Zotero abstract field and runs the same token scoring. An abstract match confirms the citation is plausibly in the right domain, without requiring a local file.
-
-```{r verify-abstract}
-crd_aud_verify_abstract(audit_file, zotero_dir = toy_zotero_dir)
-```
-
-```{r show-abstract, echo = FALSE}
-d3 <- readr::read_csv(audit_file, show_col_types = FALSE)
-
-d3_show <- data.frame(
-  key        = d3$citation_key,
-  paraphrase = d3$paraphrase,
-  quote      = ifelse(is.na(d3$quote), "", substr(d3$quote, 1, 180)),
-  loc        = ifelse(is.na(d3$page_or_section), "", d3$page_or_section),
-  verified   = sapply(d3$verified, badge),
-  stringsAsFactors = FALSE
-)
-
-DT::datatable(
-  d3_show,
-  rownames = FALSE,
-  escape   = FALSE,
-  colnames = c("key", "paraphrase", "quote", "p/§", "verified"),
-  options  = list(
-    pageLength = 9, scrollX = TRUE, dom = "t",
-    initComplete = DT::JS(
-      "function(settings, json) {",
-      "$(this.api().table().node()).css('font-size', '11px');",
-      "}"
-    ),
-    columnDefs = list(
-      list(width = "110px", targets = 0),
-      list(width = "240px", targets = 1),
-      list(width = "240px", targets = 2),
-      list(width = "35px",  targets = 3),
-      list(width = "90px",  targets = 4)
-    )
-  ),
-  caption = "After crd_aud_verify_abstract(): doe2021NoFile row moves from NA to abstract_match."
-)
-```
-
-The `doe2021NoFile` row is now `abstract_match` (blue). The quote column shows the Zotero abstract — the claim about stream temperature and salmon distribution is consistent with the abstract's content. `page_or_section` is set to `"abstract"` so the source is unambiguous.
-
-**`abstract_match` is not the same as `auto`.** The abstract confirms the source is in the right domain. It cannot confirm the specific statistic or quote from the body of the paper. Review these rows with that in mind: if the claim is general enough to be substantiated by the abstract alone, set `context`; if it cites a specific number or result, you still need the PDF.
+- **`auto`** (yellow) — passage found, score >= threshold. Compare paraphrase vs quote — notice the wording differs but the facts match.
+- **`no_match`** (green) — the Pacific Salmon Treaty row cites `smith2020SalmonHabitat`, a freshwater habitat paper with nothing about harvest allocation. This is the core failure mode `cred` surfaces: real key, plausible prose, wrong source.
+- **`abstract_match`** (blue) — `doe2021NoFile` has no PDF, but the Zotero abstract confirms the citation is in the right domain. Not as strong as `auto`.
+- **Score 1** = most suspect (no_match, or numbers don't appear in quote). **Score 4--5** = strong match. Review low scores first.
 
 ---
 
-### Step 2c — Resolve inline R expressions
+### Resolving inline R expressions
 
-Bookdown paraphrases sometimes contain inline R like `` `r my_var` ``. These are just variable names in the CSV — they haven't been evaluated. `crd_aud_eval_inline()` evaluates them in your current R session and stores the result in `paraphrase_eval`.
-
-```{r eval-inline-demo}
-# Create variables that would normally come from your book's data pipeline
-kootenay_tdp <- 42
-kootenay_din <- 18
-
-# Now evaluate — cred looks up variables in the calling environment
-crd_aud_eval_inline(audit_file)
-```
-
-**How it works:**
-
-- `paraphrase` is never modified — it always keeps the raw `` `r expr` `` text
-- `paraphrase_eval` gets the resolved version (e.g., "Fertilizer represents 42%...")
-- `crd_aud_score()` uses `paraphrase_eval` when available, so scores improve once values are filled in
-- If a variable doesn't exist in your session, it warns and leaves that expression as-is
-
-**The key requirement:** run `crd_aud_eval_inline()` from the same R session where your book's variables are loaded. In practice, source your setup chunks first:
+Bookdown paraphrases sometimes contain inline R code that only evaluates during rendering. `crd_aud_eval_inline()` resolves these in your current R session and stores the result in `paraphrase_eval`, which `crd_aud_score()` uses for scoring.
 
 ```r
-# In your pipeline script:
+# Variables must exist in your session first
 source("scripts/packages.R")
 source("scripts/functions.R")
-# ... any chunks that create the variables ...
+
+# Then resolve -- paraphrase is preserved, paraphrase_eval gets actual values
 crd_aud_eval_inline("qa/citation_audit.csv")
 ```
 
----
-
-### Step 3 — Score for review priority
-
-`crd_aud_score()` adds `review_score` (1–6) and `review_flag` columns. Lower scores are more suspect — review them first.
-
-| Score | Meaning |
-|-------|---------|
-| 1 | `no_match`, or auto with claim numbers absent from quote |
-| 2 | No source, abstract with numeric claim, or very weak prose |
-| 3 | Abstract qualitative, weak prose overlap |
-| 4 | Numeric partial match or moderate prose overlap |
-| 5 | Strong numeric + prose match |
-| 6 | Human-reviewed |
-
-```{r score}
-crd_aud_score(audit_file)
-```
-
-```{r show-scores, echo = FALSE}
-d4 <- readr::read_csv(audit_file, show_col_types = FALSE)
-d4_show <- data.frame(
-  key    = d4$citation_key,
-  score  = d4$review_score,
-  flag   = d4$review_flag,
-  verified = sapply(d4$verified, badge),
-  paraphrase = substr(d4$paraphrase, 1, 80),
-  stringsAsFactors = FALSE
-)
-DT::datatable(
-  d4_show,
-  rownames = FALSE,
-  escape   = FALSE,
-  options  = list(
-    pageLength = 9, scrollX = TRUE, dom = "t",
-    order = list(list(1, "asc")),
-    initComplete = DT::JS(
-      "function(settings, json) {",
-      "$(this.api().table().node()).css('font-size', '11px');",
-      "}"
-    ),
-    columnDefs = list(
-      list(width = "110px", targets = 0),
-      list(width = "40px",  targets = 1),
-      list(width = "140px", targets = 2),
-      list(width = "90px",  targets = 3),
-      list(width = "300px", targets = 4)
-    )
-  ),
-  caption = "After crd_aud_score(): rows sorted by review_score ascending — most suspect first."
-)
-```
-
-The `no_match` row (Pacific Salmon Treaty → wrong source) scores 1. The `NA`/abstract-only rows score 2–3. Strong auto matches score 4–5. The review app shows these columns colour-coded when present.
+If a variable doesn't exist, it warns and leaves that expression as-is. Run from the same R session where your book builds.
 
 ---
 
-### Step 4 — Sort for review
-
-```{r sort}
-crd_aud_sort(audit_file, by = "status")
-```
-
----
-
-### Step 5 — Summary
-
-```{r summary}
-crd_aud_summary(audit_file)
-```
-
----
-
-### Step 6 — Interactive review
+### Interactive review
 
 ```r
 crd_aud_review("qa/citation_audit.csv")
 ```
 
-The app opens filtered to `auto` rows. Click a row to see paraphrase and quote side by side. Set `verified` to `yes`, `no`, or `corrected`, add notes, click **Update row**, then **Save to CSV**.
+```{r review-screenshot, echo = FALSE, out.width = "100%", eval = file.exists(system.file("figures/review_app.png", package = "cred"))}
+knitr::include_graphics(system.file("figures/review_app.png", package = "cred"))
+```
+
+The app shows paraphrase and quote side by side. Set `verified` to `yes`, `no`, `corrected`, or `context`, add notes, click **Update row**, then **Save to CSV**. Text filters let you search paraphrase and quote content.
 
 ---
 
@@ -408,25 +215,13 @@ The app opens filtered to `auto` rows. Click a row to see paraphrase and quote s
 | Value | Meaning | Next action |
 |-------|---------|------------|
 | `auto` | Source matched above threshold | Read quote vs paraphrase; set yes/no/corrected |
-| `abstract_match` | Zotero abstract matched — no full text | Judge if abstract is sufficient; set context or get PDF |
+| `abstract_match` | Zotero abstract matched -- no full text | Judge if abstract is sufficient; set context or get PDF |
 | `no_match` | Source exists, no paragraph matched | Check source manually; may be a wrong citation |
 | `yes` | Reviewed and confirmed accurate | Done |
 | `no` | Claim not supported by source | Fix the claim in the Rmd |
 | `corrected` | Claim was wrong; you fixed it | Done |
 | `context` | Source provides background, not a direct factual claim | Done |
 | `NA` | No source file and no abstract in Zotero | Attach PDF to unlock |
-
----
-
-## Claim type screening
-
-`crd_aud_scr_risk()` populates `claim_type` to prioritise your review effort. Numeric claims carry the highest hallucination risk.
-
-```{r risk}
-d5 <- readr::read_csv(audit_file, show_col_types = FALSE)
-d5 <- crd_aud_scr_risk(d5)
-table(d5$claim_type)
-```
 
 ---
 
@@ -438,52 +233,52 @@ Put the audit CSV and pipeline script in a `qa/` directory at your report root:
 
 ```
 my-report/
-├── 0100-introduction.Rmd
-├── 0200-methods.Rmd
-├── scripts/
-│   └── citation_audit.R      # repeatable pipeline
-└── qa/
-    └── citation_audit.csv     # the audit (git-tracked)
++-- 0100-introduction.Rmd
++-- 0200-methods.Rmd
++-- scripts/
+|   +-- citation_audit.R      # repeatable pipeline
++-- qa/
+    +-- citation_audit.csv     # the audit (git-tracked)
 ```
 
 ### The pipeline script
 
-Create `scripts/citation_audit.R` — this is the one file you (or an LLM) run every time. It handles first run vs. update automatically:
+Create `scripts/citation_audit.R` -- this is the one file you (or an LLM) run every time. It handles first run vs. update automatically:
 
 ```r
-# scripts/citation_audit.R — repeatable citation audit pipeline
+# scripts/citation_audit.R -- repeatable citation audit pipeline
 library(cred)
 
 audit_file <- "qa/citation_audit.csv"
 
-# Step 1 — Extract or update citations from Rmd chapters
+# Step 1 -- Extract or update citations from Rmd chapters
 if (file.exists(audit_file)) {
   crd_aud_upd(audit_file)
 } else {
   crd_aud_write(out_file = audit_file)
 }
 
-# Step 2 — Auto-fill quotes from Zotero source files
+# Step 2 -- Auto-fill quotes from Zotero source files
 crd_aud_verify_all(audit_file)
 
-# Step 3 — Abstract fallback for NA rows
+# Step 3 -- Abstract fallback for NA rows
 crd_aud_verify_abstract(audit_file)
 
-# Step 4 — Resolve inline R (run from session with project variables loaded)
+# Step 4 -- Resolve inline R (run from session with project variables loaded)
 # source("scripts/packages.R"); source("scripts/functions.R")  # if needed
 crd_aud_eval_inline(audit_file)
 
-# Step 5 — Score for review priority
+# Step 5 -- Score for review priority
 crd_aud_score(audit_file)
 
-# Step 6 — Summary
+# Step 6 -- Summary
 crd_aud_summary(audit_file)
 ```
 
 Run the full pipeline after adding new citations or attaching new PDFs in Zotero. Run just the quick update after editing existing text:
 
 ```r
-# Quick — re-extract and re-score only (seconds, no Zotero lookup)
+# Quick -- re-extract and re-score only (seconds, no Zotero lookup)
 crd_aud_upd("qa/citation_audit.csv")
 crd_aud_score("qa/citation_audit.csv")
 ```
@@ -504,60 +299,21 @@ A good commit message: `qa: update citation audit after intro rewrite` or `qa: r
 
 When you reword a sentence in the Rmd, the paraphrase text changes. `crd_aud_upd()` handles this in two passes:
 
-1. **Exact join** on `(section, citation_key, paraphrase)` — unchanged rows carry forward all manual columns
-2. **Fuzzy fallback** — unmatched rows are compared by token similarity to existing rows with the same `(section, citation_key)`. If overlap >= 0.4, manual columns (verified, quote, notes, scores) carry forward to the new text
+1. **Exact join** on `(section, citation_key, paraphrase)` -- unchanged rows carry forward all manual columns
+2. **Fuzzy fallback** -- unmatched rows are compared by token similarity to existing rows with the same `(section, citation_key)`. If overlap >= 0.4, manual columns (verified, quote, notes, scores) carry forward to the new text
 
 The console reports what happened: `94 rows (13 new/unverified, 1 fuzzy-matched)`.
-
-### Programmatic review (without the Shiny app)
-
-You can read, edit, and write the CSV directly — useful when an LLM is helping with review or when you want to mark rows without opening the app:
-
-```r
-library(readr)
-d <- read_csv("qa/citation_audit.csv", show_col_types = FALSE)
-
-# Mark a row as reviewed
-d$verified[5] <- "yes"
-d$notes[5] <- "confirmed — numbers match Table 3 in source"
-
-# Mark a common-knowledge claim
-d$verified[12] <- "context"
-d$notes[12] <- "common knowledge, citation removed from Rmd"
-
-write_csv(d, "qa/citation_audit.csv", na = "")
-```
-
-Protected statuses (`yes`, `no`, `corrected`, `context`) are never overwritten by any automated function. Once you set them, they persist through all future pipeline runs.
-
-### Interactive review
-
-```r
-crd_aud_review("qa/citation_audit.csv")
-```
-
-The app opens filtered to `auto` rows. Click a row to see paraphrase and quote side by side. Set `verified`, add notes, click **Update row**, then **Save to CSV**. Use text filters to search paraphrase and quote content.
-
-### Known limitation: inline R expressions
-
-Paraphrases with inline R code (`` `r some_value` ``) appear as raw R in the CSV because the expressions aren't evaluated outside the bookdown render. `crd_aud_score()` tries to evaluate simple expressions via `paraphrase_eval`, but most depend on objects created during knitting and can't be resolved. Rows with unresolved inline R often score `1 (num_mismatch)` — this is expected, not a real mismatch. Review these manually.
 
 ### How source matching works
 
 Both PDF/docx matching and abstract matching use the same token overlap algorithm:
 
-1. Strip R inline expressions, `@citekeys`, and markdown punctuation from `paraphrase`
-2. Extract word tokens (≥ 4 characters) and numeric tokens separately — numbers are the most discriminative signals
+1. Strip inline R, `@citekeys`, and markdown punctuation from `paraphrase`
+2. Extract word tokens (>= 4 characters) and numeric tokens separately -- numbers are the most discriminative signals
 3. Score each paragraph: proportion of query tokens found in the passage
-4. Accept the top-scoring passage if score ≥ `min_score` (default 0.2)
+4. Accept the top-scoring passage if score >= `min_score` (default 0.2)
 
-**What 0.2 means:** 1 in 5 query tokens must appear in the passage. With a 15-token query, 3 tokens need to match. Deliberately permissive — a false positive costs seconds of review; a false negative means searching the PDF yourself.
-
-| Situation | Suggested `min_score` |
-|---|---|
-| Short or generic paraphrases — many false positives | 0.3 – 0.4 |
-| Default — specific factual claims | 0.2 |
-| Long dense sources where good matches score low | 0.1 – 0.15 |
+**What 0.2 means:** 1 in 5 query tokens must appear in the passage. Deliberately permissive -- a false positive costs seconds of review; a false negative means searching the PDF yourself.
 
 ```r
 crd_aud_verify_all("citation_audit.csv", min_score = 0.2)       # default

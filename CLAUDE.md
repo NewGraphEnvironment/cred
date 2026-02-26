@@ -15,7 +15,7 @@ the specific claim made.
 R/
 ├── audit.R      — CSV lifecycle: crd_aud_write, crd_aud_verify_all, crd_aud_verify_abstract,
 │                  crd_aud_upd (fuzzy join), crd_aud_eval_inline (inline R → paraphrase_eval),
-│                  crd_aud_score, crd_aud_sort, crd_aud_summary, crd_aud_scr_risk, crd_aud_fmt_xlsx
+│                  crd_aud_score, crd_aud_summary, crd_aud_scr_risk, crd_aud_fmt_xlsx
 ├── zotero.R     — SQLite helpers: crd_zot_src_lookup, crd_zot_abstract_lookup
 ├── review.R     — Shiny review app: crd_aud_review (launch_browser param, not launch.browser)
 │                  text filters for paraphrase/quote search

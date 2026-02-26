@@ -437,64 +437,6 @@ crd_aud_fill_src <- function(
   invisible(audit)
 }
 
-#' Sort an audit CSV for review and write it back
-#'
-#' Rearranges the rows of an audit CSV to support different review workflows,
-#' then writes the result back to the same file. The `sort_index` column
-#' (set at write time) always allows restoration to report order.
-#'
-#' @section Verified status order for `by = "status"`:
-#' Rows are grouped: `NA` (unseen) → `"no_match"` → `"auto"` →
-#' `"corrected"` → `"no"` → `"context"` → `"yes"`. Within each group,
-#' rows are ordered by `sort_index`. This puts the most-needing-review
-#' rows first.
-#'
-#' @param audit_file `character(1)` path to the audit CSV.
-#' @param by `character(1)` sort strategy. One of:
-#'   - `"report"` — restore to original report order (`sort_index`).
-#'   - `"status"` — group by verification status, worst-first, then
-#'     `sort_index` within each group.
-#'   - `"key"` — alphabetical by `citation_key`, then `sort_index`.
-#' @return Invisibly returns the sorted [tibble][tibble::tibble].
-#' @export
-#' @examples
-#' \dontrun{
-#' # Group unverified rows first for review
-#' crd_aud_sort("background/citation_audit.csv", by = "status")
-#'
-#' # Restore report order when done
-#' crd_aud_sort("background/citation_audit.csv", by = "report")
-#' }
-crd_aud_sort <- function(audit_file, by = c("report", "status", "key")) {
-  chk::chk_file(audit_file)
-  by <- match.arg(by)
-
-  d <- readr::read_csv(audit_file, show_col_types = FALSE)
-
-  if (!"sort_index" %in% names(d)) {
-    stop("`sort_index` column not found. Re-generate the audit CSV with ",
-         "crd_aud_write() to add it.")
-  }
-
-  # auto first — has quotes to check; NA last — nothing to review without source
-  status_levels <- c("auto", "no_match", "corrected", "no", "context", "yes", NA)
-
-  d <- switch(by,
-    report = dplyr::arrange(d, .data$sort_index),
-    status = {
-      d$status_order <- match(d$verified, status_levels[!is.na(status_levels)])
-      d$status_order <- ifelse(is.na(d$verified), 0L, d$status_order)
-      dplyr::arrange(d, .data$status_order, .data$sort_index) |>
-        dplyr::select(-"status_order")
-    },
-    key = dplyr::arrange(d, .data$citation_key, .data$sort_index)
-  )
-
-  readr::write_csv(d, audit_file, na = "")
-  message("Sorted by '", by, "' and wrote ", nrow(d), " rows to ", audit_file)
-  invisible(d)
-}
-
 #' Summarise an audit CSV by verification status
 #'
 #' Prints a three-part snapshot to the console:
