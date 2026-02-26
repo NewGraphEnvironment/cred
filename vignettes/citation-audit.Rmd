@@ -45,11 +45,11 @@ Rmd files  -->  audit CSV  -->  Zotero lookup  -->  auto-fill quotes  -->  score
 | Step | Function | What it does |
 |------|----------|-------------|
 | 1 | `crd_aud_write()` | Scan Rmd files, extract citations with paraphrase context, write CSV |
-| 2 | `crd_aud_verify_all()` | Look up Zotero attachments, search each source, fill `quote` and `verified` |
-| 2b | `crd_aud_verify_abstract()` | For remaining NA rows, score against Zotero abstract text |
-| 2c | `crd_aud_eval_inline()` | Resolve inline R expressions in paraphrases |
-| 3 | `crd_aud_score()` | Add `review_score` (1--6) and `review_flag` |
-| 4 | `crd_aud_review()` | Launch interactive Shiny app for human review |
+| 2 | `crd_aud_eval_inline()` | Resolve inline R expressions so matching has real numbers |
+| 3 | `crd_aud_verify_all()` | Look up Zotero attachments, search each source, fill `quote` and `verified` |
+| 4 | `crd_aud_verify_abstract()` | For remaining NA rows, score against Zotero abstract text |
+| 5 | `crd_aud_score()` | Add `review_score` (1--6) and `review_flag` |
+| 6 | `crd_aud_review()` | Launch interactive Shiny app for human review |
 
 ---
 
@@ -105,12 +105,22 @@ writeLines(c(
 crd_aud_write(rmd_dir = rmd_dir, out_file = audit_file)
 ```
 
-```{r verify-all, include = FALSE}
+```{r run-pipeline, include = FALSE}
+# Step 2 -- resolve inline R (variables defined later in the demo section)
+n_sites    <- 3
+growth_pct <- 40
+crd_aud_eval_inline(audit_file, overwrite = TRUE)
+
+# Step 3 -- verify against source documents
 d <- readr::read_csv(audit_file, show_col_types = FALSE)
 keys    <- unique(d$citation_key)
 sources <- crd_zot_src_lookup(keys, zotero_dir = toy_zotero_dir)
 crd_aud_verify_all(audit_file = audit_file, sources = sources)
+
+# Step 4 -- abstract fallback
 crd_aud_verify_abstract(audit_file, zotero_dir = toy_zotero_dir)
+
+# Step 5 -- score
 crd_aud_score(audit_file)
 ```
 
@@ -183,15 +193,16 @@ DT::datatable(
 
 ### Resolving inline R expressions
 
-One of the toy rows contains inline R — the paraphrase references variables that would normally come from data pipelines during bookdown rendering. Before resolving, the CSV shows the raw expression:
+One of the toy rows contains inline R — the paraphrase references variables that would normally come from data pipelines during bookdown rendering. `crd_aud_eval_inline()` (step 2) resolved these before verification ran. The raw paraphrase is always preserved; `paraphrase_eval` has the resolved version:
 
-```{r show-before-eval, echo = FALSE}
-d_before <- readr::read_csv(audit_file, show_col_types = FALSE)
-inline_row <- grepl("n_sites", d_before$paraphrase, fixed = TRUE)
-cat(d_before$paraphrase[inline_row])
+```{r show-eval-comparison, echo = FALSE}
+d_eval <- readr::read_csv(audit_file, show_col_types = FALSE)
+inline_row <- grepl("n_sites", d_eval$paraphrase, fixed = TRUE)
+cat("paraphrase:      ", d_eval$paraphrase[inline_row], "\n")
+cat("paraphrase_eval: ", d_eval$paraphrase_eval[inline_row])
 ```
 
-`crd_aud_eval_inline()` evaluates these in your current R session. Define the variables, then call it:
+The call that produced this:
 
 ```{r eval-inline-demo}
 # In a real project these come from your data pipeline
@@ -201,16 +212,7 @@ growth_pct <- 40
 crd_aud_eval_inline(audit_file, overwrite = TRUE)
 ```
 
-Now `paraphrase_eval` has the resolved text while `paraphrase` is unchanged:
-
-```{r show-after-eval, echo = FALSE}
-d_after <- readr::read_csv(audit_file, show_col_types = FALSE)
-inline_row <- grepl("n_sites", d_after$paraphrase, fixed = TRUE)
-cat("paraphrase:      ", d_after$paraphrase[inline_row], "\n")
-cat("paraphrase_eval: ", d_after$paraphrase_eval[inline_row])
-```
-
-`crd_aud_score()` uses `paraphrase_eval` when available, so the numbers can be compared against the quote. In your pipeline script, source your project setup first:
+`crd_aud_score()` uses `paraphrase_eval` when available, so the numbers can be compared against the quote. In your pipeline, source your project setup first so the variables exist:
 
 ```r
 source("scripts/packages.R")
@@ -284,15 +286,15 @@ if (file.exists(audit_file)) {
   crd_aud_write(out_file = audit_file)
 }
 
-# Step 2 -- Auto-fill quotes from Zotero source files
-crd_aud_verify_all(audit_file)
-
-# Step 3 -- Abstract fallback for NA rows
-crd_aud_verify_abstract(audit_file)
-
-# Step 4 -- Resolve inline R (run from session with project variables loaded)
+# Step 2 -- Resolve inline R (run from session with project variables loaded)
 # source("scripts/packages.R"); source("scripts/functions.R")  # if needed
 crd_aud_eval_inline(audit_file)
+
+# Step 3 -- Auto-fill quotes from Zotero source files
+crd_aud_verify_all(audit_file)
+
+# Step 4 -- Abstract fallback for NA rows
+crd_aud_verify_abstract(audit_file)
 
 # Step 5 -- Score for review priority
 crd_aud_score(audit_file)
