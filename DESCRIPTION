@@ -31,5 +31,4 @@ Imports:
     pdftools,
     readr,
     RSQLite,
-    stringr,
-    xml2
+    stringr

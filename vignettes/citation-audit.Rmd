@@ -290,6 +290,38 @@ The `doe2021NoFile` row is now `abstract_match` (blue). The quote column shows t
 
 ---
 
+### Step 2c — Resolve inline R expressions
+
+Bookdown paraphrases sometimes contain inline R like `` `r my_var` ``. These are just variable names in the CSV — they haven't been evaluated. `crd_aud_eval_inline()` evaluates them in your current R session and stores the result in `paraphrase_eval`.
+
+```{r eval-inline-demo}
+# Create variables that would normally come from your book's data pipeline
+kootenay_tdp <- 42
+kootenay_din <- 18
+
+# Now evaluate — cred looks up variables in the calling environment
+crd_aud_eval_inline(audit_file)
+```
+
+**How it works:**
+
+- `paraphrase` is never modified — it always keeps the raw `` `r expr` `` text
+- `paraphrase_eval` gets the resolved version (e.g., "Fertilizer represents 42%...")
+- `crd_aud_score()` uses `paraphrase_eval` when available, so scores improve once values are filled in
+- If a variable doesn't exist in your session, it warns and leaves that expression as-is
+
+**The key requirement:** run `crd_aud_eval_inline()` from the same R session where your book's variables are loaded. In practice, source your setup chunks first:
+
+```r
+# In your pipeline script:
+source("scripts/packages.R")
+source("scripts/functions.R")
+# ... any chunks that create the variables ...
+crd_aud_eval_inline("qa/citation_audit.csv")
+```
+
+---
+
 ### Step 3 — Score for review priority
 
 `crd_aud_score()` adds `review_score` (1–6) and `review_flag` columns. Lower scores are more suspect — review them first.
@@ -437,9 +469,9 @@ crd_aud_verify_all(audit_file)
 # Step 3 — Abstract fallback for NA rows
 crd_aud_verify_abstract(audit_file)
 
-# Step 4 — Resolve inline R from rendered HTML
-# (only needed if paraphrases contain `r expr` spans)
-crd_aud_eval_html(audit_file, html_dir = "docs")
+# Step 4 — Resolve inline R (run from session with project variables loaded)
+# source("scripts/packages.R"); source("scripts/functions.R")  # if needed
+crd_aud_eval_inline(audit_file)
 
 # Step 5 — Score for review priority
 crd_aud_score(audit_file)
