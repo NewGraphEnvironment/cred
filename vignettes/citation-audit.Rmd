@@ -88,6 +88,8 @@ writeLines(c(
 ), file.path(rmd_dir, "0100-habitat.Rmd"))
 
 # Chapter 2 -- beaver ecology (jones2019 docx)
+# The last row uses inline R to demonstrate crd_aud_eval_inline().
+# In a real report, `n_sites` and `growth_pct` would come from data pipelines.
 writeLines(c(
   "# Beaver Ecology {#beaver}",
   "",
@@ -97,7 +99,7 @@ writeLines(c(
   "",
   "Ponded habitat behind beaver dams buffers water temperatures and shelters juvenile salmonids through winter, increasing overwinter survival [@jones2019BeaverEcology].",
   "",
-  "Beaver activity connects floodplain side channels where juvenile chinook grow faster than in the mainstem [@jones2019BeaverEcology]."
+  "Tagged juvenile chinook accessed floodplain side channels at `r n_sites` beaver dam sites, achieving growth rates `r growth_pct`% higher than mainstem fish [@jones2019BeaverEcology]."
 ), file.path(rmd_dir, "0200-beaver.Rmd"))
 
 crd_aud_write(rmd_dir = rmd_dir, out_file = audit_file)
@@ -181,14 +183,38 @@ DT::datatable(
 
 ### Resolving inline R expressions
 
-Bookdown paraphrases sometimes contain inline R code that only evaluates during rendering. `crd_aud_eval_inline()` resolves these in your current R session and stores the result in `paraphrase_eval`, which `crd_aud_score()` uses for scoring.
+One of the toy rows contains inline R — the paraphrase references variables that would normally come from data pipelines during bookdown rendering. Before resolving, the CSV shows the raw expression:
+
+```{r show-before-eval, echo = FALSE}
+d_before <- readr::read_csv(audit_file, show_col_types = FALSE)
+inline_row <- grepl("n_sites", d_before$paraphrase, fixed = TRUE)
+cat(d_before$paraphrase[inline_row])
+```
+
+`crd_aud_eval_inline()` evaluates these in your current R session. Define the variables, then call it:
+
+```{r eval-inline-demo}
+# In a real project these come from your data pipeline
+n_sites    <- 3
+growth_pct <- 40
+
+crd_aud_eval_inline(audit_file, overwrite = TRUE)
+```
+
+Now `paraphrase_eval` has the resolved text while `paraphrase` is unchanged:
+
+```{r show-after-eval, echo = FALSE}
+d_after <- readr::read_csv(audit_file, show_col_types = FALSE)
+inline_row <- grepl("n_sites", d_after$paraphrase, fixed = TRUE)
+cat("paraphrase:      ", d_after$paraphrase[inline_row], "\n")
+cat("paraphrase_eval: ", d_after$paraphrase_eval[inline_row])
+```
+
+`crd_aud_score()` uses `paraphrase_eval` when available, so the numbers can be compared against the quote. In your pipeline script, source your project setup first:
 
 ```r
-# Variables must exist in your session first
 source("scripts/packages.R")
 source("scripts/functions.R")
-
-# Then resolve -- paraphrase is preserved, paraphrase_eval gets actual values
 crd_aud_eval_inline("qa/citation_audit.csv")
 ```
 
