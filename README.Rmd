@@ -42,6 +42,16 @@ crd_aud_verify_all("qa/citation_audit.csv")
 crd_aud_verify_abstract("qa/citation_audit.csv")
 ```
 
+**2c. Resolve inline R expressions** — if paraphrases contain inline R spans (e.g., backtick-r-var-backtick), evaluate them in your current session. Source your project's setup chunks first so the variables exist:
+
+```r
+source("scripts/packages.R")
+source("scripts/functions.R")
+crd_aud_eval_inline("qa/citation_audit.csv")
+```
+
+The raw paraphrase is preserved; resolved values go in `paraphrase_eval`. Scoring uses `paraphrase_eval` when available.
+
 **3. Score for review priority** — adds `review_score` (1–6) and `review_flag`. Lower scores are more suspect:
 
 ```r
