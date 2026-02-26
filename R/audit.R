@@ -604,7 +604,7 @@ crd_aud_eval_inline <- function(audit_file,
 
   needs_eval <- is.na(d$paraphrase_eval) | overwrite
   needs_eval <- needs_eval & stringr::str_detect(
-    d$paraphrase, "`r ", negate = FALSE
+    d$paraphrase, stringr::fixed("`r ")
   )
   needs_eval[is.na(d$paraphrase)] <- FALSE
 
@@ -615,7 +615,7 @@ crd_aud_eval_inline <- function(audit_file,
   }
 
   eval_one <- function(text) {
-    if (is.na(text) || !stringr::str_detect(text, "`r ")) return(text)
+    if (is.na(text) || !stringr::str_detect(text, stringr::fixed("`r "))) return(text)
     spans <- stringr::str_extract_all(text, "`r [^`]+`")[[1]]
     for (span in spans) {
       expr <- stringr::str_remove_all(span, "^`r |`$")
@@ -637,11 +637,11 @@ crd_aud_eval_inline <- function(audit_file,
   )
 
   # Rows without inline R get paraphrase_eval = paraphrase
-  no_inline <- !stringr::str_detect(d$paraphrase, "`r ") & is.na(d$paraphrase_eval)
+  no_inline <- !stringr::str_detect(d$paraphrase, stringr::fixed("`r ")) & is.na(d$paraphrase_eval)
   no_inline[is.na(d$paraphrase)] <- FALSE
   d$paraphrase_eval[no_inline] <- d$paraphrase[no_inline]
 
-  n_ok   <- sum(needs_eval & !stringr::str_detect(d$paraphrase_eval, "`r ", negate = FALSE), na.rm = TRUE)
+  n_ok   <- sum(needs_eval & !stringr::str_detect(d$paraphrase_eval, stringr::fixed("`r ")), na.rm = TRUE)
   n_fail <- n_target - n_ok
   message(
     "Evaluated inline R in ", n_ok, " row(s)",
