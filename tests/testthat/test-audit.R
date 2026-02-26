@@ -282,6 +282,23 @@ test_that("crd_aud_upd fuzzy match respects min_similarity threshold", {
   unlink(env$audit_file)
 })
 
+test_that("crd_aud_upd produces unique row_id values", {
+  env <- setup_upd_test()
+
+  # Run update twice to simulate repeated use
+  suppressMessages(crd_aud_upd(env$audit_file, rmd_dir = env$rmd_dir))
+  result <- suppressMessages(
+    crd_aud_upd(env$audit_file, rmd_dir = env$rmd_dir)
+  )
+
+  expect_true("row_id" %in% names(result))
+  expect_equal(length(unique(result$row_id)), nrow(result),
+    info = "row_id must be unique across all rows")
+
+  unlink(env$rmd_dir, recursive = TRUE)
+  unlink(env$audit_file)
+})
+
 # ---------------------------------------------------------------------------
 # crd_aud_fill_src candidate_quotes tests
 # ---------------------------------------------------------------------------

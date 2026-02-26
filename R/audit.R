@@ -133,19 +133,12 @@ crd_aud_upd <- function(
   fresh_keys <- dplyr::select(fresh, "section", "citation_key", "paraphrase",
                               "row_id")
 
-  manual_cols_all <- c(manual_cols, "row_id")
   merged <- dplyr::left_join(
     fresh_keys,
     dplyr::select(existing, "section", "citation_key", "paraphrase",
-                  dplyr::any_of(manual_cols_all)),
+                  dplyr::any_of(manual_cols)),
     by = c("section", "citation_key", "paraphrase")
   )
-  # Restore row_id from existing where present; new rows keep their fresh value
-  if ("row_id.x" %in% names(merged)) {
-    merged$row_id <- dplyr::coalesce(merged$row_id.y, merged$row_id.x)
-    merged$row_id.x <- NULL
-    merged$row_id.y <- NULL
-  }
   # Ensure all manual columns exist (NA for new rows)
   for (col in manual_cols) {
     if (!col %in% names(merged)) merged[[col]] <- NA_character_
