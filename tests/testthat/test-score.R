@@ -145,7 +145,7 @@ test_that("crd_aud_score adds review_score and review_flag columns", {
     page_or_section = NA_character_,
     verified     = c("auto", "no_match", NA_character_),
     notes        = NA_character_,
-    sort_index   = 1:3
+    row_id   = 1:3
   )
   tmp <- write_tmp_audit(audit)
 
@@ -170,7 +170,7 @@ test_that("crd_aud_score respects overwrite = FALSE", {
     page_or_section = NA_character_,
     verified     = "auto",
     notes        = NA_character_,
-    sort_index   = 1L,
+    row_id   = 1L,
     review_score = 5L,
     review_flag  = "manual_override"
   )
@@ -193,7 +193,7 @@ test_that("crd_aud_score rescores when overwrite = TRUE", {
     page_or_section = NA_character_,
     verified     = "auto",
     notes        = NA_character_,
-    sort_index   = 1L,
+    row_id   = 1L,
     review_score = 99L,
     review_flag  = "stale"
   )
@@ -217,7 +217,7 @@ test_that("crd_aud_score uses paraphrase_eval when present", {
     page_or_section = NA_character_,
     verified       = "auto",
     notes          = NA_character_,
-    sort_index     = 1L
+    row_id     = 1L
   )
   tmp <- write_tmp_audit(audit)
 
@@ -239,7 +239,7 @@ test_that("crd_aud_score writes results back to CSV", {
     page_or_section = NA_character_,
     verified     = "auto",
     notes        = NA_character_,
-    sort_index   = 1L
+    row_id   = 1L
   )
   tmp <- write_tmp_audit(audit)
 

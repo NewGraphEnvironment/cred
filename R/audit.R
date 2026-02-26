@@ -6,7 +6,7 @@
   "section", "citation_key", "verified", "notes",
   "review_score", "review_flag", "claim_type",
   "paraphrase", "paraphrase_eval", "quote",
-  "page_or_section", "candidate_quotes", "sort_index"
+  "page_or_section", "candidate_quotes", "row_id"
 )
 
 # Reorder columns to canonical order. Unknown columns appended at end.
@@ -77,7 +77,7 @@ crd_aud_write <- function(
       page_or_section = NA_character_,
       verified        = NA_character_,
       notes           = NA_character_,
-      sort_index      = seq_len(dplyr::n())
+      row_id      = seq_len(dplyr::n())
     )
 
   result <- .reorder_cols(result)
@@ -131,20 +131,20 @@ crd_aud_upd <- function(
 
   # Drop manual columns from fresh so existing values take precedence on join
   fresh_keys <- dplyr::select(fresh, "section", "citation_key", "paraphrase",
-                              "sort_index")
+                              "row_id")
 
-  manual_cols_all <- c(manual_cols, "sort_index")
+  manual_cols_all <- c(manual_cols, "row_id")
   merged <- dplyr::left_join(
     fresh_keys,
     dplyr::select(existing, "section", "citation_key", "paraphrase",
                   dplyr::any_of(manual_cols_all)),
     by = c("section", "citation_key", "paraphrase")
   )
-  # Restore sort_index from existing where present; new rows keep their fresh value
-  if ("sort_index.x" %in% names(merged)) {
-    merged$sort_index <- dplyr::coalesce(merged$sort_index.y, merged$sort_index.x)
-    merged$sort_index.x <- NULL
-    merged$sort_index.y <- NULL
+  # Restore row_id from existing where present; new rows keep their fresh value
+  if ("row_id.x" %in% names(merged)) {
+    merged$row_id <- dplyr::coalesce(merged$row_id.y, merged$row_id.x)
+    merged$row_id.x <- NULL
+    merged$row_id.y <- NULL
   }
   # Ensure all manual columns exist (NA for new rows)
   for (col in manual_cols) {
@@ -975,7 +975,7 @@ crd_aud_fmt_xlsx <- function(audit_file, out_file = NULL) {
     page_or_section = 14,
     verified        = 11,
     notes           = 30,
-    sort_index      =  9
+    row_id      =  9
   )
   # Apply in column order of d
   widths <- vapply(names(d), function(n) {
