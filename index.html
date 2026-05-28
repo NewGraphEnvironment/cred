@@ -7,8 +7,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
 <title>Citation Review and Evidence Documentation • cred</title>
 <script src="deps/jquery-3.6.0/jquery-3.6.0.min.js"></script><meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
-<link href="deps/bootstrap-5.3.1/bootstrap.min.css" rel="stylesheet">
-<script src="deps/bootstrap-5.3.1/bootstrap.bundle.min.js"></script><link href="deps/font-awesome-6.5.2/css/all.min.css" rel="stylesheet">
+<link href="deps/bootstrap-5.3.8/bootstrap.min.css" rel="stylesheet">
+<script src="deps/bootstrap-5.3.8/bootstrap.bundle.min.js"></script><link href="deps/font-awesome-6.5.2/css/all.min.css" rel="stylesheet">
 <link href="deps/font-awesome-6.5.2/css/v4-shims.min.css" rel="stylesheet">
 <script src="deps/headroom-0.11.0/headroom.min.js"></script><script src="deps/headroom-0.11.0/jQuery.headroom.min.js"></script><script src="deps/bootstrap-toc-1.0.1/bootstrap-toc.min.js"></script><script src="deps/clipboard.js-2.0.11/clipboard.min.js"></script><script src="deps/search-1.0.0/autocomplete.jquery.min.js"></script><script src="deps/search-1.0.0/fuse.min.js"></script><script src="deps/search-1.0.0/mark.min.js"></script><!-- pkgdown --><script src="pkgdown.js"></script><meta property="og:title" content="Citation Review and Evidence Documentation">
 <meta name="description" content="Tools for extracting, auditing, and verifying inline citations in bookdown R Markdown documents. Supports systematic detection of hallucinated statistics or misattributed findings introduced during LLM-assisted drafting.">
@@ -59,6 +59,7 @@
 </h1>
 </div>
 <p><code>cred</code> catches a specific failure mode in LLM-assisted scientific writing: a real citation key attached to a claim the source does not actually make. It automates the tedious part — finding the right passage in a PDF or Word doc — so a human can focus on the judgment call.</p>
+<p>cred is the <strong>post-draft verification</strong> half of a two-phase citation methodology. The pre-draft half — building a topic-bounded retrieval store from your Zotero library and querying it as you write — lives in the <a href="https://github.com/NewGraphEnvironment/soul/tree/main/skills/lit-search" class="external-link"><code>/lit-search</code></a> skill (ragnar + DuckDB). Together they bound LLM citation drift from both ends: source-grounded retrieval before claims are written, token-overlap verification after.</p>
 <div class="section level2">
 <h2 id="installation">Installation<a class="anchor" aria-label="anchor" href="#installation"></a>
 </h2>
@@ -99,40 +100,40 @@
 <col width="50%">
 <col width="50%">
 </colgroup>
-<thead><tr class="header">
+<thead><tr>
 <th>Value</th>
 <th>Meaning</th>
 </tr></thead>
 <tbody>
-<tr class="odd">
+<tr>
 <td><code>auto</code></td>
 <td>Machine-matched against source file — awaiting your review</td>
 </tr>
-<tr class="even">
+<tr>
 <td><code>abstract_match</code></td>
 <td>Matched against Zotero abstract — no full text available</td>
 </tr>
-<tr class="odd">
+<tr>
 <td><code>yes</code></td>
 <td>Reviewed and confirmed accurate</td>
 </tr>
-<tr class="even">
+<tr>
 <td><code>no</code></td>
 <td>Claim not supported by source</td>
 </tr>
-<tr class="odd">
+<tr>
 <td><code>corrected</code></td>
 <td>Claim was wrong; you fixed it in the Rmd</td>
 </tr>
-<tr class="even">
+<tr>
 <td><code>no_match</code></td>
 <td>Source exists but paraphrase did not score above threshold</td>
 </tr>
-<tr class="odd">
+<tr>
 <td><code>context</code></td>
 <td>Citation provides context, not a direct factual claim</td>
 </tr>
-<tr class="even">
+<tr>
 <td><code>NA</code></td>
 <td>No source file and no abstract in Zotero</td>
 </tr>
@@ -168,21 +169,21 @@
 <col width="68%">
 <col width="31%">
 </colgroup>
-<thead><tr class="header">
+<thead><tr>
 <th>Situation</th>
 <th>Suggested <code>min_score</code>
 </th>
 </tr></thead>
 <tbody>
-<tr class="odd">
+<tr>
 <td>Generic paraphrases — many false positives</td>
 <td>0.3 – 0.4</td>
 </tr>
-<tr class="even">
+<tr>
 <td>Default — specific factual claims with numbers</td>
 <td>0.2</td>
 </tr>
-<tr class="odd">
+<tr>
 <td>Long dense sources where good matches score low</td>
 <td>0.1 – 0.15</td>
 </tr>
@@ -196,6 +197,51 @@
 <div class="sourceCode" id="cb12"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/utils/vignette.html" class="external-link">vignette</a></span><span class="op">(</span><span class="st">"citation-audit"</span>, package <span class="op">=</span> <span class="st">"cred"</span><span class="op">)</span></span></code></pre></div>
 <p>The vignette walks through the full workflow with toy source files (PDF + docx) and a minimal Zotero SQLite database that ship with the package.</p>
+</div>
+<div class="section level2">
+<h2 id="two-phase-citation-methodology">Two-phase citation methodology<a class="anchor" aria-label="anchor" href="#two-phase-citation-methodology"></a>
+</h2>
+<table class="table">
+<colgroup>
+<col width="33%">
+<col width="33%">
+<col width="33%">
+</colgroup>
+<thead><tr>
+<th>Phase</th>
+<th>Tool</th>
+<th>What it does</th>
+</tr></thead>
+<tbody>
+<tr>
+<td><strong>Pre-draft</strong></td>
+<td><a href="https://github.com/NewGraphEnvironment/soul/tree/main/skills/lit-search" class="external-link"><code>/lit-search</code></a></td>
+<td>Build a topic-scoped ragnar/DuckDB store from your Zotero PDFs; query during drafting to surface source quotes the LLM can paraphrase from.</td>
+</tr>
+<tr>
+<td><strong>Post-draft</strong></td>
+<td><code>cred</code></td>
+<td>Walk each inline citation in the rendered Rmd, score against the source PDF/abstract via token overlap, flag drift, review.</td>
+</tr>
+</tbody>
+</table>
+<p>The two phases close the loop. Pre-draft retrieval keeps the LLM grounded in real sources from the start; post-draft verification catches what slipped through. Either phase alone leaks: ragnar retrieval can be ignored at write-time, and post-hoc verification on a draft that never saw the sources is much more work.</p>
+</div>
+<div class="section level2">
+<h2 id="roadmap">Roadmap<a class="anchor" aria-label="anchor" href="#roadmap"></a>
+</h2>
+<ul>
+<li>
+<strong>Pre-draft passage retrieval inside cred</strong> (<a href="https://github.com/NewGraphEnvironment/cred/issues/2" class="external-link">#2</a>) — <code>crd_zot_pull_quotes()</code> so a draft can request source quotes by citation key + topic without leaving R.</li>
+<li>
+<strong>ragnar-powered evidence search</strong> (<a href="https://github.com/NewGraphEnvironment/cred/issues/22" class="external-link">#22</a>) — swap the token-overlap matcher for embedding retrieval when the corpus is large; keep token overlap as the lightweight default.</li>
+<li>
+<strong>Multi-citation claim grouping</strong> (<a href="https://github.com/NewGraphEnvironment/cred/issues/21" class="external-link">#21</a>) — when a sentence carries three citation keys, review them as a batch instead of three serial rows.</li>
+<li>
+<strong>Git pre-commit hook</strong> (<a href="https://github.com/NewGraphEnvironment/cred/issues/3" class="external-link">#3</a>) — <code>crd_hook_install()</code> so the audit CSV is regenerated and stale rows are flagged at commit time, not at render time.</li>
+<li>
+<strong>Abstract fallback after full-text</strong> (<a href="https://github.com/NewGraphEnvironment/cred/issues/9" class="external-link">#9</a>) — for unresolved <code>no_match</code> rows where the abstract exists locally, score against the abstract before falling through to <code>NA</code>.</li>
+</ul>
 </div>
 </div>
   </main><aside class="col-md-3"><div class="links">

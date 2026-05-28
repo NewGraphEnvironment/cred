@@ -41,16 +41,16 @@ data-raw/make_toy_zotero.R — regenerates inst/extdata/zotero.sqlite
 
 This is the core data model. Every function respects it.
 
-| Value            | Meaning                                                 | Set by                                                                                                         |
-|------------------|---------------------------------------------------------|----------------------------------------------------------------------------------------------------------------|
-| `auto`           | Passage found in source file, score ≥ threshold         | [`crd_aud_verify_all()`](https://newgraphenvironment.github.io/cred/reference/crd_aud_verify_all.md)           |
-| `abstract_match` | Zotero abstract matched — no full text available        | [`crd_aud_verify_abstract()`](https://newgraphenvironment.github.io/cred/reference/crd_aud_verify_abstract.md) |
-| `no_match`       | Source exists, no paragraph scored above threshold      | [`crd_aud_verify_all()`](https://newgraphenvironment.github.io/cred/reference/crd_aud_verify_all.md)           |
-| `yes`            | Human: reviewed and confirmed accurate                  | human                                                                                                          |
-| `no`             | Human: claim not supported by source                    | human                                                                                                          |
-| `corrected`      | Human: claim was wrong, fixed in Rmd                    | human                                                                                                          |
-| `context`        | Human: citation provides background, not a direct claim | human                                                                                                          |
-| `NA`             | No source file and no abstract in Zotero                | —                                                                                                              |
+| Value | Meaning | Set by |
+|----|----|----|
+| `auto` | Passage found in source file, score ≥ threshold | [`crd_aud_verify_all()`](https://newgraphenvironment.github.io/cred/reference/crd_aud_verify_all.md) |
+| `abstract_match` | Zotero abstract matched — no full text available | [`crd_aud_verify_abstract()`](https://newgraphenvironment.github.io/cred/reference/crd_aud_verify_abstract.md) |
+| `no_match` | Source exists, no paragraph scored above threshold | [`crd_aud_verify_all()`](https://newgraphenvironment.github.io/cred/reference/crd_aud_verify_all.md) |
+| `yes` | Human: reviewed and confirmed accurate | human |
+| `no` | Human: claim not supported by source | human |
+| `corrected` | Human: claim was wrong, fixed in Rmd | human |
+| `context` | Human: citation provides background, not a direct claim | human |
+| `NA` | No source file and no abstract in Zotero | — |
 
 **Protected statuses** — never overwritten by any automated function:
 `yes`, `no`, `corrected`, `context`
@@ -86,6 +86,7 @@ paraphrase-to-paraphrase matching)
 ## Build and Test
 
 ``` r
+
 devtools::test()          # run tests
 devtools::document()      # rebuild man/ from roxygen
 devtools::check()         # full R CMD check
@@ -95,6 +96,7 @@ lintr::lint_package()     # must be 0 lints before commit
 Build the vignette / pkgdown site:
 
 ``` r
+
 devtools::build_vignettes()
 pkgdown::build_site()
 ```
@@ -308,6 +310,7 @@ production repos disagree, production wins — update the template.
 Every `index.Rmd` follows this setup sequence. Order matters.
 
 ``` r
+
 # 1. Gitbook vs PDF switch
 gitbook_on <- TRUE
 
@@ -330,6 +333,7 @@ source('scripts/functions.R')
 Responsive settings by output format:
 
 ``` r
+
 # Gitbook
 photo_width <- "100%"; font_set <- 11
 
@@ -452,6 +456,7 @@ where Zotero isn’t running.
 Auto-generate package citations:
 
 ``` r
+
 knitr::write_bib(c(.packages(), 'bookdown', 'knitr', 'rmarkdown'), 'packages.bib')
 ```
 
@@ -544,6 +549,7 @@ date: |
 `staticimports.R`:
 
 ``` r
+
 news_to_appendix(md_name = "NEWS.md", rmd_name = "2090-report-change-log.Rmd")
 ```
 
@@ -559,6 +565,7 @@ formatting
 Always use `ngr::ngr_str_viewer_cog()` — never hardcode viewer iframes.
 
 ``` r
+
 knitr::asis_output(ngr::ngr_str_viewer_cog("https://bucket.s3.us-west-2.amazonaws.com/ortho.tif"))
 ```
 
@@ -597,6 +604,7 @@ Use the `gq` package for all shared layer symbology. Never hardcode hex
 color values when a registry style exists.
 
 ``` r
+
 library(gq)
 reg <- gq_reg_main()  # load once per script — 51+ layers
 ```
@@ -606,10 +614,10 @@ reg <- gq_reg_main()  # load once per script — 51+ layers
 
 ### Translators
 
-| Target | Simple layer                                         | Classified layer                                 |
-|--------|------------------------------------------------------|--------------------------------------------------|
-| tmap   | `gq_tmap_style(layer)` → `do.call(tm_polygons, ...)` | `gq_tmap_classes(layer)` → field, values, labels |
-| mapgl  | `gq_mapgl_style(layer)` → paint properties           | `gq_mapgl_classes(layer)` → match expression     |
+| Target | Simple layer | Classified layer |
+|----|----|----|
+| tmap | `gq_tmap_style(layer)` → `do.call(tm_polygons, ...)` | `gq_tmap_classes(layer)` → field, values, labels |
+| mapgl | `gq_mapgl_style(layer)` → paint properties | `gq_mapgl_classes(layer)` → match expression |
 
 ### Custom styles
 
@@ -617,6 +625,7 @@ For project-specific layers not in the main registry, use a hand-curated
 CSV and merge:
 
 ``` r
+
 reg <- gq_reg_merge(gq_reg_main(), gq_reg_read_csv("path/to/custom.csv"))
 ```
 
@@ -624,11 +633,11 @@ Install: `pak::pak("NewGraphEnvironment/gq")`
 
 ## Map Targets
 
-| Output              | Tool                  | When                               |
-|---------------------|-----------------------|------------------------------------|
-| PDF / print figures | `tmap` v4             | Bookdown PDF, static reports       |
-| Interactive HTML    | `mapgl` (MapLibre GL) | Bookdown gitbook, memos, web pages |
-| QGIS project        | Native QML            | Field work, Mergin Maps            |
+| Output | Tool | When |
+|----|----|----|
+| PDF / print figures | `tmap` v4 | Bookdown PDF, static reports |
+| Interactive HTML | `mapgl` (MapLibre GL) | Bookdown gitbook, memos, web pages |
+| QGIS project | Native QML | Field work, Mergin Maps |
 
 ## Key Rules
 
@@ -787,11 +796,11 @@ implementation details.
 
 Three levels. Default to casual unless context dictates otherwise.
 
-| Level           | When                                            | Style                                                 |
-|-----------------|-------------------------------------------------|-------------------------------------------------------|
-| **Casual**      | Established working relationships               | Professional but warm. Direct, concise. No slang.     |
-| **Very casual** | Close collaborators with rapport                | Colloquial OK. Light humor. Slang acceptable.         |
-| **Formal**      | New contacts, senior officials, formal requests | Full sentences, no contractions, state purpose early. |
+| Level | When | Style |
+|----|----|----|
+| **Casual** | Established working relationships | Professional but warm. Direct, concise. No slang. |
+| **Very casual** | Close collaborators with rapport | Colloquial OK. Light humor. Slang acceptable. |
+| **Formal** | New contacts, senior officials, formal requests | Full sentences, no contractions, state purpose early. |
 
 **Collaborative, not directive.** Acknowledge their constraints:
 
@@ -924,13 +933,13 @@ Environment repositories.
 Five repos form the governance and operations layer across all New Graph
 Environment work:
 
-| Repo                                                      | Purpose                                                       | Analogy     |
-|-----------------------------------------------------------|---------------------------------------------------------------|-------------|
-| [compass](https://github.com/NewGraphEnvironment/compass) | Ethics, values, guiding principles                            | The “why”   |
-| [soul](https://github.com/NewGraphEnvironment/soul)       | Standards, skills, conventions for LLM agents                 | The “how”   |
-| [compost](https://github.com/NewGraphEnvironment/compost) | Communications templates, email workflows, contact management | The “who”   |
-| [awshak](https://github.com/NewGraphEnvironment/awshak)   | Infrastructure as Code, deployment                            | The “where” |
-| [gq](https://github.com/NewGraphEnvironment/gq)           | Cartographic style management across QGIS, tmap, leaflet, web | The “look”  |
+| Repo | Purpose | Analogy |
+|----|----|----|
+| [compass](https://github.com/NewGraphEnvironment/compass) | Ethics, values, guiding principles | The “why” |
+| [soul](https://github.com/NewGraphEnvironment/soul) | Standards, skills, conventions for LLM agents | The “how” |
+| [compost](https://github.com/NewGraphEnvironment/compost) | Communications templates, email workflows, contact management | The “who” |
+| [awshak](https://github.com/NewGraphEnvironment/awshak) | Infrastructure as Code, deployment | The “where” |
+| [gq](https://github.com/NewGraphEnvironment/gq) | Cartographic style management across QGIS, tmap, leaflet, web | The “look” |
 
 **Adaptive management:** Conventions evolve from real project work, not
 theory. When a pattern is learned or refined during project work,
@@ -1072,13 +1081,13 @@ Scripts and logs live together: `scripts/<module>/logs/`
 - **Milestones** = iteration boundaries (only for release/claim prep)
 - Don’t double-track unless there’s a reason
 
-| Content                                   | Project                               |
-|-------------------------------------------|---------------------------------------|
-| R&D, experiments, SRED-related            | **SRED R&D Tracking (#8)**            |
-| Data storage, sqlite, postgres, pipelines | **Data Architecture (#9)**            |
-| Fish passage field/reporting              | **Fish Passage 2025 (#6)**            |
-| Restoration planning                      | **Aquatic Restoration Planning (#5)** |
-| QGIS, Mergin, field forms                 | **Collaborative GIS (#3)**            |
+| Content | Project |
+|----|----|
+| R&D, experiments, SRED-related | **SRED R&D Tracking (#8)** |
+| Data storage, sqlite, postgres, pipelines | **Data Architecture (#9)** |
+| Fish passage field/reporting | **Fish Passage 2025 (#6)** |
+| Restoration planning | **Aquatic Restoration Planning (#5)** |
+| QGIS, Mergin, field forms | **Collaborative GIS (#3)** |
 
 # PR Review Automation
 
@@ -1203,6 +1212,7 @@ warnings — every lint should be worth fixing.
 ### Recommended .lintr config
 
 ``` r
+
 linters: linters_with_defaults(
     line_length_linter(120),
     object_name_linter(styles = c("snake_case", "dotted.case")),
@@ -1250,11 +1260,11 @@ at New Graph Environment.
 
 Three tools, different purposes. Use the right one.
 
-| Need                                                       | Tool                       | Why                                                           |
-|------------------------------------------------------------|----------------------------|---------------------------------------------------------------|
-| Search by keyword, read metadata/fulltext, semantic search | **MCP `zotero_*` tools**   | pyzotero, works with Zotero item keys                         |
-| Look up by citation key (e.g., `irvine2020ParsnipRiver`)   | **`/zotero-lookup` skill** | Citation keys are a BBT feature — pyzotero can’t resolve them |
-| Create items, attach PDFs, deduplicate                     | **`/zotero-api` skill**    | Connector API for writes, JS console for attachments          |
+| Need | Tool | Why |
+|----|----|----|
+| Search by keyword, read metadata/fulltext, semantic search | **MCP `zotero_*` tools** | pyzotero, works with Zotero item keys |
+| Look up by citation key (e.g., `irvine2020ParsnipRiver`) | **`/zotero-lookup` skill** | Citation keys are a BBT feature — pyzotero can’t resolve them |
+| Create items, attach PDFs, deduplicate | **`/zotero-api` skill** | Connector API for writes, JS console for attachments |
 
 **Citation keys vs item keys:** Citation keys (like
 `irvine2020ParsnipRiver`) come from Better BibTeX. Item keys (like
@@ -1328,6 +1338,7 @@ Zotero → rebuild report → bibliography updates.
 This is set globally in `~/.Rprofile`:
 
 ``` r
+
 # default library — NewGraphEnvironment group (libraryID 9, group 4733734)
 options(rbbt.default.library_id = 9)
 ```
@@ -1420,18 +1431,18 @@ is the international competitiveness that SRED exists to incentivize.
 
 ## System Components
 
-| Layer                | Repos                          | Role in Framework                                                     |
-|----------------------|--------------------------------|-----------------------------------------------------------------------|
-| **Agent governance** | soul                           | Conventions, skills, settings — how agents behave across all repos    |
-| **Communications**   | compost                        | Centralized email workflows, contact management, tone standards       |
-| **Operations**       | rolex                          | Time tracking, invoicing, SRED evidence, budget management            |
-| **Infrastructure**   | awshak                         | IaC (OpenTofu), S3, IAM, CORS, OIDC — reproducible cloud environments |
-| **GIS automation**   | rfp, ngr, dff-2022             | QGIS project generation, spatial data processing, layer management    |
-| **Imagery**          | stac_uav, stac_orthophoto_bc   | UAV processing, STAC cataloging, containerized pipelines              |
-| **Citations**        | xciter                         | Pandoc hooks for citations in interactive tables                      |
-| **Data**             | db_newgraph, bcfishpass, fwapg | PostgreSQL spatial databases, modelling, query APIs                   |
-| **Field collection** | Mergin Maps projects           | Mobile forms, offline GeoPackages, bidirectional sync                 |
-| **Reporting**        | Annual project repos           | Bookdown reports consuming all of the above                           |
+| Layer | Repos | Role in Framework |
+|----|----|----|
+| **Agent governance** | soul | Conventions, skills, settings — how agents behave across all repos |
+| **Communications** | compost | Centralized email workflows, contact management, tone standards |
+| **Operations** | rolex | Time tracking, invoicing, SRED evidence, budget management |
+| **Infrastructure** | awshak | IaC (OpenTofu), S3, IAM, CORS, OIDC — reproducible cloud environments |
+| **GIS automation** | rfp, ngr, dff-2022 | QGIS project generation, spatial data processing, layer management |
+| **Imagery** | stac_uav, stac_orthophoto_bc | UAV processing, STAC cataloging, containerized pipelines |
+| **Citations** | xciter | Pandoc hooks for citations in interactive tables |
+| **Data** | db_newgraph, bcfishpass, fwapg | PostgreSQL spatial databases, modelling, query APIs |
+| **Field collection** | Mergin Maps projects | Mobile forms, offline GeoPackages, bidirectional sync |
+| **Reporting** | Annual project repos | Bookdown reports consuming all of the above |
 
 ## Fiscal Year Iterations
 
@@ -1455,13 +1466,13 @@ engine.
 
 ### FY2026 (May 2025 – April 2026)
 
-| Iteration | Focus                                                | Key Repos                  |
-|-----------|------------------------------------------------------|----------------------------|
-| TBD       | LLM agent orchestration & governance                 | soul, agent teams          |
-| TBD       | Communications workflow                              | compost                    |
-| TBD       | Time tracking & evidence management                  | rolex                      |
-| TBD       | MCP integrations (Zotero, PostgreSQL, Harvest, Xero) | soul settings, MCP configs |
-| TBD       | Continued GIS/reporting improvements                 | rfp, ngr, bookdown repos   |
+| Iteration | Focus | Key Repos |
+|----|----|----|
+| TBD | LLM agent orchestration & governance | soul, agent teams |
+| TBD | Communications workflow | compost |
+| TBD | Time tracking & evidence management | rolex |
+| TBD | MCP integrations (Zotero, PostgreSQL, Harvest, Xero) | soul settings, MCP configs |
+| TBD | Continued GIS/reporting improvements | rfp, ngr, bookdown repos |
 
 Iteration numbers are assigned by Boast in the final report. We provide
 evidence organized by theme.

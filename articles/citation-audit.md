@@ -17,14 +17,14 @@ call.
 
     Rmd files  -->  audit CSV  -->  Zotero lookup  -->  auto-fill quotes  -->  score  -->  review
 
-| Step | Function                                                                                                       | What it does                                                                |
-|------|----------------------------------------------------------------------------------------------------------------|-----------------------------------------------------------------------------|
-| 1    | [`crd_aud_write()`](https://newgraphenvironment.github.io/cred/reference/crd_aud_write.md)                     | Scan Rmd files, extract citations with paraphrase context, write CSV        |
-| 2    | [`crd_aud_eval_inline()`](https://newgraphenvironment.github.io/cred/reference/crd_aud_eval_inline.md)         | Resolve inline R expressions so matching has real numbers                   |
-| 3    | [`crd_aud_verify_all()`](https://newgraphenvironment.github.io/cred/reference/crd_aud_verify_all.md)           | Look up Zotero attachments, search each source, fill `quote` and `verified` |
-| 4    | [`crd_aud_verify_abstract()`](https://newgraphenvironment.github.io/cred/reference/crd_aud_verify_abstract.md) | For remaining NA rows, score against Zotero abstract text                   |
-| 5    | [`crd_aud_score()`](https://newgraphenvironment.github.io/cred/reference/crd_aud_score.md)                     | Add `review_score` (1–6) and `review_flag`                                  |
-| 6    | [`crd_aud_review()`](https://newgraphenvironment.github.io/cred/reference/crd_aud_review.md)                   | Launch interactive Shiny app for human review                               |
+| Step | Function | What it does |
+|----|----|----|
+| 1 | [`crd_aud_write()`](https://newgraphenvironment.github.io/cred/reference/crd_aud_write.md) | Scan Rmd files, extract citations with paraphrase context, write CSV |
+| 2 | [`crd_aud_eval_inline()`](https://newgraphenvironment.github.io/cred/reference/crd_aud_eval_inline.md) | Resolve inline R expressions so matching has real numbers |
+| 3 | [`crd_aud_verify_all()`](https://newgraphenvironment.github.io/cred/reference/crd_aud_verify_all.md) | Look up Zotero attachments, search each source, fill `quote` and `verified` |
+| 4 | [`crd_aud_verify_abstract()`](https://newgraphenvironment.github.io/cred/reference/crd_aud_verify_abstract.md) | For remaining NA rows, score against Zotero abstract text |
+| 5 | [`crd_aud_score()`](https://newgraphenvironment.github.io/cred/reference/crd_aud_score.md) | Add `review_score` (1–6) and `review_flag` |
+| 6 | [`crd_aud_review()`](https://newgraphenvironment.github.io/cred/reference/crd_aud_review.md) | Launch interactive Shiny app for human review |
 
 ------------------------------------------------------------------------
 
@@ -76,6 +76,7 @@ always preserved; `paraphrase_eval` has the resolved version:
 The call that produced this:
 
 ``` r
+
 # In a real project these come from your data pipeline
 n_sites    <- 3
 growth_pct <- 40
@@ -90,6 +91,7 @@ against the quote. In your pipeline, source your project setup first so
 the variables exist:
 
 ``` r
+
 source("scripts/packages.R")
 source("scripts/functions.R")
 crd_aud_eval_inline("qa/citation_audit.csv")
@@ -103,6 +105,7 @@ Run from the same R session where your book builds.
 ### Interactive review
 
 ``` r
+
 crd_aud_review("qa/citation_audit.csv")
 ```
 
@@ -122,16 +125,16 @@ candidates** to expand alternative passages with their scores. Set
 
 ## The verified values
 
-| Value            | Meaning                                                | Next action                                             |
-|------------------|--------------------------------------------------------|---------------------------------------------------------|
-| `auto`           | Source matched above threshold                         | Read quote vs paraphrase; set yes/no/corrected          |
-| `abstract_match` | Zotero abstract matched – no full text                 | Judge if abstract is sufficient; set context or get PDF |
-| `no_match`       | Source exists, no paragraph matched                    | Check source manually; may be a wrong citation          |
-| `yes`            | Reviewed and confirmed accurate                        | Done                                                    |
-| `no`             | Claim not supported by source                          | Fix the claim in the Rmd                                |
-| `corrected`      | Claim was wrong; you fixed it                          | Done                                                    |
-| `context`        | Source provides background, not a direct factual claim | Done                                                    |
-| `NA`             | No source file and no abstract in Zotero               | Attach PDF to unlock                                    |
+| Value | Meaning | Next action |
+|----|----|----|
+| `auto` | Source matched above threshold | Read quote vs paraphrase; set yes/no/corrected |
+| `abstract_match` | Zotero abstract matched – no full text | Judge if abstract is sufficient; set context or get PDF |
+| `no_match` | Source exists, no paragraph matched | Check source manually; may be a wrong citation |
+| `yes` | Reviewed and confirmed accurate | Done |
+| `no` | Claim not supported by source | Fix the claim in the Rmd |
+| `corrected` | Claim was wrong; you fixed it | Done |
+| `context` | Source provides background, not a direct factual claim | Done |
+| `NA` | No source file and no abstract in Zotero | Attach PDF to unlock |
 
 ------------------------------------------------------------------------
 
@@ -156,6 +159,7 @@ Create `scripts/citation_audit.R` – this is the one file you (or an LLM)
 run every time. It handles first run vs. update automatically:
 
 ``` r
+
 # scripts/citation_audit.R -- repeatable citation audit pipeline
 library(cred)
 
@@ -189,6 +193,7 @@ Run the full pipeline after adding new citations or attaching new PDFs
 in Zotero. Run just the quick update after editing existing text:
 
 ``` r
+
 # Quick -- re-extract and re-score only (seconds, no Zotero lookup)
 crd_aud_upd("qa/citation_audit.csv")
 crd_aud_score("qa/citation_audit.csv")
@@ -198,11 +203,11 @@ crd_aud_score("qa/citation_audit.csv")
 
 The CSV is current state; git history is the audit trail.
 
-| After…                                                                                                       | Commit? | Why                                         |
-|--------------------------------------------------------------------------------------------------------------|---------|---------------------------------------------|
-| Full pipeline run                                                                                            | Yes     | Captures auto/no_match/abstract_match state |
-| Shiny review session (Save to CSV)                                                                           | Yes     | Preserves human judgments                   |
-| Quick [`crd_aud_upd()`](https://newgraphenvironment.github.io/cred/reference/crd_aud_upd.md) after Rmd edits | Yes     | Records paraphrase changes + fuzzy matches  |
+| After… | Commit? | Why |
+|----|----|----|
+| Full pipeline run | Yes | Captures auto/no_match/abstract_match state |
+| Shiny review session (Save to CSV) | Yes | Preserves human judgments |
+| Quick [`crd_aud_upd()`](https://newgraphenvironment.github.io/cred/reference/crd_aud_upd.md) after Rmd edits | Yes | Records paraphrase changes + fuzzy matches |
 
 A good commit message: `qa: update citation audit after intro rewrite`
 or `qa: review 12 auto rows, 3 corrected`.
@@ -242,6 +247,7 @@ Deliberately permissive – a false positive costs seconds of review; a
 false negative means searching the PDF yourself.
 
 ``` r
+
 crd_aud_verify_all("citation_audit.csv", min_score = 0.2)       # default
 crd_aud_verify_abstract("citation_audit.csv", min_score = 0.2)  # same threshold
 ```

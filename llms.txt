@@ -5,9 +5,19 @@ writing: a real citation key attached to a claim the source does not
 actually make. It automates the tedious part — finding the right passage
 in a PDF or Word doc — so a human can focus on the judgment call.
 
+cred is the **post-draft verification** half of a two-phase citation
+methodology. The pre-draft half — building a topic-bounded retrieval
+store from your Zotero library and querying it as you write — lives in
+the
+[`/lit-search`](https://github.com/NewGraphEnvironment/soul/tree/main/skills/lit-search)
+skill (ragnar + DuckDB). Together they bound LLM citation drift from
+both ends: source-grounded retrieval before claims are written,
+token-overlap verification after.
+
 ## Installation
 
 ``` r
+
 pak::pak("NewGraphEnvironment/cred")
 ```
 
@@ -21,6 +31,7 @@ Rmd files  →  audit CSV  →  eval inline  →  verify  →  score  →  revie
 surrounding sentence as `paraphrase`:
 
 ``` r
+
 crd_aud_write(rmd_dir = ".", out_file = "qa/citation_audit.csv")
 ```
 
@@ -30,6 +41,7 @@ session. Source your project’s setup chunks first so the variables
 exist:
 
 ``` r
+
 source("scripts/packages.R")
 source("scripts/functions.R")
 crd_aud_eval_inline("qa/citation_audit.csv")
@@ -46,6 +58,7 @@ best-matching passage, fills `quote`, `page_or_section`, and
 `candidate_quotes`:
 
 ``` r
+
 crd_aud_verify_all("qa/citation_audit.csv")
 ```
 
@@ -55,6 +68,7 @@ local file, scores the Zotero abstract against the paraphrase. Sets
 the claim:
 
 ``` r
+
 crd_aud_verify_abstract("qa/citation_audit.csv")
 ```
 
@@ -62,6 +76,7 @@ crd_aud_verify_abstract("qa/citation_audit.csv")
 `review_flag`. Lower scores are more suspect:
 
 ``` r
+
 crd_aud_score("qa/citation_audit.csv")
 ```
 
@@ -70,27 +85,29 @@ collapsible panel showing alternative candidate passages, dropdown to
 set `verified`, text search filters, saves back to CSV:
 
 ``` r
+
 crd_aud_review("qa/citation_audit.csv")
 ```
 
 ## What each `verified` value means
 
-| Value            | Meaning                                                    |
-|------------------|------------------------------------------------------------|
-| `auto`           | Machine-matched against source file — awaiting your review |
-| `abstract_match` | Matched against Zotero abstract — no full text available   |
-| `yes`            | Reviewed and confirmed accurate                            |
-| `no`             | Claim not supported by source                              |
-| `corrected`      | Claim was wrong; you fixed it in the Rmd                   |
-| `no_match`       | Source exists but paraphrase did not score above threshold |
-| `context`        | Citation provides context, not a direct factual claim      |
-| `NA`             | No source file and no abstract in Zotero                   |
+| Value | Meaning |
+|----|----|
+| `auto` | Machine-matched against source file — awaiting your review |
+| `abstract_match` | Matched against Zotero abstract — no full text available |
+| `yes` | Reviewed and confirmed accurate |
+| `no` | Claim not supported by source |
+| `corrected` | Claim was wrong; you fixed it in the Rmd |
+| `no_match` | Source exists but paraphrase did not score above threshold |
+| `context` | Citation provides context, not a direct factual claim |
+| `NA` | No source file and no abstract in Zotero |
 
 ## Keeping the CSV up to date
 
 After editing Rmd files:
 
 ``` r
+
 # Merge new citations; preserves manual edits via exact + fuzzy join
 crd_aud_upd("qa/citation_audit.csv")
 ```
@@ -130,6 +147,7 @@ searching the PDF yourself.
 `min_score` is exposed in every matching function:
 
 ``` r
+
 crd_aud_verify_all("citation_audit.csv", min_score = 0.2)  # default
 ```
 
@@ -146,12 +164,49 @@ machine-assigned rows without touching human-reviewed ones (`yes`, `no`,
 ## Learn more
 
 ``` r
+
 vignette("citation-audit", package = "cred")
 ```
 
 The vignette walks through the full workflow with toy source files
 (PDF + docx) and a minimal Zotero SQLite database that ship with the
 package.
+
+## Two-phase citation methodology
+
+| Phase | Tool | What it does |
+|----|----|----|
+| **Pre-draft** | [`/lit-search`](https://github.com/NewGraphEnvironment/soul/tree/main/skills/lit-search) | Build a topic-scoped ragnar/DuckDB store from your Zotero PDFs; query during drafting to surface source quotes the LLM can paraphrase from. |
+| **Post-draft** | `cred` | Walk each inline citation in the rendered Rmd, score against the source PDF/abstract via token overlap, flag drift, review. |
+
+The two phases close the loop. Pre-draft retrieval keeps the LLM
+grounded in real sources from the start; post-draft verification catches
+what slipped through. Either phase alone leaks: ragnar retrieval can be
+ignored at write-time, and post-hoc verification on a draft that never
+saw the sources is much more work.
+
+## Roadmap
+
+- **Pre-draft passage retrieval inside cred**
+  ([\#2](https://github.com/NewGraphEnvironment/cred/issues/2)) —
+  `crd_zot_pull_quotes()` so a draft can request source quotes by
+  citation key + topic without leaving R.
+- **ragnar-powered evidence search**
+  ([\#22](https://github.com/NewGraphEnvironment/cred/issues/22)) — swap
+  the token-overlap matcher for embedding retrieval when the corpus is
+  large; keep token overlap as the lightweight default.
+- **Multi-citation claim grouping**
+  ([\#21](https://github.com/NewGraphEnvironment/cred/issues/21)) — when
+  a sentence carries three citation keys, review them as a batch instead
+  of three serial rows.
+- **Git pre-commit hook**
+  ([\#3](https://github.com/NewGraphEnvironment/cred/issues/3)) —
+  `crd_hook_install()` so the audit CSV is regenerated and stale rows
+  are flagged at commit time, not at render time.
+- **Abstract fallback after full-text**
+  ([\#9](https://github.com/NewGraphEnvironment/cred/issues/9)) — for
+  unresolved `no_match` rows where the abstract exists locally, score
+  against the abstract before falling through to `NA`.
 
 # Package index
 
