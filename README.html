@@ -613,34 +613,42 @@ right passage in a PDF or Word doc — so a human can focus on the
 judgment call.</p>
 <h2 id="installation">Installation</h2>
 <div class="sourceCode" id="cb1"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" tabindex="-1"></a>pak<span class="sc">::</span><span class="fu">pak</span>(<span class="st">&quot;NewGraphEnvironment/cred&quot;</span>)</span></code></pre></div>
-<h2 id="the-workflow-in-six-steps">The workflow in six steps</h2>
-<pre><code>Rmd files  →  audit CSV  →  Zotero lookup  →  auto-fill quotes  →  sort  →  review app</code></pre>
+<h2 id="the-workflow">The workflow</h2>
+<pre><code>Rmd files  →  audit CSV  →  eval inline  →  verify  →  score  →  review app</code></pre>
 <p><strong>1. Generate the audit CSV</strong> — one row per citation,
 with the surrounding sentence as <code>paraphrase</code>:</p>
-<div class="sourceCode" id="cb3"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" tabindex="-1"></a><span class="fu">crd_aud_write</span>(<span class="at">rmd_dir =</span> <span class="st">&quot;.&quot;</span>, <span class="at">out_file =</span> <span class="st">&quot;background/citation_audit.csv&quot;</span>)</span></code></pre></div>
-<p><strong>2. Auto-fill quotes from source documents</strong> — queries
+<div class="sourceCode" id="cb3"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" tabindex="-1"></a><span class="fu">crd_aud_write</span>(<span class="at">rmd_dir =</span> <span class="st">&quot;.&quot;</span>, <span class="at">out_file =</span> <span class="st">&quot;qa/citation_audit.csv&quot;</span>)</span></code></pre></div>
+<p><strong>2. Resolve inline R expressions</strong> — if paraphrases
+contain inline R spans (e.g., backtick-r-var-backtick), evaluate them in
+your current session. Source your project’s setup chunks first so the
+variables exist:</p>
+<div class="sourceCode" id="cb4"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" tabindex="-1"></a><span class="fu">source</span>(<span class="st">&quot;scripts/packages.R&quot;</span>)</span>
+<span id="cb4-2"><a href="#cb4-2" tabindex="-1"></a><span class="fu">source</span>(<span class="st">&quot;scripts/functions.R&quot;</span>)</span>
+<span id="cb4-3"><a href="#cb4-3" tabindex="-1"></a><span class="fu">crd_aud_eval_inline</span>(<span class="st">&quot;qa/citation_audit.csv&quot;</span>)</span></code></pre></div>
+<p>The raw paraphrase is preserved; resolved values go in
+<code>paraphrase_eval</code>. Scoring and matching use
+<code>paraphrase_eval</code> when available.</p>
+<p><strong>3. Auto-fill quotes from source documents</strong> — queries
 your local Zotero database for PDF/docx attachments, searches each one
 for the best-matching passage, fills <code>quote</code>,
-<code>page_or_section</code>, and <code>verified = &quot;auto&quot;</code>:</p>
-<div class="sourceCode" id="cb4"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" tabindex="-1"></a><span class="fu">crd_aud_verify_all</span>(<span class="st">&quot;background/citation_audit.csv&quot;</span>)</span></code></pre></div>
-<p><strong>2b. Abstract fallback for remaining NA rows</strong> — for
+<code>page_or_section</code>, and <code>verified = &quot;auto&quot;</code>. Top-3
+candidate passages are stored as JSON in
+<code>candidate_quotes</code>:</p>
+<div class="sourceCode" id="cb5"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" tabindex="-1"></a><span class="fu">crd_aud_verify_all</span>(<span class="st">&quot;qa/citation_audit.csv&quot;</span>)</span></code></pre></div>
+<p><strong>4. Abstract fallback for remaining NA rows</strong> — for
 citations with no local file, scores the Zotero abstract against the
 paraphrase. Sets <code>verified = &quot;abstract_match&quot;</code> if the
-abstract is in the same domain as the claim. Useful when you have many
-references added by DOI lookup without attached PDFs:</p>
-<div class="sourceCode" id="cb5"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" tabindex="-1"></a><span class="fu">crd_aud_verify_abstract</span>(<span class="st">&quot;background/citation_audit.csv&quot;</span>)</span></code></pre></div>
-<p><strong>3. Check progress</strong> — see status breakdown and which
-PDFs to attach in Zotero to unlock more rows:</p>
-<div class="sourceCode" id="cb6"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" tabindex="-1"></a><span class="fu">crd_aud_summary</span>(<span class="st">&quot;background/citation_audit.csv&quot;</span>)</span></code></pre></div>
-<p><strong>4. Sort for your review session</strong> — <code>auto</code>
-rows (quotes ready to check) first, <code>NA</code> rows (no source
-file) last:</p>
-<div class="sourceCode" id="cb7"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb7-1"><a href="#cb7-1" tabindex="-1"></a><span class="fu">crd_aud_sort</span>(<span class="st">&quot;background/citation_audit.csv&quot;</span>, <span class="at">by =</span> <span class="st">&quot;status&quot;</span>)</span></code></pre></div>
-<p><strong>5. Launch the review app</strong> — paraphrase and quote side
-by side, dropdown to set <code>verified</code>, saves back to CSV:</p>
-<div class="sourceCode" id="cb8"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb8-1"><a href="#cb8-1" tabindex="-1"></a><span class="fu">crd_aud_review</span>(<span class="st">&quot;background/citation_audit.csv&quot;</span>)</span></code></pre></div>
-<p><strong>6. Restore report order</strong> when done:</p>
-<div class="sourceCode" id="cb9"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb9-1"><a href="#cb9-1" tabindex="-1"></a><span class="fu">crd_aud_sort</span>(<span class="st">&quot;background/citation_audit.csv&quot;</span>, <span class="at">by =</span> <span class="st">&quot;report&quot;</span>)</span></code></pre></div>
+abstract is in the same domain as the claim:</p>
+<div class="sourceCode" id="cb6"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" tabindex="-1"></a><span class="fu">crd_aud_verify_abstract</span>(<span class="st">&quot;qa/citation_audit.csv&quot;</span>)</span></code></pre></div>
+<p><strong>5. Score for review priority</strong> — adds
+<code>review_score</code> (1–6) and <code>review_flag</code>. Lower
+scores are more suspect:</p>
+<div class="sourceCode" id="cb7"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb7-1"><a href="#cb7-1" tabindex="-1"></a><span class="fu">crd_aud_score</span>(<span class="st">&quot;qa/citation_audit.csv&quot;</span>)</span></code></pre></div>
+<p><strong>6. Launch the review app</strong> — paraphrase and quote side
+by side, collapsible panel showing alternative candidate passages,
+dropdown to set <code>verified</code>, text search filters, saves back
+to CSV:</p>
+<div class="sourceCode" id="cb8"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb8-1"><a href="#cb8-1" tabindex="-1"></a><span class="fu">crd_aud_review</span>(<span class="st">&quot;qa/citation_audit.csv&quot;</span>)</span></code></pre></div>
 <h2 id="what-each-verified-value-means">What each <code>verified</code>
 value means</h2>
 <table>
@@ -686,9 +694,13 @@ value means</h2>
 </tbody>
 </table>
 <h2 id="keeping-the-csv-up-to-date">Keeping the CSV up to date</h2>
-<p>After adding new content to your Rmd files:</p>
-<div class="sourceCode" id="cb10"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb10-1"><a href="#cb10-1" tabindex="-1"></a><span class="co"># Merge new citations into existing CSV without losing manual edits</span></span>
-<span id="cb10-2"><a href="#cb10-2" tabindex="-1"></a><span class="fu">crd_aud_upd</span>(<span class="st">&quot;background/citation_audit.csv&quot;</span>)</span></code></pre></div>
+<p>After editing Rmd files:</p>
+<div class="sourceCode" id="cb9"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb9-1"><a href="#cb9-1" tabindex="-1"></a><span class="co"># Merge new citations; preserves manual edits via exact + fuzzy join</span></span>
+<span id="cb9-2"><a href="#cb9-2" tabindex="-1"></a><span class="fu">crd_aud_upd</span>(<span class="st">&quot;qa/citation_audit.csv&quot;</span>)</span></code></pre></div>
+<p>Exact match on <code>(section, citation_key, paraphrase)</code>
+first. Reworded sentences fall back to token-similarity matching
+(default threshold 0.4), so minor edits don’t lose your review work. Git
+history tracks the audit trail.</p>
 <h2 id="zotero-integration">Zotero integration</h2>
 <p><code>cred</code> queries the local Zotero SQLite database directly —
 no Zotero API key needed, no network call. It uses an immutable
@@ -707,7 +719,7 @@ a false positive (wrong paragraph shown as <code>auto</code>) costs a
 few seconds of review; a false negative (right paragraph called
 <code>no_match</code>) means searching the PDF yourself.</p>
 <p><code>min_score</code> is exposed in every matching function:</p>
-<div class="sourceCode" id="cb12"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb12-1"><a href="#cb12-1" tabindex="-1"></a><span class="fu">crd_aud_verify_all</span>(<span class="st">&quot;citation_audit.csv&quot;</span>, <span class="at">min_score =</span> <span class="fl">0.2</span>)  <span class="co"># default</span></span></code></pre></div>
+<div class="sourceCode" id="cb11"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb11-1"><a href="#cb11-1" tabindex="-1"></a><span class="fu">crd_aud_verify_all</span>(<span class="st">&quot;citation_audit.csv&quot;</span>, <span class="at">min_score =</span> <span class="fl">0.2</span>)  <span class="co"># default</span></span></code></pre></div>
 <table>
 <thead>
 <tr>
@@ -735,10 +747,29 @@ to reprocess machine-assigned rows without touching human-reviewed ones
 (<code>yes</code>, <code>no</code>, <code>corrected</code>,
 <code>context</code>).</p>
 <h2 id="learn-more">Learn more</h2>
-<div class="sourceCode" id="cb13"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb13-1"><a href="#cb13-1" tabindex="-1"></a><span class="fu">vignette</span>(<span class="st">&quot;citation-audit&quot;</span>, <span class="at">package =</span> <span class="st">&quot;cred&quot;</span>)</span></code></pre></div>
+<div class="sourceCode" id="cb12"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb12-1"><a href="#cb12-1" tabindex="-1"></a><span class="fu">vignette</span>(<span class="st">&quot;citation-audit&quot;</span>, <span class="at">package =</span> <span class="st">&quot;cred&quot;</span>)</span></code></pre></div>
 <p>The vignette walks through the full workflow with toy source files
 (PDF + docx) and a minimal Zotero SQLite database that ship with the
 package.</p>
+<h2 id="roadmap">Roadmap</h2>
+<ul>
+<li><strong>Pre-draft passage retrieval inside cred</strong> (<a href="https://github.com/NewGraphEnvironment/cred/issues/2">#2</a>) —
+<code>crd_zot_pull_quotes()</code> so a draft can request source quotes
+by citation key + topic without leaving R.</li>
+<li><strong>ragnar-powered evidence search</strong> (<a href="https://github.com/NewGraphEnvironment/cred/issues/22">#22</a>) —
+swap the token-overlap matcher for embedding retrieval when the corpus
+is large; keep token overlap as the lightweight default.</li>
+<li><strong>Multi-citation claim grouping</strong> (<a href="https://github.com/NewGraphEnvironment/cred/issues/21">#21</a>) —
+when a sentence carries three citation keys, review them as a batch
+instead of three serial rows.</li>
+<li><strong>Git pre-commit hook</strong> (<a href="https://github.com/NewGraphEnvironment/cred/issues/3">#3</a>) —
+<code>crd_hook_install()</code> so the audit CSV is regenerated and
+stale rows are flagged at commit time, not at render time.</li>
+<li><strong>Abstract fallback after full-text</strong> (<a href="https://github.com/NewGraphEnvironment/cred/issues/9">#9</a>) —
+for unresolved <code>no_match</code> rows where the abstract exists
+locally, score against the abstract before falling through to
+<code>NA</code>.</li>
+</ul>
 
 </body>
 </html>

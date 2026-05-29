@@ -12,8 +12,6 @@ knitr::opts_chunk$set(collapse = TRUE, comment = "#>")
 
 `cred` catches a specific failure mode in LLM-assisted scientific writing: a real citation key attached to a claim the source does not actually make. It automates the tedious part — finding the right passage in a PDF or Word doc — so a human can focus on the judgment call.
 
-cred is the **post-draft verification** half of a two-phase citation methodology. The pre-draft half — building a topic-bounded retrieval store from your Zotero library and querying it as you write — lives in the [`/lit-search`](https://github.com/NewGraphEnvironment/soul/tree/main/skills/lit-search) skill (ragnar + DuckDB). Together they bound LLM citation drift from both ends: source-grounded retrieval before claims are written, token-overlap verification after.
-
 ## Installation
 
 ```r
@@ -127,15 +125,6 @@ vignette("citation-audit", package = "cred")
 ```
 
 The vignette walks through the full workflow with toy source files (PDF + docx) and a minimal Zotero SQLite database that ship with the package.
-
-## Two-phase citation methodology
-
-| Phase | Tool | What it does |
-|---|---|---|
-| **Pre-draft** | [`/lit-search`](https://github.com/NewGraphEnvironment/soul/tree/main/skills/lit-search) | Build a topic-scoped ragnar/DuckDB store from your Zotero PDFs; query during drafting to surface source quotes the LLM can paraphrase from. |
-| **Post-draft** | `cred` | Walk each inline citation in the rendered Rmd, score against the source PDF/abstract via token overlap, flag drift, review. |
-
-The two phases close the loop. Pre-draft retrieval keeps the LLM grounded in real sources from the start; post-draft verification catches what slipped through. Either phase alone leaks: ragnar retrieval can be ignored at write-time, and post-hoc verification on a draft that never saw the sources is much more work.
 
 ## Roadmap
 
