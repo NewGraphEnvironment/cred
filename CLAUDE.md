@@ -23,6 +23,9 @@ R/
 │                  text filters for paraphrase/quote search, collapsible candidate passages panel
 ├── rmd.R        — crd_aud_write internals: parse @citekey + surrounding sentence
 ├── sentence.R   — sentence extraction helpers
+├── store.R      — ragnar evidence store: crd_store_connect (md5-verified pull from a
+│                  configured source), crd_search (hybrid/BM25/VSS + citation-key
+│                  resolution), crd_store_build (Zotero collection or keys → DuckDB)
 ├── pdf.R        — PDF text extraction + paragraph splitting (pdftools)
 └── docx.R       — Word doc extraction (officer) + .paraphrase_tokens(), .token_score()
                    (internal matching functions reused by abstract matching)
@@ -33,6 +36,7 @@ tests/testthat/
 ├── test-matching.R
 ├── test-rmd.R
 ├── test-score.R     — crd_aud_score, .score_row, scoring internals
+├── test-store.R     — store source resolution, manifest parsing, arg validation
 └── test-sentence.R
 
 inst/extdata/              — toy data for vignette
@@ -110,6 +114,7 @@ Function prefixes follow the package domain:
 
 - `crd_aud_*` — audit CSV lifecycle (write, verify, score, review, etc.)
 - `crd_zot_*` — Zotero database access
+- `crd_store_*`, `crd_search()` — ragnar evidence store (build, resolve, retrieve)
 - Internal helpers use a leading dot (`.paraphrase_tokens`, `.token_score`, `.score_row`)
 
 ## Open Issues
@@ -128,6 +133,15 @@ Function prefixes follow the package domain:
 - **`crd_aud_upd()` for incremental updates** — exact join on `(section, citation_key, paraphrase)` with fuzzy fallback (`min_similarity = 0.4`) when text changes; preserves human edits.
 - **`crd_aud_score()` adds `review_score` (1-6) and `review_flag`** — lower = more suspect.
 - **CSV is current state, git history is the audit trail.**
+- **Evidence retrieval is a second, corpus-wide tier** — token overlap answers "does *this*
+  source support the claim"; `crd_search()` answers "which of these 25 PDFs does, and where".
+  The ragnar stack lives in `Suggests`, guarded at call time, so audit-only users skip DuckDB.
+- **A store is only trustworthy if verified** — a store built against a different embedding model
+  answers differently while looking healthy, so `crd_store_connect()` checks md5 against the
+  shared manifest and `crd_store_build()` always pins the embedding model explicitly
+  (bare `embed_ollama()` silently defaults to `embeddinggemma`).
+- **No bucket address in the source** — `cred` is public; the store source comes from
+  `getOption("cred.store_source")` / `CRED_STORE_SOURCE` with no default.
 
 <!-- BEGIN SOUL CONVENTIONS — DO NOT EDIT BELOW THIS LINE -->
 
