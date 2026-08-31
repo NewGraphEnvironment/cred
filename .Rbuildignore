@@ -8,3 +8,8 @@
 ^\.Rproj\.user$
 ^doc$
 ^Meta$
+^planning$
+^CLAUDE\.md$
+^\.claude$
+^\.git$
+^data$

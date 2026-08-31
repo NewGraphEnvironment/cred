@@ -198,3 +198,54 @@ crd_zot_abstract_lookup <- function(citation_keys, zotero_dir = "~/Zotero") {
 
   result
 }
+
+#' Map Zotero attachment paths back to citation keys
+#'
+#' The inverse of [crd_zot_src_lookup()]. A ragnar store records each chunk's
+#' `origin` as the absolute path the PDF had on the machine that built it —
+#' provenance, but not something you can cite. The durable identifier inside
+#' that path is the Zotero attachment key (the parent directory name), which
+#' resolves back to a Better BibTeX citation key.
+#'
+#' @param paths `character` vector of attachment paths of the form
+#'   `.../storage/{attachment_key}/{filename}`.
+#' @param zotero_dir `character(1)` path to the Zotero data directory.
+#'   Default `"~/Zotero"`.
+#' @return `character` vector of citation keys, parallel to `paths`, with `NA`
+#'   where the path carries no resolvable attachment key.
+#' @noRd
+.crd_zot_key_from_path <- function(paths, zotero_dir = "~/Zotero") {
+  out <- rep(NA_character_, length(paths))
+  att_keys <- basename(dirname(paths))
+  # Zotero attachment keys are 8 uppercase alphanumeric characters
+  valid <- !is.na(att_keys) & grepl("^[A-Z0-9]{8}$", att_keys)
+  if (!any(valid)) return(out)
+
+  db_path <- file.path(path.expand(zotero_dir), "zotero.sqlite")
+  if (!file.exists(db_path)) return(out)
+  if (!requireNamespace("RSQLite", quietly = TRUE)) return(out)
+
+  keys <- unique(att_keys[valid])
+  con <- RSQLite::dbConnect(RSQLite::SQLite(),
+                            paste0("file:", db_path, "?mode=ro&immutable=1"))
+  on.exit(RSQLite::dbDisconnect(con), add = TRUE)
+
+  sql <- sprintf("
+    SELECT att.key   AS attachment_key,
+           idv.value AS citation_key
+    FROM items att
+    JOIN itemAttachments ia  ON ia.itemID   = att.itemID
+    JOIN items           i   ON i.itemID    = ia.parentItemID
+    JOIN itemData        id  ON id.itemID   = i.itemID
+    JOIN itemDataValues  idv ON id.valueID  = idv.valueID
+    JOIN fields          f   ON id.fieldID  = f.fieldID
+    WHERE f.fieldName = 'citationKey'
+    AND   att.key IN (%s)
+  ", paste(rep("?", length(keys)), collapse = ", "))
+
+  raw <- RSQLite::dbGetQuery(con, sql, params = as.list(keys))
+  if (nrow(raw) == 0L) return(out)
+
+  out[valid] <- raw$citation_key[match(att_keys[valid], raw$attachment_key)]
+  out
+}
