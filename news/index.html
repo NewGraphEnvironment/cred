@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">cred</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.1.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.2.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -36,6 +36,20 @@
     </div>
 
     <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.2.0" id="cred-020">cred 0.2.0<a class="anchor" aria-label="anchor" href="#cred-020"></a></h2>
+<p>Corpus-wide evidence retrieval. Token-overlap search answers whether <em>one</em> known source supports a claim; this release adds a second tier that searches an entire indexed corpus and returns citable passages.</p>
+<ul><li>
+<code><a href="../reference/crd_search.html">crd_search()</a></code> — retrieve passages from a ragnar store, labelled with the Zotero citation key rather than a machine-local file path. Falls back from hybrid to BM25 with a warning when Ollama is unreachable</li>
+<li>
+<code><a href="../reference/crd_store_connect.html">crd_store_connect()</a></code> — resolve a store by name, verifying its md5 against the shared manifest before opening and downloading atomically when it does not match</li>
+<li>
+<code><a href="../reference/crd_store_build.html">crd_store_build()</a></code> — build a store from a Zotero collection or an explicit set of citation keys, always pinning the embedding model</li>
+<li>The ragnar stack (<code>ragnar</code>, <code>DBI</code>, <code>duckdb</code>) is in <code>Suggests</code> and guarded at call time, so the audit workflow does not require a DuckDB install</li>
+<li>The store source is read from <code>getOption("cred.store_source")</code> or <code>CRED_STORE_SOURCE</code>, with no default and no bucket address in the package</li>
+<li>
+<code>planning/</code>, <code>CLAUDE.md</code> and <code>.claude/</code> no longer ship in the built tarball</li>
+</ul></div>
+    <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.1.0" id="cred-010">cred 0.1.0<a class="anchor" aria-label="anchor" href="#cred-010"></a></h2>
 <p>First stable release. Core citation audit pipeline for detecting hallucinated or misattributed citations in LLM-assisted bookdown reports.</p>
 <ul><li>Extract citations and surrounding sentences from Rmd files</li>
@@ -47,7 +61,8 @@
 <li>Interactive Shiny review app with collapsible candidate panel</li>
 <li>Incremental CSV updates with fuzzy join to preserve human edits</li>
 </ul></div>
-  </main></div>
+  </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>
+    </nav></aside></div>
 
 
     <footer><div class="pkgdown-footer-left">
