@@ -250,8 +250,18 @@ package.
 - [`crd_pdf_srch_clm()`](https://newgraphenvironment.github.io/cred/reference/crd_pdf_srch_clm.md)
   : Search a PDF for the best-matching passage to a paraphrase
 
+- [`crd_search()`](https://newgraphenvironment.github.io/cred/reference/crd_search.md)
+  : Search a ragnar evidence store for passages supporting a claim
+
 - [`crd_sent_ext_key()`](https://newgraphenvironment.github.io/cred/reference/crd_sent_ext_key.md)
   : Extract the sentence(s) containing a specific citation key
+
+- [`crd_store_build()`](https://newgraphenvironment.github.io/cred/reference/crd_store_build.md)
+  : Build a ragnar evidence store from Zotero PDFs
+
+- [`crd_store_connect()`](https://newgraphenvironment.github.io/cred/reference/crd_store_connect.md)
+  : Connect to a ragnar evidence store, pulling and verifying it if
+  needed
 
 - [`crd_zot_abstract_lookup()`](https://newgraphenvironment.github.io/cred/reference/crd_zot_abstract_lookup.md)
   : Retrieve Zotero abstracts for a vector of citation keys
