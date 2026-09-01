@@ -124,8 +124,12 @@ Function prefixes follow the package domain:
 - [#2](https://github.com/NewGraphEnvironment/cred/issues/2) — `crd_zot_pull_quotes()`: pre-draft passage retrieval (RAG pattern)
 - [#3](https://github.com/NewGraphEnvironment/cred/issues/3) — `crd_hook_install()`: git pre-commit hook
 - [#9](https://github.com/NewGraphEnvironment/cred/issues/9) — Abstract fallback for no_match rows
+- [#17](https://github.com/NewGraphEnvironment/cred/issues/17) — Audit trail vignette
+- [#18](https://github.com/NewGraphEnvironment/cred/issues/18) — Reload CSV button in review app
 - [#21](https://github.com/NewGraphEnvironment/cred/issues/21) — Multi-citation claim grouping
-- [#22](https://github.com/NewGraphEnvironment/cred/issues/22) — Ragnar-powered evidence search for large corpora
+
+Shipped: [#22](https://github.com/NewGraphEnvironment/cred/issues/22) ragnar retrieval (v0.2.0) and
+[#24](https://github.com/NewGraphEnvironment/cred/issues/24) merge-on-write push (v0.3.0).
 
 ## Key Design Decisions
 
@@ -143,7 +147,16 @@ Function prefixes follow the package domain:
   shared manifest and `crd_store_build()` always pins the embedding model explicitly
   (bare `embed_ollama()` silently defaults to `embeddinggemma`).
 - **No bucket address in the source** — `cred` is public; the store source comes from
-  `getOption("cred.store_source")` / `CRED_STORE_SOURCE` with no default.
+  `getOption("cred.store_source")` / `CRED_STORE_SOURCE` with no default. Ask a maintainer for the
+  value; it is deliberately not recorded anywhere in this repo.
+- **A ragnar store cannot fill `page_or_section`.** Verified against `information_schema` on a live
+  ragnar 0.3.0 store: no page-like column exists in any table. `chunks` carries
+  `origin, doc_id, chunk_id, start, end, context, embedding, text`, where `start`/`end` are
+  character offsets into extracted markdown, not pages. So `crd_search()` must never promise a page
+  number — `crd_pdf_ext_txt()` (`pdftools::pdf_text()`) is page-indexed and remains the only
+  page-aware path in the package. This settles an open question in
+  [soul#23](https://github.com/NewGraphEnvironment/soul/issues/23), which lists it as deciding
+  whether the ragnar path can fill that column at all.
 - **The manifest is merged, never replaced** — it describes every store in the bucket, so a push
   built from the current run alone orphans the rest. `.crd_manifest_merge()` is pure and passes
   untouched entries through verbatim, including shapes this version does not recognise.
