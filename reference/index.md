@@ -75,6 +75,9 @@
   : Connect to a ragnar evidence store, pulling and verifying it if
   needed
 
+- [`crd_store_push()`](https://newgraphenvironment.github.io/cred/reference/crd_store_push.md)
+  : Push a ragnar evidence store and merge it into the shared manifest
+
 - [`crd_zot_abstract_lookup()`](https://newgraphenvironment.github.io/cred/reference/crd_zot_abstract_lookup.md)
   : Retrieve Zotero abstracts for a vector of citation keys
 

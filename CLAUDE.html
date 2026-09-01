@@ -56,7 +56,8 @@
 ├── sentence.R   — sentence extraction helpers
 ├── store.R      — ragnar evidence store: crd_store_connect (md5-verified pull from a
 │                  configured source), crd_search (hybrid/BM25/VSS + citation-key
-│                  resolution), crd_store_build (Zotero collection or keys → DuckDB)
+│                  resolution), crd_store_build (Zotero collection or keys → DuckDB),
+│                  crd_store_push (merge-on-write manifest + ETag compare-and-swap)
 ├── pdf.R        — PDF text extraction + paragraph splitting (pdftools)
 └── docx.R       — Word doc extraction (officer) + .paraphrase_tokens(), .token_score()
                    (internal matching functions reused by abstract matching)
@@ -68,6 +69,7 @@ tests/testthat/
 ├── test-rmd.R
 ├── test-score.R     — crd_aud_score, .score_row, scoring internals
 ├── test-store.R     — store source resolution, manifest parsing, arg validation
+├── test-store-push.R — manifest merge, S3 probes, push guards (all offline)
 └── test-sentence.R
 
 inst/extdata/              — toy data for vignette
@@ -194,6 +196,12 @@ data-raw/make_toy_zotero.R      — regenerates inst/extdata/zotero.sqlite</code
 <strong>A store is only trustworthy if verified</strong> — a store built against a different embedding model answers differently while looking healthy, so <code><a href="reference/crd_store_connect.html">crd_store_connect()</a></code> checks md5 against the shared manifest and <code><a href="reference/crd_store_build.html">crd_store_build()</a></code> always pins the embedding model explicitly (bare <code>embed_ollama()</code> silently defaults to <code>embeddinggemma</code>).</li>
 <li>
 <strong>No bucket address in the source</strong> — <code>cred</code> is public; the store source comes from <code>getOption("cred.store_source")</code> / <code>CRED_STORE_SOURCE</code> with no default.</li>
+<li>
+<strong>The manifest is merged, never replaced</strong> — it describes every store in the bucket, so a push built from the current run alone orphans the rest. <code>.crd_manifest_merge()</code> is pure and passes untouched entries through verbatim, including shapes this version does not recognise.</li>
+<li>
+<strong>Fail toward not-clobbering</strong> — an unreadable manifest aborts a push. Only a <em>confirmed</em> absence (bucket reachable via <code>head-bucket</code>, object missing via <code>head-object</code>) counts as “none yet”, and even then <code>create_manifest = TRUE</code> is required: a wrong prefix produces the same 404. <code>aws s3 cp</code> cannot make this distinction — it reports a missing key and a missing bucket identically — which is why the <code>s3api</code> probes exist.</li>
+<li>
+<strong>Provenance describes where a store was built</strong>, read from the store’s own directory rather than the process’s working directory.</li>
 </ul><!-- BEGIN SOUL CONVENTIONS — DO NOT EDIT BELOW THIS LINE --></div>
 </div>
 <div class="section level1">
