@@ -52,33 +52,33 @@ An unreadable manifest is worse than no manifest, because the artifacts still lo
 
 ## Phase 1 — Exit-status plumbing and S3 probes
 
-- [ ] Change `.crd_aws()` to return a list `list(out =, status =)` rather than a bare character
+- [x] Change `.crd_aws()` to return a list `list(out =, status =)` rather than a bare character
       vector, so callers can branch on the exit code. Update its two existing callers
       (`.crd_manifest_read()`, `crd_store_connect()`) — they only `paste()` the output into error
       messages, so the change is mechanical
-- [ ] `.crd_s3_head_bucket(source, profile)` → logical; distinguishes reachable from not
-- [ ] `.crd_s3_head_object(source, key, profile)` → `list(exists =, etag =)`
-- [ ] `.crd_s3_put(path, source, key, profile, if_match = NULL)` → wraps
+- [x] `.crd_s3_head_bucket(source, profile)` → logical; distinguishes reachable from not
+- [x] `.crd_s3_head_object(source, key, profile)` → `list(exists =, etag =)`
+- [x] `.crd_s3_put(path, source, key, profile, if_match = NULL)` → wraps
       `s3api put-object`, returning status so a 412 is detectable
-- [ ] Tests: exit-status propagation and 404-vs-unreachable classification, using a stub command
+- [x] Tests: exit-status propagation and 404-vs-unreachable classification, using a stub command
       rather than the network
 
 ## Phase 2 — Describe and merge (the pure core)
 
-- [ ] `.crd_store_describe(store_path, model)` — `documents`/`chunks` counts (from the correct
+- [x] `.crd_store_describe(store_path, model)` — `documents`/`chunks` counts (from the correct
       tables per #22 finding 3), `embedding_size`, `embedding_model`, `store_name`, `bytes`,
       `md5` (lowercased), plus git provenance: `repo` parsed from `git remote get-url origin`,
       `branch`, `head_sha`, `built_by`, `date_completed`
-- [ ] `.crd_manifest_merge(existing, name, entry)` — **pure, no I/O; the piece to test hardest.**
+- [x] `.crd_manifest_merge(existing, name, entry)` — **pure, no I/O; the piece to test hardest.**
       Returns the union with `entry` replacing only `stores[[name]]`, every other entry byte-identical
-- [ ] Tests: merging B into a manifest holding A yields both; a string `built_by` and an array
+- [x] Tests: merging B into a manifest holding A yields both; a string `built_by` and an array
       `built_by` both survive untouched when they are not the target; replacing an existing entry
       updates only that key; top-level fields other than `stores` and `date_updated` are preserved
 
 ## Phase 3 — `crd_store_push()`
 
-- [ ] `crd_store_push(store_path, source = getOption("cred.store_source"), name = NULL, profile, dry_run = FALSE, create_manifest = FALSE, allow_model_mismatch = FALSE, max_retries = 3L)`
-- [ ] Order of operations, chosen so nothing destructive happens before every check has passed:
+- [x] `crd_store_push(store_path, source = getOption("cred.store_source"), name = NULL, profile, dry_run = FALSE, create_manifest = FALSE, allow_model_mismatch = FALSE, max_retries = 3L)`
+- [x] Order of operations, chosen so nothing destructive happens before every check has passed:
       1. Resolve source (`.crd_store_source()`), guard packages (`.crd_need()`)
       2. `head-bucket` — unreachable is a hard stop, never treated as absence
       3. `head-object` on `log.json` — capture ETag; absent + no `create_manifest` → refuse,
@@ -88,21 +88,21 @@ An unreadable manifest is worse than no manifest, because the artifacts still lo
       5. `dry_run` → print the merged manifest and the intended keys, upload nothing, return early
       6. Upload the `.duckdb`, then re-read + re-merge + `put-object --if-match <etag>`
       7. On 412, re-read and retry up to `max_retries`, then fail naming the concurrent writer
-- [ ] Set the manifest's top-level `generating_script` to `cred::crd_store_push()`
-- [ ] Refuse to push when a sibling `.wal` exists — a store with an unflushed WAL has an md5 that
+- [x] Set the manifest's top-level `generating_script` to `cred::crd_store_push()`
+- [x] Refuse to push when a sibling `.wal` exists — a store with an unflushed WAL has an md5 that
       does not describe what a puller will open
-- [ ] Verify the pushed entry is one `crd_store_connect()` accepts, without a re-download
+- [x] Verify the pushed entry is one `crd_store_connect()` accepts, without a re-download
 
 ## Phase 4 — Tests, docs, hygiene
 
-- [ ] All new tests offline: no network, no S3, no Ollama. Stub `.crd_aws()` with
+- [x] All new tests offline: no network, no S3, no Ollama. Stub `.crd_aws()` with
       `testthat::local_mocked_bindings()` to drive the status codes
-- [ ] `\dontrun{}` examples per repo convention; no bucket address in source, docs or tests —
+- [x] `\dontrun{}` examples per repo convention; no bucket address in source, docs or tests —
       shape `s3://<bucket>/<prefix>/` only
-- [ ] `devtools::document()`; `lintr::lint_package()` must be 0
-- [ ] `CLAUDE.md`: add `crd_store_push()` to the `R/store.R` architecture line, and a design
+- [x] `devtools::document()`; `lintr::lint_package()` must be 0
+- [x] `CLAUDE.md`: add `crd_store_push()` to the `R/store.R` architecture line, and a design
       decision recording read-merge-write plus fail-toward-not-clobbering
-- [ ] `NEWS.md` + version bump handled at merge by `/gh-pr-merge`
+- [x] `NEWS.md` + version bump handled at merge by `/gh-pr-merge`
 
 ## Explicitly out of scope
 
@@ -113,10 +113,10 @@ An unreadable manifest is worse than no manifest, because the artifacts still lo
 
 ## Validation
 
-- [ ] `devtools::test()` passes
-- [ ] `/code-check` clean on each commit
-- [ ] `lintr::lint_package()` reports 0 lints
-- [ ] PWF checkboxes match landed work
-- [ ] Acceptance: pushing `vca_refs` leaves `fraser` intact in the manifest — the exact
+- [x] `devtools::test()` passes
+- [x] `/code-check` clean on each commit
+- [x] `lintr::lint_package()` reports 0 lints
+- [x] PWF checkboxes match landed work
+- [x] Acceptance: pushing `vca_refs` leaves `fraser` intact in the manifest — the exact
       regression `0157-rag-sync.R` causes
 - [ ] `/planning-archive` on completion

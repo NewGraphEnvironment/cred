@@ -58,11 +58,26 @@
 #' space silently splits into several arguments and a `;` in a store name would
 #' execute.
 #'
+#' The exit status is returned rather than discarded. `aws s3 cp` reports a
+#' missing key and a nonexistent bucket identically — both exit 1 with
+#' `404 ... Key "..." does not exist` — so callers that need to tell "no
+#' manifest here" from "wrong bucket" must branch on status from the `s3api`
+#' probes instead of parsing `cp` output.
+#'
+#' `clean_stdout = TRUE` routes stderr to a file instead of merging it into
+#' stdout. Callers that *parse* the output must use it: `aws` writes warnings to
+#' stderr while still exiting 0 (the urllib3/LibreSSL notice on macOS, IMDS
+#' credential retries), and a merged stream welds those onto the value being
+#' read. Such a run passes every test until the day a warning appears.
+#'
 #' @param args `character` vector of arguments passed to `aws`.
 #' @param profile `character(1)` AWS profile name, or `""` to omit.
-#' @return `character` vector of the combined stdout and stderr lines.
+#' @param clean_stdout `logical(1)` keep stderr out of `out`. Default `FALSE`.
+#' @return A `list` with `out` (stdout lines, plus stderr unless
+#'   `clean_stdout`), `err` (stderr lines when separated) and `status`
+#'   (integer exit code, `0` on success).
 #' @noRd
-.crd_aws <- function(args, profile = Sys.getenv("AWS_PROFILE")) {
+.crd_aws <- function(args, profile = Sys.getenv("AWS_PROFILE"), clean_stdout = FALSE) {
   if (!nzchar(Sys.which("aws"))) {
     stop("The AWS CLI ('aws') was not found on PATH.\n",
          "  Install it, or supply an already-downloaded store and use verify = FALSE.",
@@ -70,7 +85,19 @@
   }
   if (nzchar(profile)) args <- c(args, "--profile", profile)
   args <- vapply(args, shQuote, character(1L), USE.NAMES = FALSE)
-  suppressWarnings(system2("aws", args, stdout = TRUE, stderr = TRUE))
+
+  err <- character()
+  if (clean_stdout) {
+    err_file <- tempfile("cred-aws-err-")
+    on.exit(unlink(err_file), add = TRUE)
+    out <- suppressWarnings(system2("aws", args, stdout = TRUE, stderr = err_file))
+    if (file.exists(err_file)) err <- readLines(err_file, warn = FALSE)
+  } else {
+    out <- suppressWarnings(system2("aws", args, stdout = TRUE, stderr = TRUE))
+  }
+  status <- attr(out, "status")
+  list(out = as.character(out), err = err,
+       status = if (is.null(status)) 0L else as.integer(status))
 }
 
 #' Read the evidence-store provenance manifest
@@ -87,10 +114,10 @@
   dest <- file.path(tempdir(), paste0("cred-log-", Sys.getpid(), ".json"))
   on.exit(unlink(dest), add = TRUE)
 
-  out <- .crd_aws(c("s3", "cp", paste0(source, "log.json"), dest), profile = profile)
+  res <- .crd_aws(c("s3", "cp", paste0(source, "log.json"), dest), profile = profile)
   if (!file.exists(dest)) {
     stop("Could not fetch the store manifest from ", source, "log.json\n  ",
-         paste(out, collapse = "\n  "), call. = FALSE)
+         paste(res$out, collapse = "\n  "), call. = FALSE)
   }
 
   jsonlite::fromJSON(dest, simplifyVector = FALSE)
@@ -217,9 +244,9 @@ crd_store_connect <- function(store,
   part <- paste0(local_path, ".part-", Sys.getpid())
   on.exit(unlink(part), add = TRUE)
 
-  out <- .crd_aws(c("s3", "cp", paste0(source, name, ".duckdb"), part), profile = profile)
+  res <- .crd_aws(c("s3", "cp", paste0(source, name, ".duckdb"), part), profile = profile)
   if (!file.exists(part)) {
-    stop("Download failed for store '", name, "'.\n  ", paste(out, collapse = "\n  "),
+    stop("Download failed for store '", name, "'.\n  ", paste(res$out, collapse = "\n  "),
          call. = FALSE)
   }
 
@@ -555,4 +582,571 @@ crd_store_build <- function(store_path,
   message("Store built: ", store_path, " | docs: ", n_docs, " | chunks: ", n_chunks,
           " | model: ", model)
   invisible(src)
+}
+
+#' Split a store source URI into bucket and key prefix
+#'
+#' @param source `character(1)` `s3://bucket/prefix/` URI.
+#' @return A `list` with `bucket` and `prefix` (prefix may be `""`).
+#' @noRd
+.crd_s3_parts <- function(source) {
+  if (!grepl("^s3://", source)) {
+    stop("Only s3:// sources are supported for this operation, got: ", source,
+         call. = FALSE)
+  }
+  rest <- sub("^s3://", "", source)
+  bucket <- sub("/.*$", "", rest)
+  prefix <- sub("^[^/]*/?", "", rest)
+  if (!nzchar(bucket)) {
+    stop("Could not parse a bucket from the store source: ", source, call. = FALSE)
+  }
+  list(bucket = bucket, prefix = prefix)
+}
+
+#' Is the bucket reachable with the current credentials?
+#'
+#' Distinguishing "reachable but empty" from "cannot reach" is the whole point:
+#' treating an unreachable bucket as an absent manifest is how a push seeds a
+#' second, rival manifest.
+#'
+#' @param source `character(1)` store source URI.
+#' @param profile `character(1)` AWS profile name.
+#' @return `TRUE` when the bucket responds, `FALSE` otherwise.
+#' @noRd
+.crd_s3_head_bucket <- function(source, profile = Sys.getenv("AWS_PROFILE")) {
+  parts <- .crd_s3_parts(source)
+  res <- .crd_aws(c("s3api", "head-bucket", "--bucket", parts$bucket), profile = profile)
+  identical(res$status, 0L)
+}
+
+#' Does an object exist, and what is its ETag?
+#'
+#' The ETag is captured so a later write can be made conditional on the object
+#' not having changed in between.
+#'
+#' A failed probe and a confirmed absence are reported separately. Collapsing
+#' them lets a throttle or a credential refresh masquerade as "no object here",
+#' which is the direction that loses data.
+#'
+#' @param source `character(1)` store source URI.
+#' @param key `character(1)` object name relative to the source prefix.
+#' @param profile `character(1)` AWS profile name.
+#' @return A `list` with `exists` (`logical`), `confirmed_absent` (`logical` —
+#'   only `TRUE` for a genuine 404), `etag` (`character` or `NA`) and `out`.
+#' @noRd
+.crd_s3_head_object <- function(source, key, profile = Sys.getenv("AWS_PROFILE")) {
+  parts <- .crd_s3_parts(source)
+  res <- .crd_aws(
+    c("s3api", "head-object",
+      "--bucket", parts$bucket,
+      "--key", paste0(parts$prefix, key),
+      "--query", "ETag", "--output", "text"),
+    profile = profile, clean_stdout = TRUE
+  )
+  if (identical(res$status, 0L)) {
+    # Match the ETag by shape rather than collapsing the stream, so a stray
+    # line can never be welded onto the value.
+    etag <- grep('^"[^"]*"$', trimws(res$out), value = TRUE)
+    if (length(etag) != 1L) {
+      return(list(exists = TRUE, confirmed_absent = FALSE, etag = NA_character_,
+                  out = c(res$out, res$err)))
+    }
+    return(list(exists = TRUE, confirmed_absent = FALSE, etag = etag[1],
+                out = c(res$out, res$err)))
+  }
+  # Anchored on the tokens the CLI emits — a bare "404" matches any request id.
+  # Note 403 is deliberately NOT an absence: HeadObject returns 403 rather than
+  # 404 for a missing key when the caller lacks s3:ListBucket, so treating it as
+  # "no object here" would let a permissions problem read as a first push.
+  txt <- c(res$out, res$err)
+  absent <- any(grepl("\\(404\\)|NoSuchKey|error occurred \\(404", txt, ignore.case = TRUE)) ||
+    any(grepl("Not Found", txt, fixed = TRUE))
+  list(exists = FALSE, confirmed_absent = absent, etag = NA_character_,
+       out = c(res$out, res$err))
+}
+
+#' Upload a file, optionally only if the remote copy is unchanged
+#'
+#' @param path `character(1)` local file to upload.
+#' @param source `character(1)` store source URI.
+#' @param key `character(1)` object name relative to the source prefix.
+#' @param profile `character(1)` AWS profile name.
+#' @param if_match `character(1)` ETag the remote object must still have, or
+#'   `NULL`.
+#' @param if_none_match `character(1)` pass `"*"` to write only when no object
+#'   exists, or `NULL`.
+#' @return A `list` with `status` and `out`. A precondition failure means the
+#'   remote object changed under us.
+#' @noRd
+.crd_s3_put <- function(path, source, key, profile = Sys.getenv("AWS_PROFILE"),
+                        if_match = NULL, if_none_match = NULL) {
+  parts <- .crd_s3_parts(source)
+  args <- c("s3api", "put-object",
+            "--bucket", parts$bucket,
+            "--key", paste0(parts$prefix, key),
+            "--body", path)
+  if (!is.null(if_match)) {
+    # Silently dropping an unusable precondition turns a conditional write into
+    # an unconditional one — the exact failure this helper exists to prevent.
+    if (is.na(if_match) || !nzchar(if_match)) {
+      stop("A precondition was requested but the ETag is missing.\n",
+           "  Refusing to fall back to an unconditional write.", call. = FALSE)
+    }
+    args <- c(args, "--if-match", if_match)
+  }
+  if (!is.null(if_none_match) && nzchar(if_none_match)) {
+    args <- c(args, "--if-none-match", if_none_match)
+  }
+  .crd_aws(args, profile = profile)
+}
+
+#' Upload a large object with `aws s3 cp`
+#'
+#' `s3api put-object` is a single PUT with a hard 5 GB limit and no multipart or
+#' resume; `s3 cp` multiparts. Conditional writes are only needed for the
+#' manifest, so the store binary has nothing to gain from `s3api` and a size
+#' ceiling to lose.
+#'
+#' @param path `character(1)` local file.
+#' @param source `character(1)` store source URI.
+#' @param key `character(1)` object name relative to the source prefix.
+#' @param profile `character(1)` AWS profile name.
+#' @return A `list` with `status` and `out`.
+#' @noRd
+.crd_s3_cp_up <- function(path, source, key, profile = Sys.getenv("AWS_PROFILE")) {
+  .crd_aws(c("s3", "cp", path, paste0(source, key)), profile = profile)
+}
+
+#' Did a conditional write fail in a way worth retrying?
+#'
+#' Covers both a precondition failure (the object changed under us) and S3's
+#' `ConditionalRequestConflict`, which it returns for a conditional write
+#' racing another in-flight one and documents as retryable. Not matching the
+#' latter would hard-fail after the binary had already uploaded.
+#'
+#' @param res `list` as returned by `.crd_s3_put()`.
+#' @return `TRUE` when the write should be re-merged and retried.
+#' @noRd
+.crd_s3_precondition_failed <- function(res) {
+  # Anchored on what the CLI actually emits. A bare "412" substring matches any
+  # request id, byte count or key containing those digits, which would push an
+  # unrelated fatal error into the retry loop.
+  !identical(res$status, 0L) &&
+    any(grepl(paste0("\\(PreconditionFailed\\)|\\(412\\)|error occurred \\(412",
+                     "|\\(ConditionalRequestConflict\\)|\\(409\\)"),
+              c(res$out, res$err), ignore.case = TRUE))
+}
+
+#' Read git provenance for the repository containing a path
+#'
+#' Provenance must describe where the *store* was built, not where R happens to
+#' be running. Reading the current working directory would stamp a store built
+#' in one repo with the SHA of whichever repo the push was issued from — a
+#' plausible-looking value that points at unrelated code.
+#'
+#' @param dir `character(1)` directory to read provenance for. Default `"."`.
+#' @return A `list` with `repo`, `branch`, `head_sha`; elements are `NA` when
+#'   the directory is not a git repository.
+#' @noRd
+.crd_git_provenance <- function(dir = ".") {
+  run <- function(args) {
+    out <- suppressWarnings(
+      system2("git", c("-C", shQuote(dir), args), stdout = TRUE, stderr = FALSE)
+    )
+    if (!is.null(attr(out, "status")) || length(out) == 0L) NA_character_ else out[1]
+  }
+  url <- run(c("remote", "get-url", "origin"))
+  repo <- if (is.na(url)) {
+    NA_character_
+  } else {
+    # git@github.com:Owner/name.git and https://github.com/Owner/name.git
+    sub("[.]git$", "", sub("^.*[:/]([^/]+/[^/]+?)$", "\\1", url))
+  }
+  list(
+    repo     = repo,
+    branch   = run(c("rev-parse", "--abbrev-ref", "HEAD")),
+    head_sha = run(c("rev-parse", "HEAD"))
+  )
+}
+
+#' Recover the embedding model from a store's own metadata
+#'
+#' ragnar serialises the embedding closure into `metadata.embed_func`, which
+#' deparses to e.g. `function(x) ragnar::embed_ollama(x = x, model =
+#' "nomic-embed-text")`. That is the artifact's own record of how it was built —
+#' unlike an environment variable, which describes the machine doing the
+#' pushing. The distinction is the difference between a guard and a decoration:
+#' nothing in this package ever sets `CRED_EMBED_MODEL`, so a guard reading it
+#' compares a default against itself.
+#'
+#' @param con open DBI connection to the store.
+#' @return `character(1)` model name, or `NA_character_` when unreadable.
+#' @noRd
+.crd_store_model_from_meta <- function(con) {
+  raw <- tryCatch(DBI::dbGetQuery(con, "SELECT embed_func FROM metadata")$embed_func,
+                  error = function(e) NULL)
+  if (is.null(raw) || length(raw) == 0L) return(NA_character_)
+
+  fn <- tryCatch(unserialize(raw[[1]]), error = function(e) NULL)
+  if (is.null(fn)) return(NA_character_)
+
+  txt <- paste(deparse(fn), collapse = " ")
+  hit <- regmatches(txt, regexpr('model[[:space:]]*=[[:space:]]*"[^"]+"', txt))
+  if (length(hit) == 0L) return(NA_character_)
+  sub('^model[[:space:]]*=[[:space:]]*"([^"]+)"$', "\\1", hit[1])
+}
+
+#' Describe a local store for the manifest
+#'
+#' Counts come from `documents` and `chunks` — store v2 carries both, and they
+#' answer different questions (papers vs passages).
+#'
+#' @param store_path `character(1)` path to a `.duckdb` store.
+#' @param built_by `character` script or function that produced the store.
+#' @return A named `list` shaped like a manifest entry.
+#' @noRd
+.crd_store_describe <- function(store_path, built_by = "cred::crd_store_push()") {
+  .crd_need(c("DBI", "duckdb"))
+  chk::chk_file(store_path)
+
+  con <- DBI::dbConnect(duckdb::duckdb(), store_path, read_only = TRUE)
+  on.exit(try(DBI::dbDisconnect(con, shutdown = TRUE), silent = TRUE), add = TRUE)
+
+  count_rows <- function(table) {
+    tryCatch(
+      as.integer(DBI::dbGetQuery(con, paste0("SELECT COUNT(*) AS n FROM ", table))$n),
+      error = function(e) NA_integer_
+    )
+  }
+  # Read separately from the cosmetic label: bundling them means any schema
+  # drift returns NULL and silently disables the dimension guard.
+  size <- tryCatch(as.integer(DBI::dbGetQuery(con, "SELECT embedding_size FROM metadata")$embedding_size[1]),
+                   error = function(e) NA_integer_)
+  if (is.na(size)) {
+    warning("Could not read embedding_size from ", basename(store_path),
+            " — the embedding-dimension check will be skipped for this push.",
+            call. = FALSE)
+  }
+  label <- tryCatch(as.character(DBI::dbGetQuery(con, "SELECT name FROM metadata")$name[1]),
+                    error = function(e) NA_character_)
+
+  # Prefer the store's own record over the environment; fall back loudly.
+  model <- .crd_store_model_from_meta(con)
+  if (is.na(model)) {
+    model <- Sys.getenv("CRED_EMBED_MODEL", "nomic-embed-text")
+    warning("Could not read the embedding model from ", basename(store_path),
+            " — recording '", model, "' from the environment instead. ",
+            "The model recorded in the manifest may not be the one used.",
+            call. = FALSE)
+  }
+
+  git <- .crd_git_provenance(dirname(store_path))
+
+  list(
+    documents       = count_rows("documents"),
+    chunks          = count_rows("chunks"),
+    embedding_size  = size,
+    embedding_model = model,
+    store_name      = label,
+    bytes           = unname(file.size(store_path)),
+    md5             = tolower(unname(tools::md5sum(store_path))),
+    repo            = git$repo,
+    branch          = git$branch,
+    head_sha        = git$head_sha,
+    built_by        = built_by,
+    date_completed  = format(as.POSIXct(Sys.time(), tz = "UTC"), "%Y-%m-%dT%H:%M:%SZ")
+  )
+}
+
+#' Merge one store entry into an existing manifest
+#'
+#' The manifest describes **every** store in the bucket, so a push that
+#' rebuilds it from the current run alone orphans the stores it did not push —
+#' the pull side then reports "not in log.json" for a file plainly sitting in
+#' the bucket. This function is the guarantee against that: it is pure, and
+#' every entry other than `name` comes through untouched, including entries
+#' whose shape this version of cred does not recognise.
+#'
+#' @param existing `list` parsed manifest, or `NULL` for a fresh one.
+#' @param name `character(1)` store name to add or replace.
+#' @param entry `list` manifest entry for `name`.
+#' @return The merged manifest as a `list`.
+#' @noRd
+.crd_manifest_merge <- function(existing, name, entry) {
+  chk::chk_string(name)
+  if (is.null(existing)) existing <- list()
+  if (is.null(existing$stores)) existing$stores <- list()
+
+  merged <- existing
+  merged$stores[[name]] <- entry
+  merged$date_updated <- format(as.POSIXct(Sys.time(), tz = "UTC"), "%Y-%m-%dT%H:%M:%SZ")
+  merged$manifest_note <-
+    "Provenance is per store. Push must merge into this file, never replace it."
+  merged$generating_script <- "cred::crd_store_push()"
+  merged
+}
+
+#' Warn when a store's embedding model differs from the rest of the corpus
+#'
+#' @param manifest `list` existing manifest.
+#' @param name `character(1)` store being pushed.
+#' @param model `character(1)` this store's embedding model.
+#' @param allow `logical(1)` proceed despite a mismatch.
+#' @return `NULL`, invisibly.
+#' @noRd
+#' Normalise an embedding-model label for comparison
+#'
+#' Existing manifest entries record the provider inline
+#' (`"nomic-embed-text (ollama)"`) while the model read out of a store's own
+#' `embed_func` is bare (`"nomic-embed-text"`). Comparing the raw strings would
+#' flag every push against the existing corpus as a mismatch — a guard that
+#' cries wolf gets `allow_model_mismatch = TRUE` pasted into a script, which
+#' disables it for the case that matters.
+#'
+#' @param x `character` model labels.
+#' @return `character` normalised labels.
+#' @noRd
+.crd_model_norm <- function(x) {
+  x <- tolower(trimws(as.character(x)))
+  x <- sub("[[:space:]]*\\([^)]*\\)[[:space:]]*$", "", x)  # drop " (ollama)"
+  trimws(x)
+}
+
+.crd_check_model <- function(manifest, name, model, allow, size = NA_integer_) {
+  others <- manifest$stores[names(manifest$stores) != name]
+  field <- function(key, cast) {
+    v <- vapply(others, function(e) {
+      if (is.null(e[[key]])) cast(NA) else cast(e[[key]][1])
+    }, cast(NA))
+    unique(v[!is.na(v)])
+  }
+  models <- field("embedding_model", as.character)
+  sizes <- field("embedding_size", as.integer)
+
+  # embedding_size is read out of the store's own metadata table, so it is a
+  # property of the artifact. The model string comes from the pusher's
+  # environment and is only a label — checking it alone would let the exact
+  # case this guard exists for pass, while recording the wrong model.
+  size_conflict <- !is.na(size) && length(sizes) > 0L && !(size %in% sizes)
+  model_conflict <- length(models) > 0L &&
+    !(.crd_model_norm(model) %in% .crd_model_norm(models))
+  if (!size_conflict && !model_conflict) return(invisible(NULL))
+
+  msg <- paste0(
+    "Embedding mismatch for '", name, "'.\n",
+    "  this store: ", model, " (dimension ", if (is.na(size)) "unknown" else size, ")\n",
+    "  already in the manifest: ", paste(models, collapse = ", "),
+    " (dimension ", paste(sizes, collapse = ", "), ")\n",
+    if (size_conflict) {
+      "  The embedding DIMENSION differs, which is read from the store itself — this is a real
+  incompatibility, not just a label mismatch.\n"
+    } else {
+      ""
+    },
+    "  Results are not comparable across stores embedded with different models."
+  )
+  if (!allow) {
+    stop(msg, "\n  Pass allow_model_mismatch = TRUE if this is a deliberate migration.",
+         call. = FALSE)
+  }
+  warning(msg, call. = FALSE)
+  invisible(NULL)
+}
+
+#' Push a ragnar evidence store and merge it into the shared manifest
+#'
+#' Uploads a built store and records it in the bucket's single `log.json`
+#' manifest, **merging** rather than replacing. The manifest describes every
+#' store in the bucket, so a push built from the current run alone silently
+#' orphans the others — the pull side then reports "not in log.json" for a file
+#' plainly present. That failure has been observed in practice.
+#'
+#' Three deliberate refusals, each guarding a way the manifest can be corrupted:
+#'
+#' * **An unreadable manifest aborts the push.** Only a *confirmed* absence —
+#'   bucket reachable, object missing — is treated as "no manifest yet", and
+#'   even then `create_manifest = TRUE` is required. A wrong prefix in
+#'   `cred.store_source` produces exactly the same 404 as a genuine first push.
+#' * **A concurrent push cannot clobber this one.** The manifest is written
+#'   conditional on the ETag read at the start; a competing write fails the
+#'   precondition, and the merge is retried against the newer manifest.
+#' * **A store with an unflushed WAL is refused**, since its md5 does not
+#'   describe what a puller would open.
+#'
+#' The store binary is uploaded before the manifest that describes it, so a
+#' failed manifest write leaves the new binary in place under the old md5 and
+#' pulls of that store fail until the push is re-run. Both failure messages say
+#' so. Removing the window entirely means content-addressed keys
+#' (`<name>-<md5>.duckdb`), which is a change to the shared bucket layout and
+#' belongs with the infrastructure rather than here.
+#'
+#' Building the store is [crd_store_build()]; reading it back is
+#' [crd_store_connect()]. Bucket policy, IAM and retention are infrastructure
+#' concerns and deliberately live outside this package.
+#'
+#' @param store_path `character(1)` path to the `.duckdb` store to upload.
+#' @param source `character(1)` destination URI holding the stores and
+#'   `log.json`. Defaults to `getOption("cred.store_source")`, then
+#'   `CRED_STORE_SOURCE`. Shape `s3://<bucket>/<prefix>/`.
+#' @param name `character(1)` store name in the manifest. Defaults to the file
+#'   name without its extension.
+#' @param profile `character(1)` AWS profile. Default `AWS_PROFILE`.
+#' @param built_by `character` what produced the store, recorded in the entry.
+#' @param dry_run `logical(1)` print the merged manifest and upload nothing.
+#'   Default `FALSE`.
+#' @param create_manifest `logical(1)` allow writing a manifest where none
+#'   exists. Default `FALSE`. The create path is still conditional
+#'   (`--if-none-match "*"`), so two simultaneous first pushes cannot silently
+#'   overwrite one another.
+#' @param allow_model_mismatch `logical(1)` push despite a differing embedding
+#'   model. Default `FALSE`.
+#' @param max_retries `integer(1)` conditional-write retries before giving up.
+#'   Default `3L`.
+#' @return Invisibly, the merged manifest as a `list`.
+#' @export
+#' @examples
+#' \dontrun{
+#' options(cred.store_source = "s3://<bucket>/<prefix>/")
+#'
+#' # Always dry-run first — prints the merged manifest, uploads nothing.
+#' crd_store_push("data/rag/vca_refs.duckdb", dry_run = TRUE)
+#'
+#' crd_store_push("data/rag/vca_refs.duckdb")
+#' }
+crd_store_push <- function(store_path,
+                           source = getOption("cred.store_source"),
+                           name = NULL,
+                           profile = Sys.getenv("AWS_PROFILE"),
+                           built_by = "cred::crd_store_push()",
+                           dry_run = FALSE,
+                           create_manifest = FALSE,
+                           allow_model_mismatch = FALSE,
+                           max_retries = 3L) {
+  chk::chk_string(store_path)
+  chk::chk_flag(dry_run)
+  chk::chk_flag(create_manifest)
+  chk::chk_flag(allow_model_mismatch)
+  chk::chk_whole_number(max_retries)
+  chk::chk_file(store_path)
+
+  store_path <- path.expand(store_path)
+  if (is.null(name)) name <- sub("[.]duckdb$", "", basename(store_path))
+  chk::chk_string(name)
+
+  # An unflushed WAL means the file's md5 does not describe what a puller opens.
+  wal <- paste0(store_path, ".wal")
+  if (file.exists(wal)) {
+    stop("Refusing to push '", name, "': a write-ahead log is present at\n  ", wal,
+         "\n  Open and cleanly disconnect the store first so the WAL is flushed.",
+         call. = FALSE)
+  }
+
+  .crd_need(c("DBI", "duckdb"))
+  source <- .crd_store_source(source)
+
+  # Unreachable must never be mistaken for empty.
+  if (!.crd_s3_head_bucket(source, profile = profile)) {
+    stop("Cannot reach the bucket behind ", source, "\n",
+         "  Check credentials, profile (", if (nzchar(profile)) profile else "<none>",
+         ") and network. Refusing to push rather than risk writing a rival manifest.",
+         call. = FALSE)
+  }
+
+  head <- .crd_s3_head_object(source, "log.json", profile = profile)
+  if (!head$exists && !head$confirmed_absent) {
+    stop("Could not determine whether a manifest exists at ", source, "log.json\n  ",
+         paste(head$out, collapse = "\n  "),
+         "\n  This is not a 404 — refusing to push rather than guess.", call. = FALSE)
+  }
+  if (head$exists && is.na(head$etag)) {
+    stop("Read the manifest at ", source, "log.json but could not obtain its ETag.\n",
+         "  Refusing to push: without it a concurrent write cannot be detected.",
+         call. = FALSE)
+  }
+  if (!head$exists && !create_manifest) {
+    stop("No manifest at ", source, "log.json\n",
+         "  The bucket is reachable, so this prefix has no manifest yet.\n",
+         "  If that is intended, pass create_manifest = TRUE.\n",
+         "  If not, check getOption(\"cred.store_source\") — a wrong prefix looks",
+         " exactly like this.", call. = FALSE)
+  }
+
+  existing <- if (head$exists) .crd_manifest_read(source, profile = profile) else NULL
+  entry <- .crd_store_describe(store_path, built_by = built_by)
+  if (!is.null(existing)) {
+    .crd_check_model(existing, name, entry$embedding_model, allow_model_mismatch,
+                     size = entry$embedding_size)
+  }
+  merged <- .crd_manifest_merge(existing, name, entry)
+
+  if (dry_run) {
+    message("[dry run] would upload ", store_path, " -> ", source, name, ".duckdb")
+    message("[dry run] merged manifest would hold: ",
+            paste(names(merged$stores), collapse = ", "))
+    cat(jsonlite::toJSON(merged, auto_unbox = TRUE, pretty = TRUE,
+                         null = "null", na = "null"), "\n")
+    return(invisible(merged))
+  }
+
+  message("Uploading ", name, ".duckdb (", round(entry$bytes / 1048576), " MB)")
+  up <- .crd_s3_cp_up(store_path, source, paste0(name, ".duckdb"), profile = profile)
+  if (!identical(up$status, 0L)) {
+    stop("Store upload failed for '", name, "'.\n  ", paste(up$out, collapse = "\n  "),
+         call. = FALSE)
+  }
+
+  # Every write is conditional. When the manifest existed on entry the write is
+  # gated on its ETag; when it did not, `--if-none-match *` means a concurrent
+  # first push loses the race rather than silently replacing the winner.
+  stale_warning <- paste0(
+    "\n  The store binary uploaded, but the manifest still describes the previous one,",
+    "\n  so crd_store_connect(\"", name, "\") will fail on md5 for everyone until this",
+    "\n  push is re-run. Re-run it."
+  )
+  etag <- head$etag
+  existed <- head$exists
+
+  for (attempt in seq_len(max(1L, max_retries))) {
+    tmp <- file.path(tempdir(), paste0("cred-log-out-", Sys.getpid(), ".json"))
+    # na = "null" matters: jsonlite renders NA_integer_ as the STRING "NA",
+    # which would land a wrong-typed value in the shared manifest for good.
+    jsonlite::write_json(merged, tmp, auto_unbox = TRUE, pretty = TRUE,
+                         null = "null", na = "null")
+    res <- .crd_s3_put(tmp, source, "log.json", profile = profile,
+                       if_match = if (existed) etag else NULL,
+                       if_none_match = if (!existed) "*" else NULL)
+    unlink(tmp)
+
+    if (identical(res$status, 0L)) {
+      message("Manifest updated — now holds: ",
+              paste(names(merged$stores), collapse = ", "))
+      return(invisible(merged))
+    }
+    if (!.crd_s3_precondition_failed(res)) {
+      stop("Manifest write failed for '", name, "'.\n  ",
+           paste(c(res$out, res$err), collapse = "\n  "), stale_warning, call. = FALSE)
+    }
+
+    message("Manifest changed under us — re-merging (attempt ", attempt, ")")
+    head <- .crd_s3_head_object(source, "log.json", profile = profile)
+
+    # A re-probe that is not a clean read must abort. Treating it as absence
+    # would drop the precondition and clobber the very manifest the retry
+    # exists to protect.
+    if (!head$exists || is.na(head$etag)) {
+      stop("Lost track of the manifest at ", source, "log.json while retrying.\n  ",
+           paste(head$out, collapse = "\n  "),
+           "\n  Refusing to write without a precondition.", stale_warning,
+           call. = FALSE)
+    }
+    etag <- head$etag
+    existed <- TRUE
+    merged <- .crd_manifest_merge(
+      .crd_manifest_read(source, profile = profile), name, entry
+    )
+  }
+
+  stop("Gave up after ", max_retries, " conditional-write attempts on ", source,
+       "log.json\n  Another process is pushing concurrently.", stale_warning,
+       call. = FALSE)
 }

@@ -25,7 +25,8 @@ R/
 ├── sentence.R   — sentence extraction helpers
 ├── store.R      — ragnar evidence store: crd_store_connect (md5-verified pull from a
 │                  configured source), crd_search (hybrid/BM25/VSS + citation-key
-│                  resolution), crd_store_build (Zotero collection or keys → DuckDB)
+│                  resolution), crd_store_build (Zotero collection or keys → DuckDB),
+│                  crd_store_push (merge-on-write manifest + ETag compare-and-swap)
 ├── pdf.R        — PDF text extraction + paragraph splitting (pdftools)
 └── docx.R       — Word doc extraction (officer) + .paraphrase_tokens(), .token_score()
                    (internal matching functions reused by abstract matching)
@@ -37,6 +38,7 @@ tests/testthat/
 ├── test-rmd.R
 ├── test-score.R     — crd_aud_score, .score_row, scoring internals
 ├── test-store.R     — store source resolution, manifest parsing, arg validation
+├── test-store-push.R — manifest merge, S3 probes, push guards (all offline)
 └── test-sentence.R
 
 inst/extdata/              — toy data for vignette
@@ -142,6 +144,16 @@ Function prefixes follow the package domain:
   (bare `embed_ollama()` silently defaults to `embeddinggemma`).
 - **No bucket address in the source** — `cred` is public; the store source comes from
   `getOption("cred.store_source")` / `CRED_STORE_SOURCE` with no default.
+- **The manifest is merged, never replaced** — it describes every store in the bucket, so a push
+  built from the current run alone orphans the rest. `.crd_manifest_merge()` is pure and passes
+  untouched entries through verbatim, including shapes this version does not recognise.
+- **Fail toward not-clobbering** — an unreadable manifest aborts a push. Only a *confirmed*
+  absence (bucket reachable via `head-bucket`, object missing via `head-object`) counts as "none
+  yet", and even then `create_manifest = TRUE` is required: a wrong prefix produces the same 404.
+  `aws s3 cp` cannot make this distinction — it reports a missing key and a missing bucket
+  identically — which is why the `s3api` probes exist.
+- **Provenance describes where a store was built**, read from the store's own directory rather
+  than the process's working directory.
 
 <!-- BEGIN SOUL CONVENTIONS — DO NOT EDIT BELOW THIS LINE -->
 
