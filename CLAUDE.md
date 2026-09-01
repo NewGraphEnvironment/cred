@@ -2667,6 +2667,24 @@ clears `> 100` as comfortably as 218 does, so it discriminates nothing.
   — `git push` reported success, because it was a perfectly valid push
   to a branch nobody had said was wrong.
 
+- **The mirror case is worse, because the success message means the
+  opposite of what it looks like.** `git push -u origin main` pushes the
+  *local ref named `main`* — not `HEAD`. If a parallel session moved the
+  checkout onto their branch, your commit is on **their** branch, local
+  `main` has not moved, and the push prints **`Everything up-to-date`**.
+  That is indistinguishable from “already pushed”, so the natural
+  reading is that the work is safely on origin when nothing was sent at
+  all. Observed 2026-08-31 in rtj: a memory-audit commit reported a
+  clean push and was not on `origin/main`.
+
+  - **Verify the artifact, not the push output.**
+    `git cat-file -e origin/main:<a file you wrote>` answers the
+    question the exit code does not. A push that says “up-to-date” when
+    you have just committed is a contradiction worth one command.
+  - Prefer `git push origin HEAD` when you mean “publish what I am on”,
+    and read `git status -sb` for the branch name **before** committing,
+    not after the push looks odd.
+
 ### Adopting Existing Config
 
 When importing config from one location into a canonical one (legacy
@@ -2770,6 +2788,40 @@ project’s `settings.json` → soul):
   Fixing gq alone would have left every downstream repo pointed at the
   watermark. Caught by a reviewer asking what consumers read, not by the
   grep.)
+
+### A defect’s magnitude is dataset-specific — measure it where it lands
+
+- Sibling of the rule above, for numbers rather than enumerations. Once
+  a bug is confirmed, the natural next question is “how bad is it?” —
+  and the natural next move is to measure on whatever fixture is at
+  hand. That number is about **that dataset**, and quoting it about
+  another is a guess wearing a measurement’s clothes.
+- The mechanism: a pipeline usually has several constraints, and a
+  defect only reaches the output through the one that binds. Change
+  dataset, change which constraint binds, change the blast radius — with
+  no change to the bug.
+- Measured 2026-08-31 in `flooded`. A units error inflating a modelled
+  depth by 3.59x was measured on the bundled 10 m tile and reported as
+  roughly **2x** the mapped area. On the 30 m production watershed the
+  same defect cost **16%** — because there the slope and cost-distance
+  criteria bind first and clip most of the error before it reaches the
+  boundary. Both numbers are correct; only one of them was about the
+  data anybody cared about.
+- **Tell:** you are about to say “so X is roughly N× off” about a
+  dataset you did not measure. The fixture is convenient precisely
+  because it is small and well-understood, which is also why it does not
+  resemble production.
+- The remedy is usually cheap and nobody reaches for it: **re-run the
+  comparison on the real input.** In the case above the production
+  inputs were already cached on disk, and the corrected run took
+  minutes.
+- Corollary worth stating separately, because it changes what a report
+  has to retract: **ratios and absolutes do not move together.** In the
+  same measurement, absolute disturbed area fell 16% while
+  disturbed-as-percent-of-AOI went 27.51% -\> 27.50% — unchanged to two
+  decimals, because the over-mapped margin happened to carry the same
+  land-cover mix as the core. Establish which kind of claim is affected
+  before telling anyone their published numbers are wrong.
 
 ### Do not write to an artifact a human is testing on
 
@@ -3989,6 +4041,218 @@ invisible by reading, both found by running the shipped script against
 inputs built to break it rather than against the one case it was written
 for.
 
+### A guard placed mid-operation can be defeated by the operation itself
+
+A precondition check is usually written imagining a clean starting
+state, then placed wherever it is convenient to run. If the operation
+*mutates the thing the guard inspects*, the guard passes at the start
+and fails ever after — on every run, for a reason that has nothing to do
+with what it was guarding against.
+
+The tell is a guard that fires the first time it meets real work and
+never passes again. It reads as “the check found something”, which is
+why it survives review: a guard that fires looks like a guard that
+works.
+
+- Measured 2026-08-31 in link: a cross-host parity check refused to
+  proceed because both hosts’ git trees were dirty. They were dirty
+  *because the run writes its own logs into a tracked directory*, and
+  because the snapshot step stamps a ledger CSV on each worker. Every
+  real run dirtied itself before reaching the check.
+- The same check placed **before** the run was correct and useful. Only
+  the second placement was wrong, so this is not “drop the check” — it
+  is “a guard has a valid window, and the window is part of the guard”.
+
+Ask, for any precondition: **does anything between the start of the
+operation and this line write to what I am about to inspect?** Logs,
+caches, lockfiles, generated config, and ledger/stamp files are the
+usual culprits, and tracked log directories are the one people forget
+because logging feels inert.
+
+Unit tests will not catch it. The fixture supplies a clean state
+directly, so it never crosses the code that dirties it — the fixture and
+the guard agree about a world the operation has already left. This is
+the fixture-cannot-reach- the-failure-mode rule above, arriving through
+placement rather than data.
+
+### A job that writes into its own tracked output directory poisons every dirty-check
+
+The rule above covers a *guard* defeated by its own operation. The same
+mechanism has a second victim that is quieter and worse: a **provenance
+field** that records whether the tree was dirty.
+
+A run that writes logs, caches, or reports into a tracked directory is
+dirty from its own first write onward. Anything reading `git status`
+after that gets the wrong answer, and there are usually two such readers
+with different consequences:
+
+| reader | consequence | how it surfaces |
+|----|----|----|
+| a pre-flight gate | refuses to start | loudly, on the next run |
+| a provenance stamp written into the output | records “built from a modified tree” | **never** |
+
+The second inverts the field’s entire purpose. A `dirty` flag exists to
+say *this SHA cannot be trusted*. Set unconditionally, it carries no
+information — and readers learn to ignore the column, at which point a
+genuinely dirty run is indistinguishable from a clean one.
+
+Measured 2026-08-31 in link, after a fully successful 34-unit run:
+
+        host     | n_units | n_dirty
+    -------------+---------+---------
+     cypher-job1 |       9 |       0
+     cypher-job2 |       6 |       0
+     dispatcher  |      21 |      21     <- every row, and every one false
+
+    $ git status --porcelain | wc -l
+    15                                    # all of them the run's own logs
+    $ git status --porcelain --untracked-files=no
+                                          # empty: zero tracked modifications
+
+Only the dispatcher was affected, because the workers reset to origin
+and shipped their logs back over the wire rather than writing into their
+own checkout. So the defect is invisible on exactly the hosts that are
+easiest to test, and it survived four pilot runs.
+
+**Match the predicate to the subject.** Both readers above actually want
+*does tracked code differ from what will be deployed*, which untracked
+outputs cannot affect:
+
+``` bash
+git status --porcelain --untracked-files=no -- . ':(exclude)path/to/logs'
+```
+
+- **`:(exclude)` long form, never `:!`** — `:!path` keeps parsing magic
+  after the `!`, aborts, and an aborted `git status` returns empty,
+  which reads as *clean*. Fail-toward-skip on the guard whose job is to
+  stop the run.
+- **Decide `--untracked-files=no` deliberately.** It also hides a
+  genuinely new uncommitted source file, which *is* invisible to the
+  deploy target and may be the thing you wanted caught. Excluding only
+  the output directory keeps that.
+
+**Fixtures cannot reach this.** A test supplies a clean tree directly
+and never crosses the code that dirties it. The only thing that finds it
+is verifying a *completed real run* against the record it wrote — which
+is the general lesson: when a job writes provenance about itself, read
+that provenance back and check it against independently-measured ground
+truth, because the job is the one witness that cannot contradict itself.
+
+### A search that finds nothing has proven nothing until it has found something
+
+The positive-control rule above catches a probe reporting a **defect**
+that isn’t there. This is the mirror, and it is worse, because its
+output is *reassuring*: a search that cannot match returns empty, empty
+reads as clean, and a clean result ends the investigation instead of
+prompting one.
+
+It is how an audit gets reported as passed without ever having run.
+
+**The common cause is a regex feature the local tool does not have.**
+BSD tools (macOS default) and GNU tools disagree, and the disagreement
+is silent — an unsupported escape is treated as a literal, matches
+nothing, and exits 1 like an honest no-match:
+
+``` bash
+# macOS: \b is not reliably supported. Matches nothing. Exit 1. Looks clean.
+git grep -InE '\b([0-9]{1,3}\.){3}[0-9]{1,3}\b' -- .
+
+# Same tree, working pattern: 33 distinct addresses across 101 files.
+git grep -ohE '([0-9]{1,3}\.){3}[0-9]{1,3}' -- . | sort -u
+```
+
+Measured 2026-08-31 in link. The first form was run as a repo audit for
+exposed host addresses in a public repo, returned empty, and the result
+was written into an issue as *“no IPs in any tracked file”* — an
+affirmative finding, from a command that could not have found one. This
+is the same shape as the empty-result-set rule near the top of this
+file, arriving through a regex dialect rather than through a loop.
+
+**Before trusting an empty search, make it match something.** One line,
+and it converts “I found nothing” into “I looked, and here is proof I
+could see”:
+
+``` bash
+git grep -c 'PATTERN' -- <a file you KNOW contains it>   # must be non-zero
+```
+
+If you cannot name a file that should match, construct one in `/tmp` and
+search that. A search whose ability to match has never been demonstrated
+is not evidence, and reporting it as an audit result is worse than not
+auditing — someone will rely on it.
+
+Two habits that make this cheap:
+
+- **Prefer POSIX ERE and explicit character classes over shorthand
+  escapes.** `[^0-9]` and `(^|[^0-9])` travel; `\b`, `\d`, `\s`, `\+`
+  and `\|` do not.
+- **Reconcile the count against expectation.** “Zero occurrences of an
+  IP address in a repo full of orchestration logs” should read as
+  implausible on its face. When a result is surprisingly clean, suspect
+  the instrument before the world — the same prior the broken-probe rule
+  applies to surprising *failures*.
+
+### A paged API’s default `limit` reads as absence
+
+Asking a paged endpoint for “everything” and searching the response
+finds only what fits on the first page. The items past it are reported
+**missing**, which is a stronger and more actionable claim than “I did
+not look far enough” — and it does not error, so nothing distinguishes
+the two.
+
+Measured 2026-08-31 against a STAC catalogue: a `limit=200` search
+reported two of sixteen objects absent from the collection. Paging the
+whole thing — follow the `rel="next"` link until it stops — returned 230
+items with **every one present**. Had that finding shipped it would have
+read as “those surveys were never catalogued” and sent someone looking
+for imagery that already existed.
+
+Adjacent to *“Prove absence before acting on it”* above, and worth
+separating: the remedy there is a wider query as a control, which does
+nothing here because the query was already wide enough. The defect is in
+the **transport**, not the filter.
+
+- Follow pagination to exhaustion, or ask the API for its own count and
+  assert you retrieved it. `numberMatched` is the STAC field; most paged
+  APIs have one, and a `None` there is itself a signal that you must
+  page.
+- **A negative result from a paged source is not a finding until you
+  have paged it.** The positive results are fine — anything you found,
+  you found.
+- Same shape for `gh` (`--limit` defaults to 30),
+  `aws s3api list-objects-v2` (1000 keys, `NextContinuationToken`), and
+  any `?page=` REST endpoint.
+
+### A structural property is not a performance measurement
+
+Reading a number out of a format — block size, chunk size, page size,
+record length — and inferring a *cost* from it skips the layer that
+usually decides the cost. Caches, buffers and read-ahead sit between the
+structure and the wire, and they are the whole reason the structure is
+tunable in the first place.
+
+Measured 2026-08-31: a GDAL STACIT source reports 128x128 blocks against
+the same COG’s native 512x512, and that was written into an issue as
+“roughly 16x the range requests”, as an argument against adopting it.
+Counting the actual requests with `CPL_CURL_VERBOSE` gave **14 against
+14**, with bytes fetched within 16 KB and identical pixels. GDAL’s block
+cache absorbs the difference entirely.
+
+The tell is a ratio derived by arithmetic on two numbers neither of
+which is a count of the thing being claimed. It reads as quantitative —
+it has a factor and a unit — which is exactly what makes it survive
+review.
+
+- Count the operation you are claiming: requests, queries, allocations,
+  bytes. Most stacks will tell you (`CPL_CURL_VERBOSE`, a query log,
+  `strace -c`).
+- Sibling of *“A proxy assertion does not guard the thing it stands
+  for”* above, pointed the other way: that one is a **test** asserting a
+  proxy, this is a **claim** asserting one. The test fails silently; the
+  claim gets acted on.
+- It cost nothing here only because the user pushed back on a number
+  that looked unmotivated. Do not rely on that.
+
 # NGE Feature Workflow
 
 For non-trivial issue-driven work, follow this checklist. Each step
@@ -4805,6 +5069,59 @@ next steps.
     `planning/archive/` via `/planning-archive`. Write a README.md in
     the archive directory with a one-paragraph outcome summary and
     closing commit/PR ref — future sessions scan these to catch up fast.
+    Where the work produced measurements, that README is also the
+    evidence record; see below.
+
+## The archive README is the measurement record
+
+Debugging and benchmarking sessions are systematic investigation: a
+stated unknown, an experiment, a number, a conclusion, and usually two
+or three informative dead ends. That is SRED evidence, and it scatters —
+into PR bodies, issue comments, and log files whose names encode a
+timestamp and nothing else. In six months the chain *we did not know X,
+we measured Y, therefore Z* survives only in a chat transcript.
+
+**The archive README is where that chain lives.** Not a separate run
+record: the PWF triple already holds every part of it — the question in
+`task_plan.md`’s frame, the method in `progress.md`, the numbers in
+`findings.md`, the dead ends in its “Errors Encountered” table. A second
+document would restate all of it and be half-populated. The README is
+the index over them.
+
+So an archive README for work that produced measurements carries two
+more sections:
+
+``` markdown
+## Measurement
+
+m1 0.0391 vs cypher 0.0872 min/1k segments — hosts are 2.23x apart.
+Moved the provincial estimate 5.0 h -> 4.3 h and changed how work packs across machines.
+
+## Evidence
+
+`data-raw/logs/study_area_run/20260831_19*` — four spins, one defect each.
+```
+
+Three rules on those sections:
+
+- **Numbers carry units, and say what changed because of them.** A
+  measurement nobody acted on is still worth recording if it turned an
+  assumption into a number — say that too. “Confirmed the expected” is a
+  real outcome.
+- **Cite a prefix or glob, never a file list.** A list rots the moment a
+  run is re-run; a prefix survives. This is why campaign subdirectories
+  exist (`newgraph.md`, “Which logs to commit”).
+- **Keep the wrong turns.** A diagnosis made, retracted on a bad
+  inference, then confirmed by measurement *is* the evidence of
+  systematic investigation. Sanitising it into a tidy conclusion
+  destroys exactly what makes the record worth keeping.
+
+**The case this does not cover.** Measurement that predates an issue has
+no PWF to attach to — `/planning-init` takes an issue number, and
+exploratory runs often *produce* the issues rather than follow them.
+That measurement belongs in the issue or PR it spawned, with the log
+directory’s own README as the index. Do not build a third system to
+close this gap.
 
 ## Atomic Commits (Critical)
 
