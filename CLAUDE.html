@@ -173,10 +173,13 @@ data-raw/make_toy_zotero.R      — regenerates inst/extdata/zotero.sqlite</code
 <li>
 <a href="https://github.com/NewGraphEnvironment/cred/issues/9" class="external-link">#9</a> — Abstract fallback for no_match rows</li>
 <li>
-<a href="https://github.com/NewGraphEnvironment/cred/issues/21" class="external-link">#21</a> — Multi-citation claim grouping</li>
+<a href="https://github.com/NewGraphEnvironment/cred/issues/17" class="external-link">#17</a> — Audit trail vignette</li>
 <li>
-<a href="https://github.com/NewGraphEnvironment/cred/issues/22" class="external-link">#22</a> — Ragnar-powered evidence search for large corpora</li>
-</ul></div>
+<a href="https://github.com/NewGraphEnvironment/cred/issues/18" class="external-link">#18</a> — Reload CSV button in review app</li>
+<li>
+<a href="https://github.com/NewGraphEnvironment/cred/issues/21" class="external-link">#21</a> — Multi-citation claim grouping</li>
+</ul><p>Shipped: <a href="https://github.com/NewGraphEnvironment/cred/issues/22" class="external-link">#22</a> ragnar retrieval (v0.2.0) and <a href="https://github.com/NewGraphEnvironment/cred/issues/24" class="external-link">#24</a> merge-on-write push (v0.3.0).</p>
+</div>
 <div class="section level2">
 <h2 id="key-design-decisions">Key Design Decisions<a class="anchor" aria-label="anchor" href="#key-design-decisions"></a></h2>
 <ul><li>
@@ -195,7 +198,9 @@ data-raw/make_toy_zotero.R      — regenerates inst/extdata/zotero.sqlite</code
 <li>
 <strong>A store is only trustworthy if verified</strong> — a store built against a different embedding model answers differently while looking healthy, so <code><a href="reference/crd_store_connect.html">crd_store_connect()</a></code> checks md5 against the shared manifest and <code><a href="reference/crd_store_build.html">crd_store_build()</a></code> always pins the embedding model explicitly (bare <code>embed_ollama()</code> silently defaults to <code>embeddinggemma</code>).</li>
 <li>
-<strong>No bucket address in the source</strong> — <code>cred</code> is public; the store source comes from <code>getOption("cred.store_source")</code> / <code>CRED_STORE_SOURCE</code> with no default.</li>
+<strong>No bucket address in the source</strong> — <code>cred</code> is public; the store source comes from <code>getOption("cred.store_source")</code> / <code>CRED_STORE_SOURCE</code> with no default. Ask a maintainer for the value; it is deliberately not recorded anywhere in this repo.</li>
+<li>
+<strong>A ragnar store cannot fill <code>page_or_section</code>.</strong> Verified against <code>information_schema</code> on a live ragnar 0.3.0 store: no page-like column exists in any table. <code>chunks</code> carries <code>origin, doc_id, chunk_id, start, end, context, embedding, text</code>, where <code>start</code>/<code>end</code> are character offsets into extracted markdown, not pages. So <code><a href="reference/crd_search.html">crd_search()</a></code> must never promise a page number — <code><a href="reference/crd_pdf_ext_txt.html">crd_pdf_ext_txt()</a></code> (<code><a href="https://docs.ropensci.org/pdftools//reference/pdftools.html" class="external-link">pdftools::pdf_text()</a></code>) is page-indexed and remains the only page-aware path in the package. This settles an open question in <a href="https://github.com/NewGraphEnvironment/soul/issues/23" class="external-link">soul#23</a>, which lists it as deciding whether the ragnar path can fill that column at all.</li>
 <li>
 <strong>The manifest is merged, never replaced</strong> — it describes every store in the bucket, so a push built from the current run alone orphans the rest. <code>.crd_manifest_merge()</code> is pure and passes untouched entries through verbatim, including shapes this version does not recognise.</li>
 <li>
