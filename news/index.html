@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">cred</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.2.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.3.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -35,6 +35,17 @@
       <small>Source: <a href="https://github.com/NewGraphEnvironment/cred/blob/main/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.3.0" id="cred-030">cred 0.3.0<a class="anchor" aria-label="anchor" href="#cred-030"></a></h2>
+<p>Writing the shared manifest. <code><a href="../reference/crd_store_connect.html">crd_store_connect()</a></code> could read and verify it; nothing could write it, and no committed implementation wrote it correctly anywhere — the prior art rebuilt the manifest from the current run alone and overwrote the remote copy, silently orphaning every other store.</p>
+<ul><li>
+<code><a href="../reference/crd_store_push.html">crd_store_push()</a></code> — upload a store and <strong>merge</strong> its entry into the shared manifest. Three refusals guard the ways it gets corrupted: an unreadable manifest aborts the push; every write is conditional (ETag on update, <code>--if-none-match "*"</code> on create, so two simultaneous first pushes cannot overwrite one another); and a store whose embedding differs from the corpus is refused</li>
+<li>The embedding model is read from the store’s own serialized <code>embed_func</code>, so it describes the artifact rather than the machine doing the pushing</li>
+<li>Absence is established with <code>s3api head-bucket</code> + <code>head-object</code> rather than inferred from <code>aws s3 cp</code>, which reports a missing key and a nonexistent bucket identically — a wrong prefix would otherwise look like a first push</li>
+<li>Provenance records the repository that built the store, read from the store’s own directory</li>
+<li>
+<code>.crd_aws()</code> returns the exit status, and keeps stderr out of stdout for probes whose output is parsed</li>
+</ul></div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.2.0" id="cred-020">cred 0.2.0<a class="anchor" aria-label="anchor" href="#cred-020"></a></h2>
 <p>Corpus-wide evidence retrieval. Token-overlap search answers whether <em>one</em> known source supports a claim; this release adds a second tier that searches an entire indexed corpus and returns citable passages.</p>

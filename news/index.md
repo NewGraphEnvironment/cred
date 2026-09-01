@@ -1,5 +1,33 @@
 # Changelog
 
+## cred 0.3.0
+
+Writing the shared manifest.
+[`crd_store_connect()`](https://newgraphenvironment.github.io/cred/reference/crd_store_connect.md)
+could read and verify it; nothing could write it, and no committed
+implementation wrote it correctly anywhere — the prior art rebuilt the
+manifest from the current run alone and overwrote the remote copy,
+silently orphaning every other store.
+
+- [`crd_store_push()`](https://newgraphenvironment.github.io/cred/reference/crd_store_push.md)
+  — upload a store and **merge** its entry into the shared manifest.
+  Three refusals guard the ways it gets corrupted: an unreadable
+  manifest aborts the push; every write is conditional (ETag on update,
+  `--if-none-match "*"` on create, so two simultaneous first pushes
+  cannot overwrite one another); and a store whose embedding differs
+  from the corpus is refused
+- The embedding model is read from the store’s own serialized
+  `embed_func`, so it describes the artifact rather than the machine
+  doing the pushing
+- Absence is established with `s3api head-bucket` + `head-object` rather
+  than inferred from `aws s3 cp`, which reports a missing key and a
+  nonexistent bucket identically — a wrong prefix would otherwise look
+  like a first push
+- Provenance records the repository that built the store, read from the
+  store’s own directory
+- `.crd_aws()` returns the exit status, and keeps stderr out of stdout
+  for probes whose output is parsed
+
 ## cred 0.2.0
 
 Corpus-wide evidence retrieval. Token-overlap search answers whether
