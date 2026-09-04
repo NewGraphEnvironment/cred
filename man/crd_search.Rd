@@ -29,7 +29,19 @@ then adjacent chunks are merged, so the number of rows returned is neither
 citation keys. Default \code{"~/Zotero"}.}
 }
 \value{
-A \link[tibble:tibble]{tibble} ordered best-match first, with columns:
+A \link[tibble:tibble]{tibble} with one row per retrieved passage, with
+columns as below.
+
+\strong{Rows are returned in document order (\code{origin}, then position), not
+best-match first.} \code{ragnar_retrieve()} does not re-sort after merging
+overlapping chunks, and under \code{method = "hybrid"} neighbouring rows can
+carry different metrics, whose scores are not comparable — so there is no
+single ranking to return. To take the best passages, sort within one
+metric:
+
+\if{html}{\out{<div class="sourceCode r">}}\preformatted{res <- crd_search(store, "bankfull width regression")
+dplyr::arrange(dplyr::filter(res, metric == "bm25"), dplyr::desc(score))
+}\if{html}{\out{</div>}}
 \itemize{
 \item \code{citation_key} (\code{character}) — BBT key, \code{NA} if unresolvable.
 \item \code{origin} (\code{character}) — source path recorded in the store.

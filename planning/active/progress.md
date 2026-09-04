@@ -83,3 +83,50 @@ gained a `"0.3.0"` floor. The fixture uses v2-only API and DESCRIPTION carries a
 of skipping them.
 
 Suite after fixes: 317 pass, 0 fail, 2 pre-existing skips. 0 lints.
+
+### Code-check round 2 — 4 findings, all fixed
+
+Reviewed the complete diff including the fix. No blocker. One user-facing bug, three
+latent. All four independently reproduced here before acting on them.
+
+1. **[bug]** `@return` promised "ordered best-match first" and the default path does not
+   deliver it. `ragnar_retrieve()` does not re-sort after `chunks_deoverlap()`, whose last
+   ordering is `arrange(origin, doc_id, start)`. Measured: `chunk_id` ascending (document
+   order), `score` not monotone, and neighbouring rows carry *different metrics* whose
+   scores are not comparable — so no single ranking exists to return. A caller doing
+   `head(out, 3)` for "the best passages" was getting an arbitrary slice, silently. The
+   line predates the branch, but this branch rewrote the bullets beneath it to describe
+   deoverlap semantics, which is what makes the sentence false.
+   Fixed by **documenting the truth** plus a worked `arrange()` snippet for ranking within
+   one metric. Deliberately not fixed by sorting: interleaving two incomparable scales
+   needs a stated rule and is a behaviour change beyond this issue.
+2. **[fragile]** The long-form `metric_value` branch hardcoded `reduce = "max"`, but that
+   shape is what `method = "vss"` returns and its metric is `cosine_distance`, where lower
+   is better — "max" would select the *worst* constituent, silently and with the right
+   type. Dead today (neither `ragnar_retrieve_bm25()` nor `_vss()` takes `deoverlap`, so
+   `metric_value` arrives atomic and `.crd_flat()` returns before consulting `reduce`).
+   Fixed by deriving the direction from `metric_name`, via a single `.crd_metric_dirs`
+   table both branches now read — the two disagreeing is what produced the defect.
+3. **[fragile]** `suppressWarnings()` on the list branch only. Measured:
+   `.crd_flat(c("a","b"), "numeric")` warned, `.crd_flat(list("a","b"), "numeric")` was
+   silent. The only reachable warning is "NAs introduced by coercion", which means a score
+   column holds non-numeric data — silencing it yields an all-NA `score`, the exact silent
+   failure this function exists to end. Suppression removed.
+   The test asserting the property was titled "never warns" and fed only inputs
+   structurally incapable of warning (numeric -> numeric), so it passed for every possible
+   implementation. Replaced with one that feeds input that *can* warn and asserts both
+   branches behave identically.
+   Fixing that surfaced a second-order problem: per-cell coercion emitted one warning per
+   row where the atomic branch emitted one per vector. `.crd_flat` now coerces once over
+   the flattened column and reduces by group, so the branches are genuinely identical
+   rather than approximately so. All edge cases re-verified after the rewrite.
+4. **[fragile]** The merged-row test indexed two independent retrievals by the same `i`
+   while asserting only equal `nrow`. Added `expect_identical(out$text, res$text)`.
+
+Restore-the-bug re-run against the final code, this time from `main` rather than `HEAD`
+(HEAD had moved and already contained the fix — the earlier run was valid only because it
+predated the fix commit): `.crd_flat` absent from the namespace, 5 occurrences of
+`'list' object cannot be coerced to type 'double'`, 13 failures. Fix reinstated: 78 pass.
+
+Suite: 328 pass, 0 fail, 2 pre-existing skips. 0 lints. `document()` rewrote only
+`crd_search.Rd`; NAMESPACE unchanged at 25 exports.

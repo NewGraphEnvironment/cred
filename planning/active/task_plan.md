@@ -87,7 +87,7 @@ inferred from the data, so one character cell cannot promote a numeric column.
       merges, so the row count is neither `top_k` nor `2 * top_k`;
       `.crd_retrieval_score()`'s block for the list-column shape.
 - [ ] `NEWS.md` entry; bump `DESCRIPTION` to 0.3.1 as the **final** commit.
-- [ ] `devtools::check()` clean, with no leftover duckdb connections or undeletable temp
+- [x] `devtools::check()` clean, with no leftover duckdb connections or undeletable temp
       files from the fixture.
 
 ## Validation

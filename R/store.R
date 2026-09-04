@@ -268,6 +268,22 @@ crd_store_connect <- function(store,
   ragnar::ragnar_store_connect(local_path, read_only = read_only)
 }
 
+# Which end of each retrieval metric counts as "better". Single source of truth:
+# `.crd_retrieval_score()` reads it on both the long-form and the pivoted path,
+# which is what stops the two disagreeing about the direction of a distance.
+.crd_metric_dirs <- c(bm25 = "max", cosine_distance = "min")
+
+# Direction for one metric, defaulting to "max" for anything unrecognised —
+# a new similarity metric is far more likely to be higher-is-better than a
+# distance, and an unknown name should not error a search.
+.crd_metric_direction <- function(metric) {
+  if (!is.na(metric) && metric %in% names(.crd_metric_dirs)) {
+    unname(.crd_metric_dirs[[metric]])
+  } else {
+    "max"
+  }
+}
+
 #' Reduce a possibly-list retrieval column to an atomic vector
 #'
 #' `ragnar_retrieve()` defaults to `deoverlap = TRUE`: adjacent retrieved chunks
@@ -323,8 +339,23 @@ crd_store_connect <- function(store,
   # The common case: the bm25 path returns atomic columns and needs nothing.
   if (!is.list(x)) return(coerce(x))
 
-  vals <- lapply(x, function(cell) {
-    v <- suppressWarnings(coerce(unlist(cell, use.names = FALSE)))
+  # Coerce ONCE over the whole column rather than once per cell. Not a
+  # micro-optimisation: coercion is not suppressed here (see below), and
+  # per-cell coercion would emit one "NAs introduced by coercion" warning per
+  # row, where the atomic branch above emits exactly one for the vector. Making
+  # the two branches differ in how loudly they report the same problem is how a
+  # contract drifts.
+  #
+  # Warnings are deliberately NOT suppressed. The only one reachable is "NAs
+  # introduced by coercion", meaning a score column holds non-numeric data —
+  # and silencing it yields an all-NA `score`, precisely the silent failure
+  # this function exists to end.
+  cells <- lapply(x, function(cell) unlist(cell, use.names = FALSE))
+  flat <- coerce(unlist(cells, use.names = FALSE))
+  groups <- split(flat, rep(seq_along(cells), lengths(cells)))
+
+  vals <- lapply(seq_along(cells), function(i) {
+    v <- groups[[as.character(i)]]
     v <- v[!is.na(v)]
     # An empty cell, or one this metric never scored, is NA — not a dropped
     # row, which would shorten the column and misalign every other one, and not
@@ -357,20 +388,31 @@ crd_store_connect <- function(store,
 .crd_retrieval_score <- function(res) {
   n <- nrow(res)
   if ("metric_value" %in% names(res)) {
-    return(list(
-      score  = .crd_flat(res$metric_value, "numeric", "max"),
-      metric = if ("metric_name" %in% names(res)) {
-        .crd_flat(res$metric_name, "character", "first")
-      } else {
-        rep(NA_character_, n)
-      }
-    ))
+    metric <- if ("metric_name" %in% names(res)) {
+      .crd_flat(res$metric_name, "character", "first")
+    } else {
+      rep(NA_character_, n)
+    }
+    # Reduce each metric in its own direction rather than assuming "max". The
+    # long-form shape is what `method = "vss"` returns, and its metric is
+    # `cosine_distance`, where *lower* is better — a fixed "max" would pick the
+    # worst constituent, silently and with the right type. Unreachable today
+    # (neither `ragnar_retrieve_bm25()` nor `_vss()` takes `deoverlap`, so
+    # `metric_value` arrives atomic and `.crd_flat()` returns before consulting
+    # `reduce`), which is exactly why it needs to be right now rather than when
+    # it stops being dead.
+    score <- rep(NA_real_, n)
+    for (m in unique(metric[!is.na(metric)])) {
+      idx <- which(metric == m)
+      score[idx] <- .crd_flat(res$metric_value[idx], "numeric",
+                              .crd_metric_direction(m))
+    }
+    return(list(score = score, metric = metric))
   }
 
-  # Which end of each metric is "better". Order also sets preference: a row
-  # scored by BM25 keeps that score rather than being overwritten by a distance.
-  directions <- c(bm25 = "max", cosine_distance = "min")
-  directions <- directions[names(directions) %in% names(res)]
+  # Order sets preference: a row scored by BM25 keeps that score rather than
+  # being overwritten by a distance.
+  directions <- .crd_metric_dirs[names(.crd_metric_dirs) %in% names(res)]
 
   score <- rep(NA_real_, n)
   metric <- rep(NA_character_, n)
@@ -408,7 +450,20 @@ crd_store_connect <- function(store,
 #' @param method `character(1)` one of `"hybrid"`, `"bm25"`, `"vss"`.
 #' @param zotero_dir `character(1)` Zotero data directory used to resolve
 #'   citation keys. Default `"~/Zotero"`.
-#' @return A [tibble][tibble::tibble] ordered best-match first, with columns:
+#' @return A [tibble][tibble::tibble] with one row per retrieved passage, with
+#'   columns as below.
+#'
+#'   **Rows are returned in document order (`origin`, then position), not
+#'   best-match first.** `ragnar_retrieve()` does not re-sort after merging
+#'   overlapping chunks, and under `method = "hybrid"` neighbouring rows can
+#'   carry different metrics, whose scores are not comparable — so there is no
+#'   single ranking to return. To take the best passages, sort within one
+#'   metric:
+#'
+#'   ```r
+#'   res <- crd_search(store, "bankfull width regression")
+#'   dplyr::arrange(dplyr::filter(res, metric == "bm25"), dplyr::desc(score))
+#'   ```
 #'   - `citation_key` (`character`) — BBT key, `NA` if unresolvable.
 #'   - `origin` (`character`) — source path recorded in the store.
 #'   - `chunk_id`, `start`, `end` (`integer`) — location within the document.

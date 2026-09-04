@@ -76,7 +76,11 @@ test_that("a merged row is scored by its best constituent chunk, per metric dire
   res <- ragnar::ragnar_retrieve(store, .crd_test_query(), top_k = .crd_test_top_k())
   out <- crd_search(store, .crd_test_query(), top_k = .crd_test_top_k())
 
+  # `res` and `out` are two independent round-trips to duckdb, and every
+  # assertion below indexes both by the same `i`. Equal row counts do not make
+  # them row-aligned; this does.
   expect_identical(nrow(out), nrow(res))
+  expect_identical(out$text, res$text)
 
   multi <- which(lengths(res$bm25) > 1L)
   expect_gt(length(multi), 0L)   # premise: there IS a merged row to check
@@ -155,7 +159,20 @@ test_that(".crd_flat maps an empty cell to a typed NA rather than dropping the r
   expect_identical(.crd_flat(list(NULL, "a"), "character"), c(NA_character_, "a"))
 })
 
-test_that(".crd_flat passes atomic input through unchanged and never warns", {
+test_that(".crd_flat warns identically on both branches when coercion loses data", {
+  # The atomic and list branches must agree. Feeding input that structurally
+  # cannot warn (numeric -> numeric) asserts nothing: it passes for an
+  # implementation that suppresses warnings and for one that does not. A score
+  # column holding non-numeric data yields an all-NA `score`, which is the
+  # silent failure this whole function exists to end, so the warning has to
+  # survive.
+  expect_warning(a <- .crd_flat(c("a", "b"), "numeric"), "NAs introduced")
+  expect_warning(l <- .crd_flat(list("a", "b"), "numeric"), "NAs introduced")
+  expect_identical(a, c(NA_real_, NA_real_))
+  expect_identical(l, c(NA_real_, NA_real_))
+})
+
+test_that(".crd_flat passes atomic input through unchanged", {
   # The common case: every column on the bm25 path arrives atomic.
   expect_silent(got <- .crd_flat(c(1.5, 2.5), "numeric", "max"))
   expect_identical(got, c(1.5, 2.5))
@@ -163,7 +180,9 @@ test_that(".crd_flat passes atomic input through unchanged and never warns", {
   expect_identical(.crd_flat(c("a", NA), "character"), c("a", NA))
 
   # A merged row is ragnar's ordinary output, not an anomaly, so reducing one
-  # must be silent too — a warning here would fire on most real searches.
+  # must be silent — a warning here would fire on most real searches. This one
+  # can fail: an implementation that warned on multi-element cells (the contract
+  # first proposed for #27) would trip it.
   expect_silent(.crd_flat(list(c(1, 2), c(3, 4)), "numeric", "max"))
 })
 
@@ -209,4 +228,30 @@ test_that(".crd_retrieval_score still reads the long-form metric_value shape", {
   got <- .crd_retrieval_score(res)
   expect_identical(got$score, c(1.2, 0.8))
   expect_identical(got$metric, c("bm25", "bm25"))
+})
+
+test_that(".crd_retrieval_score reduces long-form metric_value in its own direction", {
+  # `method = "vss"` reports metric_name = "cosine_distance", where LOWER is
+  # better. A fixed "max" here would return the worst constituent — silently,
+  # with the right type. Unreachable through ragnar today (neither
+  # ragnar_retrieve_bm25() nor _vss() takes `deoverlap`, so metric_value arrives
+  # atomic), so this is the only thing standing between the direction and a
+  # future upstream change.
+  res <- data.frame(metric_name = c("cosine_distance", "cosine_distance"),
+                    stringsAsFactors = FALSE)
+  res$metric_value <- list(c(0.30, 0.10), 0.5)
+  got <- .crd_retrieval_score(res)
+  expect_identical(got$score, c(0.10, 0.5))
+
+  res$metric_name <- c("bm25", "bm25")
+  expect_identical(.crd_retrieval_score(res)$score, c(0.30, 0.5))
+})
+
+test_that(".crd_metric_direction defaults to max for an unrecognised metric", {
+  # An unknown metric name must not error a search; higher-is-better is the
+  # likelier default for a new similarity measure.
+  expect_identical(.crd_metric_direction("bm25"), "max")
+  expect_identical(.crd_metric_direction("cosine_distance"), "min")
+  expect_identical(.crd_metric_direction("some_future_metric"), "max")
+  expect_identical(.crd_metric_direction(NA_character_), "max")
 })
