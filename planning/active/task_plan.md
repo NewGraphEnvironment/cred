@@ -17,53 +17,78 @@ There is no `metric_value` column under hybrid retrieval, so `.crd_retrieval_sco
 The failure is misleading: the store pull succeeds and verifies, so each consumer
 rediscovers it as an apparent store problem.
 
-## The contract
+## The contract — corrected after measurement
 
-One internal flattener, used everywhere a retrieval column is coerced:
+The first version of this plan said list cells were always length 1 and proposed
+"first element plus a warning". **That was an artifact of a six-document fixture.**
+`ragnar_retrieve()` defaults to `deoverlap = TRUE` and merges adjacent retrieved chunks
+into one row, so a cell holds one value per constituent chunk. On a realistic corpus 24%
+of rows are multi-element (104 rows, 4 queries, 3 `top_k` values), and `as.numeric()` on
+a list of length-1 scalars works fine — only the multi-element cell throws.
 
-| cell length | result | note |
+So a warning would fire on most real searches, and "first" is not merely arbitrary: on
+~5% of rows the leading chunk's `bm25` is `NA` while a later one's is real, which
+misattributes the metric. Reduce by the metric's own direction instead:
+
+| column | reduction | why |
 |---|---|---|
-| 1 | the value | the only shape observed |
-| 0 | `NA` | |
-| >1 | first element | **plus a warning** naming the column and how many rows |
+| `bm25` | `max(na.rm = TRUE)` | higher is better; the best constituent is what retrieved the passage |
+| `cosine_distance` | `min(na.rm = TRUE)` | lower is better |
+| `chunk_id`, `origin`, `text` | first | matches ragnar's own `start = first(start)` |
+| empty cell / all-NA | typed `NA` | never `-Inf` from `max(numeric(0))`, never untyped `NA` |
 
-Decided during planning rather than left to accident. The warning is the point: if ragnar's
-shape changes we hear about it instead of scoring on an arbitrary element.
+No warning: this is ragnar's ordinary output, not an anomaly.
+
+`.crd_flat(x, type, reduce)` — `type` always comes from the call site and is never
+inferred from the data, so one character cell cannot promote a numeric column.
 
 ## Phase 1: Regression test that actually reaches the failure
 
-- [ ] `tests/testthat/helper-store.R` — `local_ragnar_store()` building a real ragnar v2
-      store in a temp dir with a deterministic offline `embed` function; origins shaped like
-      Zotero attachment paths. Skips when `ragnar` or `duckdb` is absent.
-- [ ] Assert the **premise** in the test: the frame `ragnar_retrieve()` returns has at least
-      one list column. If a future ragnar stops producing them, the test fails naming the
-      real cause instead of passing vacuously.
-- [ ] Failing test: `crd_search()` on that store returns a tibble with atomic `score`,
-      `chunk_id`, `origin`, `text` — currently the reported error.
-- [ ] Unit tests for the flattener directly: length 0, 1, >1 (warning fired and first element
-      taken), all-`NA`, and atomic input passed through unchanged.
-- [ ] Confirm the tests fail against current `main` before the fix lands.
+- [x] `tests/testthat/helper-store.R` — `local_ragnar_store()` building a real ragnar v2
+      store offline with a deterministic `embed`. Documents are long enough to chunk
+      several times, which is what makes retrieval merge them; a six-document fixture of
+      one-chunk documents passes against the bug. One cached store per file; the writer
+      connection is closed before the reader opens, and the reader is deferred to
+      `teardown_env()`.
+- [x] Assert the **premise**: the retrieval frame has list score columns AND at least one
+      cell of length > 1, and the untouched frame still raises the reported error. Length-1
+      cells coerce fine, so "is a list column" alone is not the premise.
+- [x] Failing test: `crd_search()` on that store returns atomic columns.
+- [x] A merged row is scored by its best constituent, per metric direction — the assertion
+      that separates this fix from a first-element one.
+- [x] Unit tests for `.crd_flat`: typed NA for empty cells, NA constituents ignored,
+      all-NA not becoming `-Inf`, atomic passthrough, missing column, zero-row frame.
+- [x] Confirmed red against unfixed code with the reported error verbatim:
+      `Error in crd_search(...): 'list' object cannot be coerced to type 'double'`
+      (test-store-search.R:34 and :65). The `.crd_flat` "could not find function" errors
+      are a vacuous red and prove nothing.
 
-## Phase 2: The flattener and its call sites
+## Phase 2: The reducer and its call sites
 
-- [ ] `.crd_flat()` in `R/store.R` implementing the contract above, with the rationale for
-      the multi-element choice in its `@noRd` block.
-- [ ] Wire into `.crd_retrieval_score()` — both branches.
-- [ ] Wire into `crd_search()` — `chunk_id`, `start`, `end`, and also `origin` / `text`:
-      `as.character()` on a list does not error, it deparses, so those are the silent half.
-- [ ] `devtools::test()` green; the Phase 1 tests now pass.
+- [ ] `.crd_flat(x, type, reduce)` in `R/store.R`, with the rationale for direction-aware
+      reduction in its `@noRd` block.
+- [ ] `.crd_retrieval_score()` — `metric_value`, `metric_name` (R/store.R:292, missed by
+      the first enumeration) and the `cand` loop, now carrying a direction per metric.
+- [ ] `crd_search()` — `chunk_id`, `start`, `end`, `origin`, `text`. `origin` is genuine
+      defence: `.crd_zot_key_from_path()` calls `dirname()`, which errors on a list.
+      `text` at R/store.R:392 is also the only column read with no `%in% names(res)`
+      guard — give it one.
+- [ ] `devtools::test()` green.
 
 ## Phase 3: Verify, document, release
 
-- [ ] **Restore the bug** (patch `.crd_flat` to a passthrough in both the namespace and the
-      attached `package:cred` binding) and confirm the new tests go red. Print a value only
-      the broken version produces, so the restoration is evidenced rather than assumed.
-- [ ] `lintr::lint_package()` — 0 new lints against the `HEAD` baseline.
+- [ ] **Restore the bug** with `git stash` / `git checkout HEAD -- R/store.R` — the source
+      that had it, not a hand-written passthrough, which is a different program failing a
+      different way. Proof is the original error string, not a pass/fail count.
+- [ ] `lintr::lint_package()` — no new lints against the `HEAD` baseline.
 - [ ] `devtools::document()`; read what it writes — no unexpected `.Rd`, no export lost.
-- [ ] Update `crd_search()`'s `@return` to state that `score` is flattened and what a
-      multi-valued cell does.
+- [ ] Docs: `crd_search()`'s `@return` for the reduction and what `chunk_id` means on a
+      merged row; `@param top_k` for the fact that hybrid retrieves per method and then
+      merges, so the row count is neither `top_k` nor `2 * top_k`;
+      `.crd_retrieval_score()`'s block for the list-column shape.
 - [ ] `NEWS.md` entry; bump `DESCRIPTION` to 0.3.1 as the **final** commit.
-- [ ] `devtools::check()` clean.
+- [ ] `devtools::check()` clean, with no leftover duckdb connections or undeletable temp
+      files from the fixture.
 
 ## Validation
 
