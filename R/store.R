@@ -268,6 +268,131 @@ crd_store_connect <- function(store,
   ragnar::ragnar_store_connect(local_path, read_only = read_only)
 }
 
+# Which end of each retrieval metric counts as "better", and the roster of
+# metrics cred knows. Single source of truth for BOTH facts: an earlier version
+# was authoritative about direction while each branch decided membership its own
+# way, and the two then disagreed about the same column — the pivoted path
+# dropping an unrecognised metric entirely, the long-form path scoring it in the
+# wrong direction.
+#
+# The three distances are ragnar's full alternative set, read from
+# `ragnar:::method_to_info()`, which maps every one of `cosine_distance`,
+# `euclidean_distance` and `negative_inner_product` to `"ASC"`.
+.crd_metric_dirs <- c(
+  bm25                   = "max",
+  cosine_distance        = "min",
+  euclidean_distance     = "min",
+  negative_inner_product = "min"
+)
+
+# Columns of a retrieval frame that are not scores. Used to spot a metric column
+# cred does not know, so an unrecognised metric is still scored rather than
+# silently dropped.
+.crd_non_metric_cols <- c("origin", "doc_id", "chunk_id", "start", "end",
+                          "context", "text", "embedding", "metric_name",
+                          "metric_value")
+
+# Direction for one metric.
+#
+# Unknown names default to "min", not "max": every metric ragnar offers besides
+# BM25 is a distance, and all three are ASC. An unknown name is therefore far
+# likelier to be another distance than a new similarity — the opposite of what
+# is intuitive, which is why the evidence is recorded here rather than the
+# guess.
+#
+# Direction only matters for a cell holding several chunks. Long-form
+# `metric_value` arrives atomic, so an unrecognised metric there is scored
+# correctly regardless of what this returns.
+.crd_metric_direction <- function(metric) {
+  if (!is.na(metric) && metric %in% names(.crd_metric_dirs)) {
+    unname(.crd_metric_dirs[[metric]])
+  } else {
+    "min"
+  }
+}
+
+#' Reduce a possibly-list retrieval column to an atomic vector
+#'
+#' `ragnar_retrieve()` defaults to `deoverlap = TRUE`: adjacent retrieved chunks
+#' of one document are merged into a single row, and every column except
+#' `origin`, `doc_id`, `start`, `end`, `context` and `text` becomes a list
+#' holding one value per constituent chunk. So a cell is not a wrapper around a
+#' scalar — it is a genuine per-chunk vector, and on a real corpus roughly a
+#' quarter of rows carry more than one value.
+#'
+#' `as.numeric()` copes with a list of length-1 scalars and **errors** on a
+#' multi-element one, which is why the failure looked intermittent and why a
+#' `suppressWarnings()` around it could never have helped.
+#'
+#' `reduce` therefore has to follow the metric's own direction rather than take
+#' whatever came first: the score that retrieved a merged passage is the best
+#' one among its chunks. `NA` marks a chunk that this metric did not retrieve,
+#' so it is dropped before reducing — taking the first element would score a row
+#' on a constituent that never matched, and would report `cosine_distance` for a
+#' row that does have a `bm25` score.
+#'
+#' No warning is emitted for a multi-element cell: it is ragnar's ordinary
+#' output, and warning on it would fire on most searches.
+#'
+#' @param x a column from a `ragnar_retrieve*()` frame — list or atomic, or
+#'   `NULL` when the column is absent.
+#' @param type `character(1)` one of `"numeric"`, `"integer"`, `"character"`.
+#'   Always supplied by the call site and never inferred from the data, so one
+#'   character cell cannot promote a numeric column.
+#' @param reduce `character(1)` how to collapse a multi-element cell:
+#'   `"first"`, `"max"` or `"min"`.
+#' @param n `integer(1)` or `NULL`. When given, an absent column is returned as
+#'   `n` typed `NA`s instead of a zero-length vector. Retrieval frames do not
+#'   carry a fixed column set — a query BM25 matches nothing on comes back with
+#'   no `bm25` column at all — and a zero-length column is a tibble recycling
+#'   error rather than the missing value it should be.
+#' @return An atomic vector of `type`, of length `length(x)` (or `n`), with a
+#'   typed `NA` wherever a cell was empty or entirely `NA`.
+#' @noRd
+.crd_flat <- function(x, type = c("numeric", "integer", "character"),
+                      reduce = c("first", "max", "min"), n = NULL) {
+  type <- match.arg(type)
+  reduce <- match.arg(reduce)
+  coerce <- switch(type,
+                   numeric   = as.numeric,
+                   integer   = as.integer,
+                   character = as.character)
+  na <- switch(type,
+               numeric   = NA_real_,
+               integer   = NA_integer_,
+               character = NA_character_)
+
+  if (is.null(x)) return(if (is.null(n)) coerce(NULL) else rep(na, n))
+  # The common case: the bm25 path returns atomic columns and needs nothing.
+  if (!is.list(x)) return(coerce(x))
+
+  # Coerce ONCE over the whole column rather than once per cell. Not a
+  # micro-optimisation: coercion is not suppressed here (see below), and
+  # per-cell coercion would emit one "NAs introduced by coercion" warning per
+  # row, where the atomic branch above emits exactly one for the vector. Making
+  # the two branches differ in how loudly they report the same problem is how a
+  # contract drifts.
+  #
+  # Warnings are deliberately NOT suppressed. The only one reachable is "NAs
+  # introduced by coercion", meaning a score column holds non-numeric data —
+  # and silencing it yields an all-NA `score`, precisely the silent failure
+  # this function exists to end.
+  cells <- lapply(x, function(cell) unlist(cell, use.names = FALSE))
+  flat <- coerce(unlist(cells, use.names = FALSE))
+  groups <- split(flat, rep(seq_along(cells), lengths(cells)))
+
+  vals <- lapply(seq_along(cells), function(i) {
+    v <- groups[[as.character(i)]]
+    v <- v[!is.na(v)]
+    # An empty cell, or one this metric never scored, is NA — not a dropped
+    # row, which would shorten the column and misalign every other one, and not
+    # `-Inf` from `max(numeric(0))`.
+    if (length(v) == 0L) return(na)
+    switch(reduce, first = v[[1L]], max = max(v), min = min(v))
+  })
+  coerce(unlist(vals, use.names = FALSE))
+}
+
 #' Extract a comparable score and its metric name from ragnar results
 #'
 #' Single-method retrieval returns long-form `metric_name`/`metric_value`
@@ -275,6 +400,10 @@ crd_store_connect <- function(store,
 #' (`bm25`, `cosine_distance`) and no `metric_value` at all — so reading
 #' `metric_value` unconditionally silently produces an all-`NA` score on the
 #' default code path.
+#'
+#' The pivoted columns are **list** columns, one value per chunk merged into the
+#' row, and are reduced by `.crd_flat()` in the direction that metric improves:
+#' `bm25` higher is better, `cosine_distance` lower is better.
 #'
 #' Scores are only comparable within a metric, which is why the metric that
 #' produced each score is returned alongside it rather than being discarded.
@@ -286,21 +415,53 @@ crd_store_connect <- function(store,
 .crd_retrieval_score <- function(res) {
   n <- nrow(res)
   if ("metric_value" %in% names(res)) {
-    return(list(
-      score  = as.numeric(res$metric_value),
-      metric = if ("metric_name" %in% names(res)) {
-        as.character(res$metric_name)
-      } else {
-        rep(NA_character_, n)
-      }
-    ))
+    metric <- if ("metric_name" %in% names(res)) {
+      .crd_flat(res$metric_name, "character", "first")
+    } else {
+      rep(NA_character_, n)
+    }
+    # Reduce each metric in its own direction rather than assuming "max". The
+    # long-form shape is what `method = "vss"` returns, and its metric is
+    # `cosine_distance`, where *lower* is better — a fixed "max" would pick the
+    # worst constituent, silently and with the right type. Unreachable today
+    # (neither `ragnar_retrieve_bm25()` nor `_vss()` takes `deoverlap`, so
+    # `metric_value` arrives atomic and `.crd_flat()` returns before consulting
+    # `reduce`), which is exactly why it needs to be right now rather than when
+    # it stops being dead.
+    # Group by metric so each reduces in its own direction. Rows whose
+    # `metric_name` is absent or NA are grouped under "" and still scored:
+    # gating the loop on the metric resolving is how `metric_value` gets
+    # discarded and an all-NA `score` comes back, which is the failure this
+    # function exists to end rather than to reintroduce on another shape.
+    score <- rep(NA_real_, n)
+    for (idx in split(seq_len(n), ifelse(is.na(metric), "", metric))) {
+      m <- metric[idx[[1L]]]
+      score[idx] <- .crd_flat(res$metric_value[idx], "numeric",
+                              .crd_metric_direction(m))
+    }
+    return(list(score = score, metric = metric))
   }
 
-  cand <- intersect(c("bm25", "cosine_distance"), names(res))
+  # Enumerate the score columns actually present rather than only the ones in
+  # the table, so a metric cred does not recognise is scored here exactly as the
+  # long-form branch scores it. Membership by table alone is what let the two
+  # branches answer differently for the same column.
+  #
+  # The type guard is the real safety net: it does not depend on
+  # `.crd_non_metric_cols` being complete, so a new *character* column added
+  # upstream cannot be mistaken for a score.
+  cand <- setdiff(names(res), .crd_non_metric_cols)
+  cand <- cand[vapply(cand, function(m) is.numeric(res[[m]]) || is.list(res[[m]]),
+                      logical(1))]
+  # Known metrics first, in table order, so a row scored by BM25 keeps that
+  # score rather than being overwritten by a distance.
+  cand <- c(intersect(names(.crd_metric_dirs), cand),
+            setdiff(cand, names(.crd_metric_dirs)))
+
   score <- rep(NA_real_, n)
   metric <- rep(NA_character_, n)
   for (m in cand) {
-    v <- suppressWarnings(as.numeric(res[[m]]))
+    v <- .crd_flat(res[[m]], "numeric", .crd_metric_direction(m))
     take <- is.na(score) & !is.na(v)
     score[take] <- v[take]
     metric[take] <- m
@@ -326,16 +487,36 @@ crd_store_connect <- function(store,
 #' @param store a ragnar store, from [crd_store_connect()] or
 #'   [ragnar::ragnar_store_connect()].
 #' @param query `character(1)` search text.
-#' @param top_k `integer(1)` number of passages to return. Default `5L`.
+#' @param top_k `integer(1)` passages to retrieve **per method**. Default `5L`.
+#'   Under `method = "hybrid"` the vector and lexical result sets are unioned and
+#'   then adjacent chunks are merged, so the number of rows returned is neither
+#'   `top_k` nor `2 * top_k` — expect somewhere between the two.
 #' @param method `character(1)` one of `"hybrid"`, `"bm25"`, `"vss"`.
 #' @param zotero_dir `character(1)` Zotero data directory used to resolve
 #'   citation keys. Default `"~/Zotero"`.
-#' @return A [tibble][tibble::tibble] ordered best-match first, with columns:
+#' @return A [tibble][tibble::tibble] with one row per retrieved passage, with
+#'   columns as below.
+#'
+#'   **Rows are returned in document order (`origin`, then position), not
+#'   best-match first.** `ragnar_retrieve()` does not re-sort after merging
+#'   overlapping chunks, and under `method = "hybrid"` neighbouring rows can
+#'   carry different metrics, whose scores are not comparable — so there is no
+#'   single ranking to return. To take the best passages, sort within one
+#'   metric:
+#'
+#'   ```r
+#'   res <- crd_search(store, "bankfull width regression")
+#'   dplyr::arrange(dplyr::filter(res, metric == "bm25"), dplyr::desc(score))
+#'   ```
 #'   - `citation_key` (`character`) — BBT key, `NA` if unresolvable.
 #'   - `origin` (`character`) — source path recorded in the store.
 #'   - `chunk_id`, `start`, `end` (`integer`) — location within the document.
+#'     A returned passage may be several adjacent chunks merged into one, in
+#'     which case `chunk_id` is the first of them and `start`/`end` span them all.
 #'   - `text` (`character`) — the retrieved passage, verbatim.
-#'   - `score` (`numeric`) — retrieval metric value.
+#'   - `score` (`numeric`) — retrieval metric value. Where a passage merges
+#'     several chunks this is the best score among them: highest for `bm25`,
+#'     lowest for `cosine_distance`.
 #'   - `metric` (`character`) — which metric produced `score` (`"bm25"` or
 #'     `"cosine_distance"`). Scores are comparable only within a metric.
 #'   - `method` (`character`) — the method actually used, which differs from
@@ -380,16 +561,23 @@ crd_search <- function(store, query, top_k = 5L,
                           metric = character(), method = character()))
   }
 
-  origin <- if ("origin" %in% names(res)) as.character(res$origin) else NA_character_
+  # Every column is routed through .crd_flat() rather than coerced directly.
+  # `chunk_id` is a list column under hybrid retrieval and throws exactly as the
+  # score columns do. `origin` is not observed as a list, but flattening it is
+  # not merely defensive: .crd_zot_key_from_path() calls dirname(), which errors
+  # on a list rather than degrading to NA.
+  origin <- .crd_flat(res$origin, "character", "first", n = nrow(res))
   scored <- .crd_retrieval_score(res)
 
+  # `chunk_id` takes the first constituent, matching ragnar's own
+  # `start = first(start)` when it merges chunks into one row.
   tibble::tibble(
     citation_key = .crd_zot_key_from_path(origin, zotero_dir = zotero_dir),
     origin       = origin,
-    chunk_id     = if ("chunk_id" %in% names(res)) as.integer(res$chunk_id) else NA_integer_,
-    start        = if ("start" %in% names(res)) as.integer(res$start) else NA_integer_,
-    end          = if ("end" %in% names(res)) as.integer(res$end) else NA_integer_,
-    text         = as.character(res$text),
+    chunk_id     = .crd_flat(res$chunk_id, "integer", "first", n = nrow(res)),
+    start        = .crd_flat(res$start, "integer", "first", n = nrow(res)),
+    end          = .crd_flat(res$end, "integer", "max", n = nrow(res)),
+    text         = .crd_flat(res$text, "character", "first", n = nrow(res)),
     score        = scored$score,
     metric       = scored$metric,
     method       = used

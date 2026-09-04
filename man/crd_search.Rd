@@ -18,7 +18,10 @@ crd_search(
 
 \item{query}{\code{character(1)} search text.}
 
-\item{top_k}{\code{integer(1)} number of passages to return. Default \code{5L}.}
+\item{top_k}{\code{integer(1)} passages to retrieve \strong{per method}. Default \code{5L}.
+Under \code{method = "hybrid"} the vector and lexical result sets are unioned and
+then adjacent chunks are merged, so the number of rows returned is neither
+\code{top_k} nor \code{2 * top_k} — expect somewhere between the two.}
 
 \item{method}{\code{character(1)} one of \code{"hybrid"}, \code{"bm25"}, \code{"vss"}.}
 
@@ -26,13 +29,29 @@ crd_search(
 citation keys. Default \code{"~/Zotero"}.}
 }
 \value{
-A \link[tibble:tibble]{tibble} ordered best-match first, with columns:
+A \link[tibble:tibble]{tibble} with one row per retrieved passage, with
+columns as below.
+
+\strong{Rows are returned in document order (\code{origin}, then position), not
+best-match first.} \code{ragnar_retrieve()} does not re-sort after merging
+overlapping chunks, and under \code{method = "hybrid"} neighbouring rows can
+carry different metrics, whose scores are not comparable — so there is no
+single ranking to return. To take the best passages, sort within one
+metric:
+
+\if{html}{\out{<div class="sourceCode r">}}\preformatted{res <- crd_search(store, "bankfull width regression")
+dplyr::arrange(dplyr::filter(res, metric == "bm25"), dplyr::desc(score))
+}\if{html}{\out{</div>}}
 \itemize{
 \item \code{citation_key} (\code{character}) — BBT key, \code{NA} if unresolvable.
 \item \code{origin} (\code{character}) — source path recorded in the store.
 \item \code{chunk_id}, \code{start}, \code{end} (\code{integer}) — location within the document.
+A returned passage may be several adjacent chunks merged into one, in
+which case \code{chunk_id} is the first of them and \code{start}/\code{end} span them all.
 \item \code{text} (\code{character}) — the retrieved passage, verbatim.
-\item \code{score} (\code{numeric}) — retrieval metric value.
+\item \code{score} (\code{numeric}) — retrieval metric value. Where a passage merges
+several chunks this is the best score among them: highest for \code{bm25},
+lowest for \code{cosine_distance}.
 \item \code{metric} (\code{character}) — which metric produced \code{score} (\code{"bm25"} or
 \code{"cosine_distance"}). Scores are comparable only within a metric.
 \item \code{method} (\code{character}) — the method actually used, which differs from
