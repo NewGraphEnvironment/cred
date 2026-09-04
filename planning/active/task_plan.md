@@ -86,13 +86,13 @@ inferred from the data, so one character cell cannot promote a numeric column.
       merged row; `@param top_k` for the fact that hybrid retrieves per method and then
       merges, so the row count is neither `top_k` nor `2 * top_k`;
       `.crd_retrieval_score()`'s block for the list-column shape.
-- [ ] `NEWS.md` entry; bump `DESCRIPTION` to 0.3.1 as the **final** commit.
+- [x] `NEWS.md` entry; bump `DESCRIPTION` to 0.3.1 as the **final** commit.
 - [x] `devtools::check()` clean, with no leftover duckdb connections or undeletable temp
       files from the fixture.
 
 ## Validation
 
-- [ ] Tests pass
-- [ ] `/code-check` clean on each commit
-- [ ] PWF checkboxes match landed work
+- [x] Tests pass
+- [x] `/code-check` clean on each commit (3 rounds: 3 + 4 + 3 findings, all fixed)
+- [x] PWF checkboxes match landed work
 - [ ] `/planning-archive` on completion

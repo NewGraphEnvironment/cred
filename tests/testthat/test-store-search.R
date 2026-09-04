@@ -247,11 +247,96 @@ test_that(".crd_retrieval_score reduces long-form metric_value in its own direct
   expect_identical(.crd_retrieval_score(res)$score, c(0.30, 0.5))
 })
 
-test_that(".crd_metric_direction defaults to max for an unrecognised metric", {
-  # An unknown metric name must not error a search; higher-is-better is the
-  # likelier default for a new similarity measure.
+test_that(".crd_metric_direction defaults to min for an unrecognised metric", {
+  # "min", not "max". `ragnar:::method_to_info()` maps every alternative it
+  # offers -- cosine_distance, euclidean_distance, negative_inner_product -- to
+  # "ASC", so BM25 is the lone higher-is-better metric and an unknown name is
+  # likelier to be another distance. The intuitive default is the wrong one.
   expect_identical(.crd_metric_direction("bm25"), "max")
   expect_identical(.crd_metric_direction("cosine_distance"), "min")
-  expect_identical(.crd_metric_direction("some_future_metric"), "max")
-  expect_identical(.crd_metric_direction(NA_character_), "max")
+  expect_identical(.crd_metric_direction("euclidean_distance"), "min")
+  expect_identical(.crd_metric_direction("negative_inner_product"), "min")
+  expect_identical(.crd_metric_direction("some_future_metric"), "min")
+  expect_identical(.crd_metric_direction(NA_character_), "min")
+})
+
+test_that("both retrieval shapes score an unrecognised metric the same way", {
+  # The mechanism behind two earlier defects: the table was authoritative about
+  # direction but each branch decided metric MEMBERSHIP its own way, so the same
+  # column got two different wrong answers -- pivoted dropped it to all-NA,
+  # long-form scored it in the wrong direction.
+  wide <- data.frame(text = c("a", "b"), stringsAsFactors = FALSE)
+  wide$euclidean_distance <- list(c(0.9, 0.2), 0.5)
+  long <- data.frame(metric_name = c("euclidean_distance", "euclidean_distance"),
+                     stringsAsFactors = FALSE)
+  long$metric_value <- list(c(0.9, 0.2), 0.5)
+
+  expect_identical(.crd_retrieval_score(wide)$score,
+                   .crd_retrieval_score(long)$score)
+  expect_identical(.crd_retrieval_score(wide)$score, c(0.2, 0.5))
+  expect_identical(.crd_retrieval_score(wide)$metric,
+                   c("euclidean_distance", "euclidean_distance"))
+})
+
+test_that(".crd_retrieval_score scores long-form rows whose metric_name is missing", {
+  # Regression guard. Grouping the score loop by metric made an absent or NA
+  # `metric_name` skip the loop body entirely, returning an all-NA score while
+  # `metric_value` sat right there -- the exact silent failure this function
+  # exists to end, reintroduced on a different shape by the fix for the first.
+  expect_identical(
+    .crd_retrieval_score(data.frame(metric_value = c(1.2, 0.8)))$score,
+    c(1.2, 0.8)
+  )
+  got <- .crd_retrieval_score(
+    data.frame(metric_name = c("bm25", NA), metric_value = c(1.2, 0.8),
+               stringsAsFactors = FALSE)
+  )
+  expect_identical(got$score, c(1.2, 0.8))
+})
+
+test_that("a non-score column is never mistaken for a metric", {
+  # `.crd_non_metric_cols` cannot be assumed complete, so the type guard is what
+  # actually protects this: a character column added upstream must not become a
+  # score however unfamiliar its name.
+  res <- data.frame(text = c("a", "b"), some_new_label = c("x", "y"),
+                    stringsAsFactors = FALSE)
+  res$bm25 <- list(1.5, 2.5)
+  got <- .crd_retrieval_score(res)
+  expect_identical(got$score, c(1.5, 2.5))
+  expect_identical(got$metric, c("bm25", "bm25"))
+})
+
+test_that(".crd_flat keeps values on their own rows regardless of empty cells", {
+  # `.crd_flat` reduces by splitting a once-coerced vector into per-cell groups.
+  # An empty cell contributes no entries, so its group is simply absent from the
+  # split — and the lookup is by NAME rather than position precisely so that a
+  # missing group yields NA on that row instead of shifting every later value up
+  # one. Silent misalignment of a whole column is the worst outcome this
+  # function has available to it, so it is pinned rather than reasoned about.
+  expect_identical(.crd_flat(list(numeric(0), 5, 7), "numeric", "max"), c(NA, 5, 7))
+  expect_identical(.crd_flat(list(5, numeric(0), 7), "numeric", "max"), c(5, NA, 7))
+  expect_identical(.crd_flat(list(5, 7, numeric(0)), "numeric", "max"), c(5, 7, NA))
+  expect_identical(.crd_flat(list(NULL, 5, NULL, 7), "numeric", "max"), c(NA, 5, NA, 7))
+})
+
+test_that(".crd_flat does not misalign at the lengths a real search returns", {
+  # An earlier version of this test claimed split() names sort lexically, "10"
+  # before "2". They do not: the grouping vector is an integer factor, whose
+  # levels sort numerically. So with no gaps, positional and name-based lookup
+  # coincide, and the first assertion below CANNOT discriminate — it is here as
+  # a plain identity check, not as a guard.
+  #
+  # The gap is what discriminates, and it is worth repeating at a two-digit
+  # length because that is the shape a real search returns: hybrid retrieval at
+  # top_k = 10 routinely yields more than nine rows, so an off-by-one in the
+  # lookup would corrupt ordinary results rather than an edge case.
+  expect_identical(.crd_flat(as.list(as.numeric(1:12)), "numeric", "max"),
+                   as.numeric(1:12))
+
+  gap <- c(as.list(as.numeric(1:9)), list(numeric(0)), list(11), list(12))
+  expect_identical(.crd_flat(gap, "numeric", "max"), c(1:9, NA, 11, 12))
+
+  both <- c(as.list(as.numeric(1:8)), list(numeric(0)), list(c(100, 200)),
+            list(11), list(c(5, 300)))
+  expect_identical(.crd_flat(both, "numeric", "max"), c(1:8, NA, 200, 11, 300))
 })

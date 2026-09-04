@@ -268,19 +268,46 @@ crd_store_connect <- function(store,
   ragnar::ragnar_store_connect(local_path, read_only = read_only)
 }
 
-# Which end of each retrieval metric counts as "better". Single source of truth:
-# `.crd_retrieval_score()` reads it on both the long-form and the pivoted path,
-# which is what stops the two disagreeing about the direction of a distance.
-.crd_metric_dirs <- c(bm25 = "max", cosine_distance = "min")
+# Which end of each retrieval metric counts as "better", and the roster of
+# metrics cred knows. Single source of truth for BOTH facts: an earlier version
+# was authoritative about direction while each branch decided membership its own
+# way, and the two then disagreed about the same column — the pivoted path
+# dropping an unrecognised metric entirely, the long-form path scoring it in the
+# wrong direction.
+#
+# The three distances are ragnar's full alternative set, read from
+# `ragnar:::method_to_info()`, which maps every one of `cosine_distance`,
+# `euclidean_distance` and `negative_inner_product` to `"ASC"`.
+.crd_metric_dirs <- c(
+  bm25                   = "max",
+  cosine_distance        = "min",
+  euclidean_distance     = "min",
+  negative_inner_product = "min"
+)
 
-# Direction for one metric, defaulting to "max" for anything unrecognised —
-# a new similarity metric is far more likely to be higher-is-better than a
-# distance, and an unknown name should not error a search.
+# Columns of a retrieval frame that are not scores. Used to spot a metric column
+# cred does not know, so an unrecognised metric is still scored rather than
+# silently dropped.
+.crd_non_metric_cols <- c("origin", "doc_id", "chunk_id", "start", "end",
+                          "context", "text", "embedding", "metric_name",
+                          "metric_value")
+
+# Direction for one metric.
+#
+# Unknown names default to "min", not "max": every metric ragnar offers besides
+# BM25 is a distance, and all three are ASC. An unknown name is therefore far
+# likelier to be another distance than a new similarity — the opposite of what
+# is intuitive, which is why the evidence is recorded here rather than the
+# guess.
+#
+# Direction only matters for a cell holding several chunks. Long-form
+# `metric_value` arrives atomic, so an unrecognised metric there is scored
+# correctly regardless of what this returns.
 .crd_metric_direction <- function(metric) {
   if (!is.na(metric) && metric %in% names(.crd_metric_dirs)) {
     unname(.crd_metric_dirs[[metric]])
   } else {
-    "max"
+    "min"
   }
 }
 
@@ -401,23 +428,40 @@ crd_store_connect <- function(store,
     # `metric_value` arrives atomic and `.crd_flat()` returns before consulting
     # `reduce`), which is exactly why it needs to be right now rather than when
     # it stops being dead.
+    # Group by metric so each reduces in its own direction. Rows whose
+    # `metric_name` is absent or NA are grouped under "" and still scored:
+    # gating the loop on the metric resolving is how `metric_value` gets
+    # discarded and an all-NA `score` comes back, which is the failure this
+    # function exists to end rather than to reintroduce on another shape.
     score <- rep(NA_real_, n)
-    for (m in unique(metric[!is.na(metric)])) {
-      idx <- which(metric == m)
+    for (idx in split(seq_len(n), ifelse(is.na(metric), "", metric))) {
+      m <- metric[idx[[1L]]]
       score[idx] <- .crd_flat(res$metric_value[idx], "numeric",
                               .crd_metric_direction(m))
     }
     return(list(score = score, metric = metric))
   }
 
-  # Order sets preference: a row scored by BM25 keeps that score rather than
-  # being overwritten by a distance.
-  directions <- .crd_metric_dirs[names(.crd_metric_dirs) %in% names(res)]
+  # Enumerate the score columns actually present rather than only the ones in
+  # the table, so a metric cred does not recognise is scored here exactly as the
+  # long-form branch scores it. Membership by table alone is what let the two
+  # branches answer differently for the same column.
+  #
+  # The type guard is the real safety net: it does not depend on
+  # `.crd_non_metric_cols` being complete, so a new *character* column added
+  # upstream cannot be mistaken for a score.
+  cand <- setdiff(names(res), .crd_non_metric_cols)
+  cand <- cand[vapply(cand, function(m) is.numeric(res[[m]]) || is.list(res[[m]]),
+                      logical(1))]
+  # Known metrics first, in table order, so a row scored by BM25 keeps that
+  # score rather than being overwritten by a distance.
+  cand <- c(intersect(names(.crd_metric_dirs), cand),
+            setdiff(cand, names(.crd_metric_dirs)))
 
   score <- rep(NA_real_, n)
   metric <- rep(NA_character_, n)
-  for (m in names(directions)) {
-    v <- .crd_flat(res[[m]], "numeric", directions[[m]])
+  for (m in cand) {
+    v <- .crd_flat(res[[m]], "numeric", .crd_metric_direction(m))
     take <- is.na(score) & !is.na(v)
     score[take] <- v[take]
     metric[take] <- m

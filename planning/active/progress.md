@@ -130,3 +130,47 @@ predated the fix commit): `.crd_flat` absent from the namespace, 5 occurrences o
 
 Suite: 328 pass, 0 fail, 2 pre-existing skips. 0 lints. `document()` rewrote only
 `crd_search.Rd`; NAMESPACE unchanged at 25 exports.
+
+### Code-check round 3 — 3 findings, including a regression round 2 introduced
+
+The third round earned its keep: it found that **round 2's own fix reintroduced the
+failure it replaced**, on a different shape.
+
+1. **[bug, regression]** Grouping the long-form score loop by metric meant rows whose
+   `metric_name` is absent or `NA` never entered the loop body — returning an all-`NA`
+   `score` while `metric_value` sat right there. Measured: `main` and the first fix commit
+   both returned `1.2, 0.8`; round 2's version returned `NA, NA`. That is precisely the
+   silent failure `.crd_retrieval_score()`'s own roxygen says it exists to end.
+   Latent rather than live (ragnar always emits `metric_name` beside `metric_value` as a
+   SQL constant), but the `else rep(NA_character_, n)` branch exists because that shape is
+   meant to be supported. Fixed by grouping on `ifelse(is.na(metric), "", metric)` so
+   unresolved rows are still scored, and pinned by a regression test that fails against
+   round 2's loop.
+2. **[fragile — the mechanism, and the reason this class kept recurring]** The direction
+   table was a single source of truth for **direction** but not for **metric membership**,
+   and the two branches consumed it incompatibly: long-form as a lookup-with-default
+   (unknown metric scored), pivoted as the roster (unknown column dropped entirely).
+   Measured on one metric with one set of values: pivoted gave `NA, NA`; long-form gave
+   `0.9, 0.5`. Two different wrong answers for the same input.
+   Worse, the comment justifying the `"max"` default was **false**. Read from
+   `ragnar:::method_to_info()`: `cosine_distance`, `euclidean_distance` and
+   `negative_inner_product` are all `"ASC"` — every metric ragnar offers besides BM25 is a
+   distance, so the intuitive default was the wrong one.
+   Fixed by making the table authoritative for membership too: the pivoted branch now
+   enumerates score columns present in the frame and resolves each through
+   `.crd_metric_direction()`, so a metric can only be handled one way. The default is
+   `"min"`, with the evidence recorded rather than the guess. A type guard (numeric or
+   list) backs up `.crd_non_metric_cols`, so the exclusion list does not have to be
+   complete for a character column to be safe from being read as a score.
+3. **[fragile]** The ">= ten cells" test's stated rationale was false — `split()` groups by
+   an *integer* factor, whose levels sort numerically, so there is no `"10"` before `"2"`
+   hazard and two of its three assertions could not discriminate. Rewritten to say that
+   plainly, keep the identity check labelled as an identity check, and put the weight on
+   the gap cases, which are what actually discriminate.
+
+Both new guards mutation-tested: reverting to round 2's loop fails 2 tests; position-based
+lookup in `.crd_flat` fails 7.
+
+Final: 344 pass, 0 fail, 2 pre-existing skips. 0 lints. NAMESPACE unchanged at 25 exports.
+Restore-the-bug from `main`: `.crd_flat` absent, 6 occurrences of the reported error,
+16 failures; reinstated 94 pass.
