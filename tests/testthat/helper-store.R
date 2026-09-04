@@ -64,7 +64,11 @@
 # `tempdir()`. That is deliberate: these tests cover the retrieval frame, not
 # Zotero lookup.
 local_ragnar_store <- function() {
-  skip_if_not_installed("ragnar")
+  # A version floor, not decoration: the fixture uses v2-only API
+  # (`MarkdownDocument`, `markdown_chunk`, `version = 2`) and DESCRIPTION carries
+  # an unpinned `Remotes: tidyverse/ragnar`, so an older install would ERROR
+  # every test here rather than skip them.
+  skip_if_not_installed("ragnar", "0.3.0")
   skip_if_not_installed("duckdb")
 
   if (!is.null(.crd_store_cache$store)) return(.crd_store_cache$store)
@@ -110,7 +114,11 @@ local_ragnar_store <- function() {
 # test are provably asking the store the same thing.
 .crd_test_query <- function() "culvert fish passage barrier"
 
-# top_k for the regression tests. Chosen because it is the smallest value at
-# which this fixture produces a merged, multi-element cell — the shape the bug
-# needs. `.crd_test_multi_row()` asserts that rather than trusting it.
+# top_k for the regression tests.
+#
+# Any value from 3 upward produces a merged, multi-element cell on this fixture
+# — the shape the bug needs. Measured multi-element rows by top_k:
+# 3->1, 5->2, 6->4, 8->4, 10->5, 12->6, 20->8. 10 is chosen for the margin, not
+# because it is a floor: if the premise assertion in test-store-search.R ever
+# goes red, raising this is papering over an upstream change, not a fix.
 .crd_test_top_k <- function() 10L

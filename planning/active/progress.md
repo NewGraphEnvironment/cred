@@ -51,3 +51,35 @@
   R/audit.R and test-eval-inline.R; `.data` bindings; `.lintr`; top-level `data-raw`/`dev`).
   `checking tests ... OK` and `checking for detritus in the temp directory ... OK`, so the
   fixture's duckdb connections and tempfile clean up.
+
+### Code-check round 1 — 3 findings, all fixed
+
+Verdict was no bugs and no security issues; the reviewer independently reproduced the
+fixture reaching the failure, ran the restore-the-bug check against HEAD's real bytes, and
+proved test 3 discriminates `max` from `first` (a simulated first-element reducer fails on
+2 of 5 merged rows). All three findings were about **coverage claimed but not held**:
+
+1. `expect_type(out$start/end, "integer")` **cannot fail** — `chunks_deoverlap()` excludes
+   `start`/`end`/`context`/`text` from the `across()` that makes list columns, and groups
+   by `origin`, so those four are atomic before `crd_search()` sees them. The `.crd_flat()`
+   calls on them are deliberate defence, not something the test guards. Now labelled as
+   such instead of sitting among assertions that do discriminate.
+2. The `cosine_distance` **min** direction is never exercised by the integration test.
+   Confirmed and extended: there ARE 90 rows across queries where
+   `first(cosine) != min(cosine)`, but every one also carries a bm25 score and is claimed
+   by the branch above; and `ragnar_retrieve_vss()` returns atomic long-form columns, so
+   the vss path cannot reach it either. Unreachable through any real frame from this
+   fixture. The hand-built unit test is now labelled THE ONLY GUARD on that direction,
+   with the reason, so it is not deleted later as a redundant edge case.
+3. Two false claims in the `top_k` comment: 10 is **not** the smallest value producing a
+   multi-element cell (measured 3->1, 5->2, 6->4, 8->4, 10->5, 12->6, 20->8), and it cited
+   `.crd_test_multi_row()`, a helper that never existed. Replaced with the measured table
+   and a note that raising `top_k` to clear a red premise assertion is papering over an
+   upstream change.
+
+Also taken from the "considered and dismissed" list: `skip_if_not_installed("ragnar")`
+gained a `"0.3.0"` floor. The fixture uses v2-only API and DESCRIPTION carries an unpinned
+`Remotes: tidyverse/ragnar`, so an older install would have ERRORed all four tests instead
+of skipping them.
+
+Suite after fixes: 317 pass, 0 fail, 2 pre-existing skips. 0 lints.

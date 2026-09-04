@@ -36,12 +36,24 @@ test_that("crd_search() returns atomic columns from a hybrid-retrieved store", {
   expect_s3_class(out, "tbl_df")
   expect_gt(nrow(out), 0L)
 
+  # Real coverage: these three are the list columns.
   expect_type(out$score, "double")
   expect_type(out$chunk_id, "integer")
+  expect_type(out$metric, "character")
+
+  # NOT coverage, and worth saying so rather than letting a green suite imply
+  # otherwise. `chunks_deoverlap()` list-ifies with
+  # `across(-c(start, end, context, text), \(x) list(unlist(x)))` and groups by
+  # `origin`, so start/end/origin/text are atomic before crd_search() ever sees
+  # them. These assertions pass identically whether the `.crd_flat()` calls on
+  # those four columns exist or are reverted to bare coercion — they are
+  # deliberate defence against a shape ragnar does not currently produce
+  # (and, for `origin`, against `.crd_zot_key_from_path()` calling `dirname()`
+  # on a list, which errors), not something this test can guard.
   expect_type(out$start, "integer")
   expect_type(out$end, "integer")
+  expect_type(out$origin, "character")
   expect_type(out$text, "character")
-  expect_type(out$metric, "character")
 
   expect_false(any(vapply(out, is.list, logical(1))))
 
@@ -76,6 +88,15 @@ test_that("a merged row is scored by its best constituent chunk, per metric dire
       expect_identical(out$metric[i], "bm25")
       expect_equal(out$score[i], max(b, na.rm = TRUE))
     } else if (any(!is.na(cd))) {
+      # Reached, but NOT discriminating. Measured across queries and every
+      # top_k from 3 to 20: no row reaching this branch has
+      # `first(cosine) != min(cosine)`, because a merged row whose constituents
+      # differ in distance essentially always carries a bm25 score too and is
+      # claimed by the branch above. Rows retrieved only by VSS *within* hybrid
+      # do reach here, but with their constituents already in ascending order.
+      # So a min -> first regression on cosine_distance would pass this test.
+      # The unit test ".crd_retrieval_score prefers the lowest distance within a
+      # merged row" below is the ONLY guard on that direction.
       expect_identical(out$metric[i], "cosine_distance")
       expect_equal(out$score[i], min(cd, na.rm = TRUE))
     }
@@ -170,6 +191,11 @@ test_that(".crd_retrieval_score handles the hybrid shape without coercing a list
 })
 
 test_that(".crd_retrieval_score prefers the lowest distance within a merged row", {
+  # THE ONLY GUARD on the cosine_distance `min` direction — see the note in the
+  # merged-row integration test above for why no real retrieval frame from this
+  # fixture can discriminate min from first. Hand-built for exactly that reason,
+  # which is a compromise, not a preference: do not delete it as a redundant
+  # edge case.
   res <- data.frame(text = "a", stringsAsFactors = FALSE)
   res$cosine_distance <- list(c(0.30, 0.10))
   got <- .crd_retrieval_score(res)
