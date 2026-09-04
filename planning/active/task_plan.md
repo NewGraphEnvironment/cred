@@ -65,24 +65,24 @@ inferred from the data, so one character cell cannot promote a numeric column.
 
 ## Phase 2: The reducer and its call sites
 
-- [ ] `.crd_flat(x, type, reduce)` in `R/store.R`, with the rationale for direction-aware
+- [x] `.crd_flat(x, type, reduce)` in `R/store.R`, with the rationale for direction-aware
       reduction in its `@noRd` block.
-- [ ] `.crd_retrieval_score()` — `metric_value`, `metric_name` (R/store.R:292, missed by
+- [x] `.crd_retrieval_score()` — `metric_value`, `metric_name` (R/store.R:292, missed by
       the first enumeration) and the `cand` loop, now carrying a direction per metric.
-- [ ] `crd_search()` — `chunk_id`, `start`, `end`, `origin`, `text`. `origin` is genuine
+- [x] `crd_search()` — `chunk_id`, `start`, `end`, `origin`, `text`. `origin` is genuine
       defence: `.crd_zot_key_from_path()` calls `dirname()`, which errors on a list.
       `text` at R/store.R:392 is also the only column read with no `%in% names(res)`
       guard — give it one.
-- [ ] `devtools::test()` green.
+- [x] `devtools::test()` green.
 
 ## Phase 3: Verify, document, release
 
-- [ ] **Restore the bug** with `git stash` / `git checkout HEAD -- R/store.R` — the source
+- [x] **Restore the bug** with `git stash` / `git checkout HEAD -- R/store.R` — the source
       that had it, not a hand-written passthrough, which is a different program failing a
       different way. Proof is the original error string, not a pass/fail count.
-- [ ] `lintr::lint_package()` — no new lints against the `HEAD` baseline.
-- [ ] `devtools::document()`; read what it writes — no unexpected `.Rd`, no export lost.
-- [ ] Docs: `crd_search()`'s `@return` for the reduction and what `chunk_id` means on a
+- [x] `lintr::lint_package()` — no new lints against the `HEAD` baseline.
+- [x] `devtools::document()`; read what it writes — no unexpected `.Rd`, no export lost.
+- [x] Docs: `crd_search()`'s `@return` for the reduction and what `chunk_id` means on a
       merged row; `@param top_k` for the fact that hybrid retrieves per method and then
       merges, so the row count is neither `top_k` nor `2 * top_k`;
       `.crd_retrieval_score()`'s block for the list-column shape.
