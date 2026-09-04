@@ -31,7 +31,10 @@ crd_search(
 
 - top_k:
 
-  `integer(1)` number of passages to return. Default `5L`.
+  `integer(1)` passages to retrieve **per method**. Default `5L`. Under
+  `method = "hybrid"` the vector and lexical result sets are unioned and
+  then adjacent chunks are merged, so the number of rows returned is
+  neither `top_k` nor `2 * top_k` — expect somewhere between the two.
 
 - method:
 
@@ -44,18 +47,33 @@ crd_search(
 
 ## Value
 
-A [tibble](https://tibble.tidyverse.org/reference/tibble.html) ordered
-best-match first, with columns:
+A [tibble](https://tibble.tidyverse.org/reference/tibble.html) with one
+row per retrieved passage, with columns as below.
+
+**Rows are returned in document order (`origin`, then position), not
+best-match first.** `ragnar_retrieve()` does not re-sort after merging
+overlapping chunks, and under `method = "hybrid"` neighbouring rows can
+carry different metrics, whose scores are not comparable — so there is
+no single ranking to return. To take the best passages, sort within one
+metric:
+
+    res <- crd_search(store, "bankfull width regression")
+    dplyr::arrange(dplyr::filter(res, metric == "bm25"), dplyr::desc(score))
 
 - `citation_key` (`character`) — BBT key, `NA` if unresolvable.
 
 - `origin` (`character`) — source path recorded in the store.
 
 - `chunk_id`, `start`, `end` (`integer`) — location within the document.
+  A returned passage may be several adjacent chunks merged into one, in
+  which case `chunk_id` is the first of them and `start`/`end` span them
+  all.
 
 - `text` (`character`) — the retrieved passage, verbatim.
 
-- `score` (`numeric`) — retrieval metric value.
+- `score` (`numeric`) — retrieval metric value. Where a passage merges
+  several chunks this is the best score among them: highest for `bm25`,
+  lowest for `cosine_distance`.
 
 - `metric` (`character`) — which metric produced `score` (`"bm25"` or
   `"cosine_distance"`). Scores are comparable only within a metric.

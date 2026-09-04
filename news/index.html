@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">cred</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.3.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.3.1</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -35,6 +35,19 @@
       <small>Source: <a href="https://github.com/NewGraphEnvironment/cred/blob/main/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.3.1" id="cred-031">cred 0.3.1<a class="anchor" aria-label="anchor" href="#cred-031"></a></h2>
+<p><code><a href="../reference/crd_search.html">crd_search()</a></code> errored on every store built with ragnar 0.3.0. Hybrid retrieval merges adjacent retrieved chunks into one row and returns the per-chunk values as <strong>list</strong> columns; <code>.crd_retrieval_score()</code> coerced them with <code><a href="https://rdrr.io/r/base/numeric.html" class="external-link">as.numeric()</a></code>, which errors on a multi-element cell. The <code><a href="https://rdrr.io/r/base/warning.html" class="external-link">suppressWarnings()</a></code> around it read as a guard but could never have helped — coercing a list raises an error, not a warning.</p>
+<p>The misleading part was that the store itself was fine: <code><a href="../reference/crd_store_connect.html">crd_store_connect()</a></code> pulled and verified normally, so the failure looked like a store problem to each consumer that hit it.</p>
+<ul><li>Retrieval columns are reduced by an internal helper rather than coerced directly. A merged passage is scored by the <strong>best</strong> of its constituent chunks — highest for <code>bm25</code>, lowest for <code>cosine_distance</code> — so a row is never scored on a chunk that metric never retrieved, nor attributed to the wrong metric because the leading chunk happened to be unscored. Both retrieval shapes read one direction table, so they cannot disagree about which way a distance improves</li>
+<li>
+<code>chunk_id</code>, <code>start</code>, <code>end</code>, <code>origin</code> and <code>text</code> take the same path. <code>origin</code> matters beyond tidiness: <code>.crd_zot_key_from_path()</code> calls <code><a href="https://rdrr.io/r/base/basename.html" class="external-link">dirname()</a></code>, which errors on a list rather than degrading to <code>NA</code>
+</li>
+<li>A column absent from the frame — <code>bm25</code> is missing entirely when nothing matched lexically — yields typed <code>NA</code>s rather than a zero-length column</li>
+<li>
+<strong><code><a href="../reference/crd_search.html">crd_search()</a></code> never returned rows best-match first</strong>, and now says so. <code>ragnar_retrieve()</code> does not re-sort after merging, so rows arrive in document order; under <code>hybrid</code>, neighbouring rows can carry different metrics whose scores are not comparable, so no single ranking exists to return. The documentation previously promised otherwise, which made <code><a href="https://rdrr.io/r/utils/head.html" class="external-link">head()</a></code> a silent wrong answer. <code><a href="../reference/crd_search.html">?crd_search</a></code> now shows how to rank within one metric</li>
+<li>A coercion that discards data warns instead of being silenced. The only such warning reachable is <code>NAs introduced by coercion</code>, which means a score column holds non-numeric data — suppressing it produced an all-<code>NA</code> <code>score</code>, the same silent failure this release is about</li>
+</ul></div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.3.0" id="cred-030">cred 0.3.0<a class="anchor" aria-label="anchor" href="#cred-030"></a></h2>
 <p>Writing the shared manifest. <code><a href="../reference/crd_store_connect.html">crd_store_connect()</a></code> could read and verify it; nothing could write it, and no committed implementation wrote it correctly anywhere — the prior art rebuilt the manifest from the current run alone and overwrote the remote copy, silently orphaning every other store.</p>
