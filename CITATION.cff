@@ -1,0 +1,28 @@
+# ------------------------------------------------
+# CITATION.cff file created with {cffr} R package
+# See also: https://docs.ropensci.org/cffr/
+# ------------------------------------------------
+ 
+cff-version: 1.2.0
+message: 'To cite package "cred" in publications use:'
+type: software
+license: MIT
+title: 'cred: Citation Review and Evidence Documentation'
+version: 0.3.1
+abstract: Tools for extracting, auditing, and verifying inline citations in bookdown
+  R Markdown documents. Supports systematic detection of hallucinated statistics or
+  misattributed findings introduced during LLM-assisted drafting.
+authors:
+- family-names: Irvine
+  given-names: Al
+  email: al@newgraphenvironment.com
+  orcid: https://orcid.org/0000-0002-3495-2128
+repository-code: https://github.com/NewGraphEnvironment/cred
+url: https://newgraphenvironment.github.io/cred/
+date-released: '2026-09-04'
+contact:
+- family-names: Irvine
+  given-names: Al
+  email: al@newgraphenvironment.com
+  orcid: https://orcid.org/0000-0002-3495-2128
+
