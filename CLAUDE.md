@@ -157,6 +157,40 @@ Shipped: [#22](https://github.com/NewGraphEnvironment/cred/issues/22) ragnar ret
   page-aware path in the package. This settles an open question in
   [soul#23](https://github.com/NewGraphEnvironment/soul/issues/23), which lists it as deciding
   whether the ragnar path can fill that column at all.
+- **`ragnar_retrieve()` merges adjacent chunks, so a retrieval cell is a per-chunk vector.**
+  `deoverlap = TRUE` is the default; `ragnar:::chunks_deoverlap()` summarises with
+  `across(-c(start, end, context, text), \(x) list(unlist(x)))`, so every other column becomes
+  a list holding one value per constituent chunk. Measured: 24% of rows are merged on a real
+  corpus. The trap is that `as.numeric()` handles a list of **length-1** cells perfectly well
+  and errors only on a multi-element one — so a fixture of short single-chunk documents
+  produces only length-1 cells and passes against the bug it was written for. A regression test
+  here must go through `ragnar_retrieve()` (not `ragnar_retrieve_bm25()`, whose columns are
+  atomic) on documents long enough to chunk several times. See
+  [#27](https://github.com/NewGraphEnvironment/cred/issues/27).
+- **Scores are reduced per metric direction, and a merged row is scored by its best chunk.**
+  `max` for `bm25`, `min` for the distances. `ragnar:::method_to_info()` maps
+  `cosine_distance`, `euclidean_distance` and `negative_inner_product` all to `"ASC"`, so BM25
+  is the only higher-is-better metric ragnar offers and an unknown metric defaults to `"min"` —
+  the intuitive default is the wrong one. Taking the first element instead misattributes the
+  metric on ~5% of rows, where a merged row's leading chunk has `bm25 = NA` and a later one
+  does not.
+- **`crd_search()` returns document order, never best-match first.** `ragnar_retrieve()` does
+  not re-sort after merging, and under `hybrid` neighbouring rows can carry different metrics
+  whose scores are not comparable — so no single ranking exists to return. Rank within one
+  metric; `?crd_search` shows how.
+- **`hybrid` is the right default because it is a strict superset of `bm25`.** Measured across
+  2 queries x 3 `top_k`: zero BM25 chunks were absent from the hybrid results, and hybrid
+  returned 5-17 chunks where BM25 returned 3-10. `hybrid` needs Ollama but falls back to BM25
+  with a warning, so it is never *less* available — a `bm25` default would discard the semantic
+  half for everyone to avoid a dependency the fallback already handles. That fallback currently
+  blames Ollama for every failure, including a store/model mismatch
+  ([#29](https://github.com/NewGraphEnvironment/cred/issues/29)).
+- **A ragnar store can be built offline for tests.** `ragnar_store_create()` accepts any
+  function for `embed`, so a deterministic local one takes the identical hybrid code path with
+  no Ollama and no network (`tests/testthat/helper-store.R`). It must reference nothing outside
+  base R — ragnar sets `environment(embed) <- baseenv()` before serialising it — and
+  `MarkdownDocument(text, origin = )` is the only way `origin` reaches the store; assigning a
+  column on the chunks object is silently dropped.
 - **The manifest is merged, never replaced** — it describes every store in the bucket, so a push
   built from the current run alone orphans the rest. `.crd_manifest_merge()` is pure and passes
   untouched entries through verbatim, including shapes this version does not recognise.
