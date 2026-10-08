@@ -57,10 +57,10 @@ Enabling change for 2, 3 and 4, and the fix for "two accounts of one dead port".
 
 ## Phase 2: `.crd_ollama_check()` on the shared remedy
 
-- [ ] Replace the fixed `ollama serve` + `ollama pull` remedy with `.crd_embed_remedy()` under an
+- [x] Replace the fixed `ollama serve` + `ollama pull` remedy with `.crd_embed_remedy()` under an
       error-shaped head (`R/store.R:1072`, called from `crd_store_build()` at `:1162`)
-- [ ] Test: a `connection` failure does not lead with `ollama pull`
-- [ ] Test: a `service` failure does not print `ollama serve`
+- [x] Test: a `connection` failure does not lead with `ollama pull`
+- [x] Test: a `service` failure does not print `ollama serve`
 
 ## Phase 3: `crd_search(method = "vss")` classified error
 

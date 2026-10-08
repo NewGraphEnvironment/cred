@@ -22,3 +22,21 @@
   wrapper still routes through the shared builder, so retargeting cannot keep the guard green
   while the message grows a private copy of the branches
 - Next: Phase 2 — `.crd_ollama_check()` on the shared remedy
+
+### Phase 2 — `.crd_ollama_check()` on the shared remedy
+
+- Tests written first and confirmed red against the old code: 10 failures, including a 404
+  naming `cred-absent-30` that still printed `ollama pull nomic-embed-text`
+- Two defects found while implementing, neither in the issue body:
+  1. the old function reduced the error to `conditionMessage()` **at the point of catching it**,
+     discarding the condition class the classifier dispatches on. Keeps the condition now
+  2. `.crd_fallback_model()`'s last resort is the hardcoded `nomic-embed-text`, and a connection
+     failure names no model and has no store — so `.crd_ollama_check("mxbai-embed-large")` would
+     have told the user to pull a model they never asked about. Added a `requested` tier,
+     above the hardcoded default and below both pieces of failure-specific evidence
+- `base_url` added as an internal seam so the `connection` tier is tested through the REAL
+  `embed_ollama()` against a refused port, not a mock. `NULL` default rather than a copy of
+  ragnar's literal
+- `testthat` pin bumped 3.1.8 -> 3.2.0: `local_mocked_bindings(.package = )` needs it, and on an
+  older install it errors rather than skipping
+- Next: Phase 3 — `crd_search(method = "vss")` classified error

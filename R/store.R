@@ -655,9 +655,14 @@ crd_store_connect <- function(store,
 #'
 #' @param cond the condition that was caught.
 #' @param store the store being searched.
+#' @param requested `character(1)` the model the caller explicitly asked for, or
+#'   `NULL`. Sits above the hardcoded default and below both pieces of
+#'   failure-specific evidence: [.crd_ollama_check()] knows which model it was
+#'   told to probe, which beats guessing, and never beats the model the service
+#'   itself named or the one the store records.
 #' @return `character(1)`.
 #' @noRd
-.crd_fallback_model <- function(cond, store = NULL) {
+.crd_fallback_model <- function(cond, store = NULL, requested = NULL) {
   msg <- paste(conditionMessage(cond), collapse = "\n")
   # Ollama's 404 body: model "nomic-embed-text" not found, try pulling it first
   hit <- regmatches(msg, regexpr('model[[:space:]]+"[^"]+"', msg))
@@ -667,6 +672,10 @@ crd_store_connect <- function(store,
   }
   recorded <- .crd_store_meta_brief(store)$model
   if (.crd_is_model_name(recorded)) return(recorded)
+  # Validated like the other two even though it came from this session's own
+  # call: the value lands in a line the message invites the reader to paste, and
+  # that is a property of the line, not of how much the source is trusted.
+  if (.crd_is_model_name(requested)) return(requested)
   "nomic-embed-text"
 }
 
@@ -722,14 +731,18 @@ crd_store_connect <- function(store,
 #' @param reason `character(1)` from [.crd_retrieval_failure()].
 #' @param cond the condition that was caught.
 #' @param store the store being searched, used only to report what it records.
+#' @param model `character(1)` the model the caller asked for, or `NULL`. Only
+#'   used to name a model in a remedy when neither the condition nor the store
+#'   names one -- see [.crd_fallback_model()].
 #' @return `character(1)` the remedy, with no trailing newline.
 #' @noRd
-.crd_embed_remedy <- function(reason, cond, store = NULL) {
+.crd_embed_remedy <- function(reason, cond, store = NULL, model = NULL) {
   if (identical(reason, "connection")) {
     return(paste0(
       "  The embedding service did not answer. If it is not running, start it; a\n",
       "  timeout can also mean it is up and loading a model, in which case retry.\n",
-      "    ollama serve && ollama pull ", .crd_fallback_model(cond, store)
+      "    ollama serve && ollama pull ",
+      .crd_fallback_model(cond, store, requested = model)
     ))
   }
 
@@ -737,7 +750,7 @@ crd_store_connect <- function(store,
     return(paste0(
       "  The embedding service answered and refused the request, so it is running,\n",
       "  and it named the model it does not have:\n",
-      "    ollama pull ", .crd_fallback_model(cond, store)
+      "    ollama pull ", .crd_fallback_model(cond, store, requested = model)
     ))
   }
 
@@ -796,7 +809,7 @@ crd_store_connect <- function(store,
       "  Compare what the store records against what the service now returns, then\n",
       "  re-pull the model or rebuild with crd_store_build():\n",
       "    ncol(ragnar::embed_ollama('probe', model = '",
-      .crd_fallback_model(cond, store), "'))"
+      .crd_fallback_model(cond, store, requested = model), "'))"
     ))
   }
 
@@ -1090,22 +1103,43 @@ crd_search <- function(store, query, top_k = 5L,
 
 #' Check that Ollama can embed with the requested model
 #'
+#' Errors, rather than warning: [crd_store_build()] cannot produce a store
+#' without embeddings, so there is nothing to degrade to.
+#'
+#' The remedy comes from [.crd_embed_remedy()], shared with [crd_search()]. It
+#' used to be two fixed lines — `ollama serve` **and** `ollama pull` — printed
+#' for every error, so a 500 from a running server was reported as something
+#' starting it would fix, and the same dead port got two different accounts
+#' depending on which function met it (NewGraphEnvironment/cred#30).
+#'
+#' The condition is kept, not just its message: `.crd_retrieval_failure()`
+#' dispatches on condition **class**, and the previous version reduced the
+#' error to `conditionMessage()` at the point of catching it, discarding the
+#' only stable evidence there is.
+#'
 #' @param model `character(1)` embedding model name.
+#' @param base_url `character(1)` embedding service, or `NULL` to take
+#'   `ragnar::embed_ollama()`'s own default. A seam for the tests, which reach
+#'   the connection branch through the real call against a refused port rather
+#'   than by mocking it; duplicating ragnar's default literal here would be one
+#'   more thing to drift.
 #' @return `NULL`, invisibly. Errors with actionable guidance otherwise.
 #' @noRd
-.crd_ollama_check <- function(model) {
-  ok <- tryCatch({
-    ragnar::embed_ollama("cred connectivity probe", model = model)
-    TRUE
-  }, error = function(e) conditionMessage(e))
+.crd_ollama_check <- function(model, base_url = NULL) {
+  args <- list("cred connectivity probe", model = model)
+  if (!is.null(base_url)) args$base_url <- base_url
 
-  if (!isTRUE(ok)) {
-    stop("Could not embed with Ollama model '", model, "'.\n  ", ok, "\n",
-         "  Start the server and pull the model:\n",
-         "    ollama serve\n",
-         "    ollama pull ", model, call. = FALSE)
-  }
-  invisible(NULL)
+  cond <- tryCatch({
+    do.call(ragnar::embed_ollama, args)
+    NULL
+  }, error = function(e) e)
+
+  if (is.null(cond)) return(invisible(NULL))
+
+  stop("Could not embed with Ollama model '", model, "'.\n",
+       "  Cause: ", .crd_indent_cause(conditionMessage(cond)), "\n",
+       .crd_embed_remedy(.crd_retrieval_failure(cond), cond, model = model),
+       call. = FALSE)
 }
 
 #' Build a ragnar evidence store from Zotero PDFs
