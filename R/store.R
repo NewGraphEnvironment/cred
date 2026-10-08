@@ -1055,7 +1055,21 @@ crd_store_connect <- function(store,
     ))
   }
 
-  if (identical(reason, "dimension") && identical(context, "search")) {
+  if (identical(reason, "dimension")) {
+    # A size error reached from a bare embedder probe is not a store mismatch --
+    # there is no store yet -- so saying so would assert more than is known. But
+    # falling through to the fallthrough was worse: it opens "cred does not
+    # recognise this failure", which is false for a reason the classifier did
+    # recognise.
+    if (identical(context, "build")) {
+      return(paste0(
+        "  The embedding service reported a vector-size error. There is no store to\n",
+        "  compare against yet, so this is the embedder or the model rather than a\n",
+        "  store mismatch. Check what width the model returns:\n",
+        "    ncol(ragnar::embed_ollama('probe', model = '",
+        .crd_fallback_model(cond, store, requested = model), "'))"
+      ))
+    }
     meta <- .crd_store_meta_brief(store)
     # The recorded model is echoed only if it looks like one. This line is prose
     # rather than a command, so the paste hazard is not the issue here -- but the

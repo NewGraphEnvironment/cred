@@ -484,3 +484,26 @@ test_that("a connect-time probe warning does not silence the later search warnin
   expect_warning(crd_search(store, .crd_test_query(), top_k = 3L),
                  class = "cred_retrieval_fallback_connection")
 })
+
+test_that("a default connect returns a store whose connection is still usable", {
+  skip_if_not_installed("ragnar")
+  # Round 1 of /code-check, measured: deleting `ok <- TRUE` from
+  # .crd_store_open() left the whole suite green at 587 passes while every
+  # default-path connect returned a store whose duckdb connection had been shut
+  # down -- dbIsValid() FALSE, any search "Invalid connection". The cleanup's
+  # error branch had a test; its success branch did not, and the two tests that
+  # do reach the tail take the other routes (one expects the mismatch error, the
+  # other passes check_model = FALSE and returns before the on.exit is even
+  # registered).
+  src <- as.character(local_ragnar_store()@location)
+  copy <- tempfile(fileext = ".duckdb")
+  expect_true(file.copy(src, copy))
+  on.exit(unlink(copy), add = TRUE)
+
+  out <- suppressMessages(crd_store_connect(copy, verify = FALSE))
+
+  expect_true(DBI::dbIsValid(out@con))
+  res <- crd_search(out, .crd_test_query(), top_k = 3L, method = "bm25")
+  expect_gt(nrow(res), 0L)
+  try(DBI::dbDisconnect(out@con, shutdown = TRUE), silent = TRUE)
+})

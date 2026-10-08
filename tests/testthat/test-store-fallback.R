@@ -684,6 +684,23 @@ test_that("the classifier, the message builder and the test helper agree on the 
   expect_identical(setdiff(from_classifier, c(from_msg, "unknown")), character(0))
   expect_identical(setdiff(from_msg, from_classifier), character(0))
   expect_identical(sort(.crd_fallback_reasons()), from_classifier)
+
+  # The enumeration is over `reason`, and since #30 the dispatch is over
+  # `reason x context` -- so this grep alone reported `dimension` as wired while
+  # it was wired for one of three contexts, and the other two fell through to
+  # the "cred does not recognise this failure" text for a reason the classifier
+  # had recognised. Enumerate the product.
+  contexts <- c("search", "build", "connect")
+  for (ctx in contexts) {
+    fallthrough <- .crd_embed_remedy("unknown", simpleError("a cause"), context = ctx)
+    for (r in setdiff(.crd_fallback_reasons(), "unknown")) {
+      expect_false(
+        identical(.crd_embed_remedy(r, simpleError("a cause"), context = ctx),
+                  fallthrough),
+        info = paste(r, ctx)
+      )
+    }
+  }
 })
 
 test_that("every reason produces a message that is not the fallthrough", {

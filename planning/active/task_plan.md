@@ -145,6 +145,18 @@ Run in an isolated copy of the tree, control green:
 | M6 vss branch unwrapped again | 9 |
 | control | **0** |
 
+Two more after `/code-check` round 1, both of which it found by measuring rather than reading:
+
+| mutation | failures |
+|---|---|
+| M7 delete `ok <- TRUE` from `.crd_store_open()` | 0 → **2** |
+| M8 re-gate the `dimension` remedy on `context == "search"` | 0 → **2** |
+
+M7 is the one worth keeping in mind: the cleanup's *error* branch had a test and its *success*
+branch did not, so a mutant that handed back a shut-down connection on **every** default connect
+left the suite green at 587 passes. The table itself was built to prove the absence of exactly
+that, and it had the gap.
+
 M2, M4 and M5 first reported **0** — three broken probes, not three test gaps. M2 and M5 used
 `perl -0`, where `^` anchors to the start of the *file*, and bash expanded the `$` in
 `meta$size`; redone in Python they fire. M4 was a real gap: the collision test rebuilt the

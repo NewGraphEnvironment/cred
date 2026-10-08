@@ -100,3 +100,20 @@
   [#32](https://github.com/NewGraphEnvironment/cred/issues/32) rather than fixed here, since the
   fixes touch `DESCRIPTION` and `R/audit.R` for reasons unrelated to #30. The one new
   non-ASCII instance this branch added was fixed, so the count is unchanged by it
+
+### /code-check round 1 — two findings, both real
+
+- **The cleanup's success path was unguarded.** Deleting `ok <- TRUE` from `.crd_store_open()`
+  left the suite green at 587 passes while every default-path connect returned a store whose
+  duckdb connection had been shut down (`dbIsValid()` FALSE, any search "Invalid connection").
+  Reproduced before fixing. The error branch had a test; the two tests reaching the tail took
+  the other routes. Added a test that connects with defaults and *uses* the result
+- **The `dimension` remedy was gated on `context == "search"`**, so the other two contexts fell
+  through to text opening "cred does not recognise this failure" — false for a reason the
+  classifier had recognised. Ungated, with a store-less form for `build` that says only what can
+  be established: no store exists yet, so it is the embedder or the model, not a mismatch
+- **And the terminating enumeration had narrowed.** The drift guard greps
+  `identical(reason, ...)`, which reported `dimension` as wired while it was wired for one of
+  three contexts: the enumeration was over `reason`, the dispatch over `reason x context`.
+  Extended to the product
+- 602 passes, 0 lints. Both fixes mutation-checked (M7, M8) before committing
