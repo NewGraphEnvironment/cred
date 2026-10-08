@@ -40,3 +40,18 @@
 - `testthat` pin bumped 3.1.8 -> 3.2.0: `local_mocked_bindings(.package = )` needs it, and on an
   older install it errors rather than skipping
 - Next: Phase 3 — `crd_search(method = "vss")` classified error
+
+### Phase 3 — classified error for `method = "vss"`
+
+- `.crd_retrieval_abort()` raises `cred_retrieval_error_<reason>` with the shared remedy and
+  the original condition as an rlang `parent`
+- Measured before choosing the shape: `conditionMessage()` on a chained rlang error **already
+  folds in** `"Caused by error: ! <parent>"`, so restating the cause inline would have printed
+  it twice. The fallback warning keeps its inline cause because a warning has no parent to render
+- That measurement surfaced a latent bug in the newly-shared text: the `service` remedy said
+  "the status **above**", true in a warning and false in a chained error, where the parent
+  renders below. Reworded to "the status it returned" — position-independent, which is what
+  shared text has to be. No assertion pinned the old word
+- `bm25` left unwrapped on purpose: it needs no embedding, so wrapping it would turn a search
+  that still works on a broken-embedder store into an error. Pinned by its own test
+- Next: Phase 4 — the connect-time check

@@ -756,11 +756,17 @@ crd_store_connect <- function(store,
 
   if (identical(reason, "service")) {
     # Reachable, refusing, and not a missing model. Nothing here identifies a
-    # remedy, so none is offered — the status above is the diagnosis.
+    # remedy, so none is offered — the status it returned is the diagnosis.
+    #
+    # "it returned" rather than "above" on purpose: this text is shared with
+    # `.crd_ollama_check()` and with `crd_search(method = "vss")`, and the
+    # latter reports the cause as an rlang `parent`, which renders BELOW the
+    # message. A deictic reference to the layout is wrong in one of the three
+    # channels whichever way it points.
     return(paste0(
       "  The embedding service answered with an error, so it is running and this is\n",
-      "  not a connection problem. The status above is all cred knows; pulling a\n",
-      "  model or restarting the server may be unrelated to it."
+      "  not a connection problem. The status it returned is all cred knows; pulling\n",
+      "  a model or restarting the server may be unrelated to it."
     ))
   }
 
@@ -841,6 +847,41 @@ crd_store_connect <- function(store,
     "Semantic retrieval failed, so crd_search() fell back to BM25.\n",
     "  Cause: ", .crd_indent_cause(conditionMessage(cond)), "\n",
     .crd_embed_remedy(reason, cond, store = store)
+  )
+}
+
+#' Raise a classified error for a retrieval that has nowhere to fall back to
+#'
+#' `method = "vss"` is semantic retrieval and nothing else, so a failure there
+#' is terminal — unlike `"hybrid"`, which degrades to BM25 with a warning.
+#' Erroring is right; raising the condition **unclassified** was not. A
+#' width-mismatched store produced a bare
+#' `Binder Error: array_cosine_distance(...)` and no diagnosis at all
+#' (NewGraphEnvironment/cred#30).
+#'
+#' The original condition is attached as an rlang `parent`, which both keeps it
+#' reachable programmatically as `cnd$parent` and folds its message into
+#' `conditionMessage()` of the outer condition — measured on rlang, so
+#' `tryCatch(error = conditionMessage)` sees the cause and the remedy together
+#' without this function restating it.
+#'
+#' @param cond the condition caught from the retrieval call.
+#' @param store the store being searched.
+#' @return Never returns; raises a `cred_retrieval_error` condition.
+#' @noRd
+.crd_retrieval_abort <- function(cond, store = NULL) {
+  reason <- .crd_retrieval_failure(cond)
+  rlang::abort(
+    paste0(
+      'Semantic retrieval failed, and method = "vss" has no fallback.\n',
+      .crd_embed_remedy(reason, cond, store = store), "\n",
+      '  Both other methods still work on this store: "hybrid" would have\n',
+      '  degraded to BM25 with a warning, and "bm25" needs no embedding at all.'
+    ),
+    # Subclassed by reason, in the same scheme as the fallback warning, so a
+    # caller can branch on the two channels identically.
+    class = c(paste0("cred_retrieval_error_", reason), "cred_retrieval_error"),
+    parent = cond
   )
 }
 
@@ -1002,8 +1043,15 @@ crd_search <- function(store, query, top_k = 5L,
   used <- method
   res <- switch(
     method,
+    # Not wrapped, deliberately: BM25 needs no embedding, so the failures this
+    # change is about cannot reach it, and catching here would convert a search
+    # that works on a broken-embedder store into an error.
     bm25 = ragnar::ragnar_retrieve_bm25(store, query, top_k = top_k),
-    vss  = ragnar::ragnar_retrieve_vss(store, query, top_k = top_k),
+    # Wrapped to classify, not to fall back — there is nothing to fall back to.
+    vss = tryCatch(
+      ragnar::ragnar_retrieve_vss(store, query, top_k = top_k),
+      error = function(e) .crd_retrieval_abort(e, store = store)
+    ),
     hybrid = tryCatch(
       ragnar::ragnar_retrieve(store, query, top_k = top_k),
       error = function(e) {

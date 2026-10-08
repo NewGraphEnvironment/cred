@@ -130,3 +130,64 @@ test_that(".crd_ollama_check is silent and returns NULL when embedding works", {
   expect_silent(out <- .crd_ollama_check("nomic-embed-text"))
   expect_null(out)
 })
+
+# --- Phase 3: crd_search(method = "vss") ----------------------------------
+
+test_that('method = "vss" errors rather than falling back, and says why', {
+  store <- local_ragnar_store_failing("dimension")
+
+  cnd <- tryCatch(crd_search(store, .crd_test_query(), top_k = 3L, method = "vss"),
+                  error = function(e) e)
+
+  # Erroring is correct: no fallback exists for vss, and silently returning
+  # nothing would be worse than saying so.
+  expect_s3_class(cnd, "cred_retrieval_error")
+  expect_s3_class(cnd, "cred_retrieval_error_dimension")
+  expect_match(conditionMessage(cnd), "no fallback", fixed = TRUE)
+  # The two methods that DO work here are named, because that is the remedy a
+  # user can act on in this session.
+  expect_match(conditionMessage(cnd), "hybrid", fixed = TRUE)
+  expect_match(conditionMessage(cnd), "bm25", fixed = TRUE)
+})
+
+test_that('a vss failure carries the raw condition and the diagnosis', {
+  store <- local_ragnar_store_failing("dimension")
+
+  cnd <- tryCatch(crd_search(store, .crd_test_query(), top_k = 3L, method = "vss"),
+                  error = function(e) e)
+
+  # The pre-#30 behaviour was this condition raised bare: a duckdb binder error
+  # and no diagnosis. It is still reachable, as an rlang parent.
+  expect_false(is.null(cnd$parent))
+  expect_match(conditionMessage(cnd$parent), "(?i)array|size|cast", perl = TRUE)
+
+  # And `conditionMessage()` on the outer condition is self-sufficient: rlang
+  # folds a parent's message into it, so `tryCatch(error = conditionMessage)`
+  # sees both the cause and the remedy. Measured, not assumed.
+  expect_match(conditionMessage(cnd), "Caused by error", fixed = TRUE)
+  expect_match(conditionMessage(cnd), "crd_store_build", fixed = TRUE)
+})
+
+test_that('method = "bm25" is not wrapped — it needs no embedding at all', {
+  store <- local_ragnar_store_failing("dimension")
+
+  # The whole point of the fallback is that lexical retrieval is unaffected by a
+  # broken embedder. A vss wrapper that also caught bm25 would turn a working
+  # search into an error.
+  out <- crd_search(store, .crd_test_query(), top_k = 3L, method = "bm25")
+  expect_gt(nrow(out), 0L)
+  expect_identical(unique(out$method), "bm25")
+})
+
+test_that('a vss failure that is NOT a dimension problem is classified as its own reason', {
+  store <- local_ragnar_store()
+  broken <- store
+  broken@embed <- ragnar::embed_ollama(model = "nomic-embed-text",
+                                       base_url = "http://127.0.0.1:1/")
+
+  cnd <- tryCatch(crd_search(broken, .crd_test_query(), top_k = 3L, method = "vss"),
+                  error = function(e) e)
+
+  expect_s3_class(cnd, "cred_retrieval_error_connection")
+  expect_match(conditionMessage(cnd), "did not answer", fixed = TRUE)
+})

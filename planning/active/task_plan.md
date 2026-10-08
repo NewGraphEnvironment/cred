@@ -64,10 +64,10 @@ Enabling change for 2, 3 and 4, and the fix for "two accounts of one dead port".
 
 ## Phase 3: `crd_search(method = "vss")` classified error
 
-- [ ] Wrap the `vss` branch, classify, re-raise with `rlang::abort(parent = e, class = c("cred_retrieval_error_<reason>", "cred_retrieval_error"))`
-- [ ] Message says no fallback exists for vss
-- [ ] Leave `bm25` unwrapped — it needs no embedding
-- [ ] Test via `local_ragnar_store_failing("dimension")` + `method = "vss"`
+- [x] Wrap the `vss` branch, classify, re-raise with `rlang::abort(parent = e, class = c("cred_retrieval_error_<reason>", "cred_retrieval_error"))`
+- [x] Message says no fallback exists for vss
+- [x] Leave `bm25` unwrapped — it needs no embedding
+- [x] Test via `local_ragnar_store_failing("dimension")` + `method = "vss"`
 
 ## Phase 4: The connect-time check
 
