@@ -156,3 +156,45 @@ were defects **inside this issue's own fix** — the same class the issue is abo
       composed message falls back to the store's record rather than quoting a rejected name.
       The store's own record is trusted: it is local and this package wrote it
 - [x] Mutation (accept any non-empty name) caught by 8 assertions — 13 for 13 overall
+
+## Phase 7: Fold in code-review round 2 (mechanism round)
+
+Round 2 was scoped to the **mechanism** behind the three defects the plan review found inside
+this fix, rather than to more instances. It named it: *a classification or remedy asserted on
+evidence that is consistent with it rather than evidence that establishes it, where the
+establishing evidence is already in the process one function away.* Its enumerations: 14
+predicates, 24 user-facing claims, 11 mutations of which **5 survived**.
+
+- [x] **The model-name guard existed and was not consulted on the sibling branch.** It checked
+      the 404 body and trusted the store's recorded name, justified by "it is local, and the
+      package wrote it" — contradicted by `crd_store_connect()`, which downloads stores from a
+      shared bucket. Writing the test wide enough then found a **third** site: the dimension
+      message's descriptive `records model` line reads metadata directly. Fourth and fifth
+      instance of the same defect class, both inside its own fix
+- [x] **404 asserted "the model is not installed" from the status.** A 404 is also a wrong path
+      prefix (`404 page not found`) from a server holding every model asked for. The
+      establishing evidence — the body's `model "..."` phrase — was already being computed ten
+      lines away and discarded. Classification now reads it
+- [x] **An HTTP error whose body is not JSON loses its status class entirely** and landed in
+      `unknown`, whose prescription is to re-download the store: a wrong and expensive remedy
+      for a reverse-proxy hiccup. `ragnar::embed_ollama()` sets
+      `req_error(body = \(resp) resp_body_json(resp)$error)`, so an HTML 502 throws inside
+      httr2's own error handler. A message route now catches it
+- [x] **7 of 10 connection patterns were deletable with the suite green** — `Connection refused`
+      only looked covered, because `Failed to connect` won the alternation in the one test
+      string. Each pattern now has its own test; all 10 verified individually
+- [x] The timeout wording and the dimension message's half-stated disjunction, both corrected
+- [x] A duplicated 6-line comment from my own block splice, removed
+
+### Termination
+
+Round 2 found defects inside the fix, so a quiet round cannot end this — only an enumeration.
+Enumerated mechanically by parsing the functions rather than grepping or recalling:
+
+- **26 predicate calls** across the nine new functions, each listed with a verdict
+- **4 sites** where a model name is interpolated into a message — all four guarded
+- **classifier reasons = message-builder branches = test-helper list**, computed, with the
+  fallthrough derived from the source rather than assumed. This agreement is now a **test**,
+  so the "two lists that happen to agree" mechanism is enforced rather than checked once
+- **27 mutations, 27 caught**, including all five of round 2's survivors and each of the 10
+  connection patterns individually

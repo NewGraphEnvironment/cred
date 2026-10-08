@@ -61,3 +61,18 @@
   to the *mechanism* behind the three defects the plan review found inside this fix). Work
   continued rather than waiting on them, per the convention; findings land as follow-up
   commits on this branch
+- Phase 7 — folded in code-review round 2, which was scoped to the mechanism rather than to
+  more instances and named it: a remedy asserted on evidence consistent with it rather than
+  evidence that establishes it, with the establishing evidence already in the process one
+  function away. Four more defects, two of them the same class a third and fourth time:
+  the model-name guard was not consulted on the store-recorded branch, nor on the dimension
+  message's descriptive line; a 404 asserted "not installed" from the status while the body
+  phrase that establishes it was computed ten lines away and discarded; and an HTTP error
+  with a non-JSON body loses its status class and landed in `unknown`, whose remedy is to
+  re-download the store
+- Round 2 also found 7 of 10 connection patterns were deletable with the suite green —
+  `Connection refused` only looked covered because `Failed to connect` won the alternation
+- Terminated by enumeration, not by a quiet round: 26 predicates listed with verdicts, 4
+  name-interpolation sites all guarded, the three reason lists computed to agree (now a
+  test), and 27 of 27 mutations caught
+- `devtools::test()` `[ FAIL 0 | WARN 0 | SKIP 2 | PASS 502 ]`; lintr and check_pkgdown clean

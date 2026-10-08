@@ -83,13 +83,17 @@ reason rather than grep the message. All inherit \code{cred_retrieval_fallback}:
 \describe{
 \item{\code{cred_retrieval_fallback_connection}}{The embedding service could not
 be reached — start Ollama.}
-\item{\code{cred_retrieval_fallback_model}}{HTTP 404 — the service answered and
-refused, so it \emph{is} running, and the model it was asked for is not
-installed.}
-\item{\code{cred_retrieval_fallback_service}}{Any other HTTP status. The service
-is running and erroring; the status is all cred knows, so no remedy is
-prescribed. Kept separate from the above precisely because pulling a
-model is unrelated to a 500 or a 503.}
+\item{\code{cred_retrieval_fallback_model}}{HTTP 404 \strong{whose body names a
+model} — the service answered, so it \emph{is} running, and it says it does
+not have that model. The body matters: a 404 is also what a wrong path
+prefix returns, from a server holding every model you asked for.}
+\item{\code{cred_retrieval_fallback_service}}{Any other reply from the service.
+It is running and erroring; the status is all cred knows, so no remedy is
+prescribed. Kept separate from the above precisely because pulling a model
+is unrelated to a 500 or a 503. This also catches an HTTP error that
+arrived with no status class on it, which happens when the error body is
+not JSON — \code{ragnar::embed_ollama()} parses it as JSON inside httr2's own
+error handler, so an HTML 502 from a reverse proxy loses the class.}
 \item{\code{cred_retrieval_fallback_dimension}}{The query embedding is a
 different width than the store's embeddings. A connected store embeds
 queries with the embedder recorded \emph{inside it}, so this is not "you

@@ -99,6 +99,30 @@ test_that(".crd_retrieval_failure separates a connection failure from everything
   )
 })
 
+test_that("every connection pattern classifies on its own", {
+  # These patterns are the ONLY classification route for a provider that is not
+  # httr2-based — there is no class check behind them. Tested as a set, 7 of the
+  # 10 could be deleted with the suite still green, because an earlier string
+  # happened to match two of them at once ("Failed to connect" won the
+  # alternation in a string written to exercise "Connection refused").
+  #
+  # So each alternative gets its own string, taken from the wording its own
+  # source actually emits.
+  for (msg in c("Failed to connect to localhost port 11434",
+                "Could not connect to server [127.0.0.1]",
+                "Couldn't connect to server",
+                "connect: Connection refused",
+                "recv failure: Connection reset by peer",
+                "Connection timed out after 2000 milliseconds",
+                "Could not resolve host: ollama.local",
+                "Timeout was reached: Operation too slow",
+                "Operation timed out after 5000 milliseconds",
+                "Empty reply from server")) {
+    expect_identical(.crd_retrieval_failure(simpleError(msg)), "connection",
+                     info = msg)
+  }
+})
+
 test_that(".crd_retrieval_failure separates a missing model from any other HTTP status", {
   # The service answered. Whatever is wrong, it is not that Ollama is down, so
   # neither of these may land in "connection".
@@ -107,6 +131,16 @@ test_that(".crd_retrieval_failure separates a missing model from any other HTTP 
     message = 'HTTP 404 Not Found.\nmodel "nomic-embed-text" not found, try pulling it first'
   )
   expect_identical(.crd_retrieval_failure(http404), "model")
+
+  # A 404 whose body does NOT name a model is a wrong path, not a missing
+  # model — the server may hold every model that was asked for. Classifying it
+  # as "model" would assert "not installed" from the status alone and then
+  # prescribe pulling something nothing asked for.
+  path404 <- rlang::error_cnd(
+    class = c("httr2_http_404", "httr2_http", "httr2_error", "rlang_error"),
+    message = "HTTP 404 Not Found.\n404 page not found"
+  )
+  expect_identical(.crd_retrieval_failure(path404), "service")
 
   # And only 404 means the model is absent. A 500, 503 or 401 has nothing to do
   # with pulling a model, so classifying them together would reinstate the
@@ -135,6 +169,31 @@ test_that(".crd_retrieval_failure classifies an embedding-width mismatch", {
       "Conversion Error: Cannot cast array of size 16 to array of size 8 when casting from source column embedding"
     )),
     "dimension"
+  )
+})
+
+test_that("an HTTP error that lost its status class is still a service reply", {
+  # ragnar::embed_ollama() builds its request with
+  # `req_error(body = \(resp) resp_body_json(resp)$error)`, so an error body that
+  # is not JSON — an HTML 502 from a reverse proxy — throws inside httr2's own
+  # error handler and the condition arrives as a bare rlang_error with no status
+  # class on it.
+  #
+  # Without a message route it lands in "unknown", whose prescription is to
+  # confirm the store against the manifest, i.e. re-download it. A wrong and
+  # expensive remedy for a proxy hiccup is exactly the defect being fixed.
+  expect_identical(
+    .crd_retrieval_failure(simpleError("HTTP 502 Bad Gateway.")),
+    "service"
+  )
+  expect_identical(
+    .crd_retrieval_failure(simpleError("HTTP 503 Service Unavailable")),
+    "service"
+  )
+  # And a classless 404 naming a model is still a missing model.
+  expect_identical(
+    .crd_retrieval_failure(simpleError('HTTP 404.\nmodel "nomic-embed-text" not found')),
+    "model"
   )
 })
 
@@ -189,6 +248,9 @@ test_that("a dimension mismatch is not misread as a connection failure", {
 test_that("only a connection failure is told to start Ollama", {
   conn <- .crd_retrieval_fallback_msg("connection", simpleError("Connection refused"))
   expect_match(conn, "ollama serve")
+  # A timeout is deliberately classified as a connection failure, and for one
+  # "it is not running" is only half the story — it can be up and loading.
+  expect_match(conn, "(?i)loading a model", perl = TRUE)
 
   # The claim of #29, as an assertion. A message that prescribes starting a
   # service that is already running is worse than one that prescribes nothing.
@@ -277,6 +339,34 @@ test_that("a model name from the service is accepted only if it looks like one",
   )
   expect_match(msg, "ollama pull nomic-embed-text", fixed = TRUE)
   expect_no_match(msg, "ollama pull with", fixed = TRUE)
+})
+
+test_that("the model name the STORE records is guarded too, not only the remote one", {
+  # The first version of this guard checked the 404 body and trusted the store,
+  # on the reasoning that the store is local and this package wrote it. Both
+  # halves are wrong: crd_store_connect() downloads stores from a shared bucket,
+  # so "local" describes where the file sits, not who wrote it. The guard existed
+  # and sat one branch of the same `if` away, unconsulted.
+  bad <- "with ' quote and; semicolon"
+  expect_false(.crd_is_model_name(bad))
+
+  fake <- structure(list(model = bad), class = "not_a_store")
+  local_mocked_bindings(.crd_store_meta_brief = function(store) {
+    list(size = 16L, model = bad)
+  })
+  for (reason in c("connection", "dimension")) {
+    msg <- .crd_retrieval_fallback_msg(reason, simpleError("cause"), store = fake)
+    # Nowhere at all, command line or prose. Writing the assertion this wide
+    # found a THIRD site: the dimension message's descriptive "records model"
+    # line reads the metadata directly rather than through the guarded path.
+    expect_no_match(msg, bad, fixed = TRUE)
+    expect_match(msg, "nomic-embed-text", fixed = TRUE)
+  }
+
+  # And the prose says what it found rather than silently substituting the
+  # default, which would misreport what the store actually records.
+  msg <- .crd_retrieval_fallback_msg("dimension", simpleError("cause"), store = fake)
+  expect_match(msg, "records model a value that is not a model name", fixed = TRUE)
 })
 
 test_that("a connection remedy names the store's recorded model, not a hardcoded one", {
@@ -517,6 +607,54 @@ test_that("one unreachable store does not silence another", {
   # Same reason, different store, so it has not been said yet.
   expect_warning(crd_search(b, .crd_test_query(), top_k = 3L),
                  class = "cred_retrieval_fallback_connection")
+})
+
+test_that("the classifier, the message builder and the test helper agree on the reasons", {
+  # THE terminating check for this issue, and the one that is computed rather
+  # than recalled. Two of the defects fixed here came from lists that happened
+  # to agree until one moved: a reason the classifier can return with no branch
+  # in the message builder silently gets the "unknown" text, and a helper that
+  # loops over four reasons when there are five resets four frequency ids.
+  #
+  # Derived by parsing the functions, so adding a reason without wiring it
+  # everywhere fails HERE rather than in whichever consumer notices first.
+  cls <- deparse(.crd_retrieval_failure)
+  from_classifier <- sort(unique(
+    gsub('.*return\\("([a-z]+)"\\).*', "\\1", grep('return\\("', cls, value = TRUE))
+  ))
+
+  msg <- deparse(.crd_retrieval_fallback_msg)
+  from_msg <- sort(unique(
+    gsub('.*identical\\(reason, "([a-z]+)"\\).*', "\\1",
+         grep('identical\\(reason, "', msg, value = TRUE))
+  ))
+
+  # The classifier's last reason is a bare literal rather than a return() call,
+  # so derive it as such instead of assuming it — this assertion is what makes
+  # the set below complete, and it fails if the fallthrough is ever changed.
+  tail_expr <- trimws(utils::tail(cls[nzchar(trimws(cls)) & trimws(cls) != "}"], 1L))
+  expect_identical(tail_expr, '"unknown"')
+  from_classifier <- sort(unique(c(from_classifier, gsub('"', "", tail_expr))))
+
+  # The premise: the parse found something. A regex that silently matched
+  # nothing would make every assertion below vacuously true.
+  expect_gt(length(from_classifier), 2L)
+  expect_gt(length(from_msg), 1L)
+
+  # "unknown" is the message builder's fallthrough, so it has no branch of its
+  # own by design.
+  expect_identical(setdiff(from_classifier, c(from_msg, "unknown")), character(0))
+  expect_identical(setdiff(from_msg, from_classifier), character(0))
+  expect_identical(sort(.crd_fallback_reasons()), from_classifier)
+})
+
+test_that("every reason produces a message that is not the fallthrough", {
+  # The other half: agreement on NAMES does not prove each branch emits its own
+  # text. A branch whose body was lost would still be named in the source.
+  texts <- vapply(.crd_fallback_reasons(), function(r) {
+    .crd_retrieval_fallback_msg(r, simpleError("a cause"))
+  }, character(1))
+  expect_length(unique(texts), length(.crd_fallback_reasons()))
 })
 
 test_that("the frequency id varies with the reason and with the store", {

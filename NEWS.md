@@ -30,9 +30,17 @@ then returned results, with nothing saying the store was suspect.
   queries with the embedder ragnar unserialises out of the store itself, so a mismatch is not
   "you queried with a different model" — it is that the model that name resolves to on this
   machine is no longer the one the store was built with
-* HTTP 404 and every other HTTP status are separate reasons. Only 404 means the model is not
-  installed; a 500 or 503 has nothing to do with pulling one, so
-  `cred_retrieval_fallback_service` reports the status and prescribes nothing
+* A reply from the service is classified by status **and body**. Only a 404 *whose body names
+  a model* means the model is absent — a 404 is also what a wrong path prefix returns, from a
+  server holding every model you asked for — so `cred_retrieval_fallback_service` carries
+  every other reply and prescribes nothing. An HTTP error that arrives with **no status class
+  on it** lands there too: `ragnar::embed_ollama()` parses the error body as JSON inside
+  httr2's own error handler, so an HTML 502 from a reverse proxy loses the class, and without
+  that route it would have been reported as a possibly-corrupt store and sent the user to
+  re-download it
+* Any model name that reaches a suggested command is checked against Ollama's own grammar
+  first. Both candidates are untrusted: the name in a 404 body is remote text, and so is the
+  one a store records, because stores are downloaded from a shared bucket
 * A remedy names the model that was actually refused — the service names it in its own 404 body
   — falling back to the one the store records, and only then to the package default. The
   connection branch no longer hardcodes `nomic-embed-text` either

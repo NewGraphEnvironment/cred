@@ -485,12 +485,6 @@ crd_store_connect <- function(store,
 # for it: httr2 chains the curl error's text into `conditionMessage()`, so these
 # also match a wrapped condition, and they are the only route for an embedding
 # provider that is not httr2-based.
-# Message fragments that identify a failure to reach the embedding service.
-#
-# Secondary to the class check in `.crd_retrieval_failure()`, not a substitute
-# for it: httr2 chains the curl error's text into `conditionMessage()`, so these
-# also match a wrapped condition, and they are the only route for an embedding
-# provider that is not httr2-based.
 .crd_conn_patterns <- paste(
   c("Failed to connect", "Could not connect", "Couldn't connect",
     "Connection refused", "Connection reset", "Connection timed out",
@@ -517,6 +511,28 @@ crd_store_connect <- function(store,
 #
 # Measured against ragnar 0.3.0 / duckdb; the premise tests in
 # test-store-fallback.R pin the text so an upstream rewording fails there.
+# Message fragments that identify a reply from the service, when the class that
+# would have said so is gone.
+#
+# It can be gone: `ragnar::embed_ollama()` builds its request with
+# `req_error(body = \(resp) resp_body_json(resp)$error)`, so an HTTP error whose
+# body is **not JSON** — anything behind an nginx or an ALB that emits an HTML
+# 502 — throws inside httr2's own error handler and arrives as a bare
+# `rlang_error` with no status class left on it.
+#
+# Without this route such a failure lands in `unknown`, whose prescription is to
+# re-download the store. That is a wrong and expensive remedy for a proxy
+# hiccup, and it is the shape of defect this whole change exists to remove.
+.crd_http_patterns <- "HTTP[[:space:]]+[0-9]{3}"
+
+# The phrase Ollama's 404 body uses when a model genuinely is not installed.
+#
+# The STATUS says the request was refused; only the BODY says why. A 404 is also
+# what a wrong path prefix returns ("404 page not found"), from a server that has
+# every model you asked for — so claiming "the model is not installed" from the
+# status alone asserts one boundary past the evidence.
+.crd_model_absent_pattern <- 'model[[:space:]]+"[^"]+"'
+
 .crd_dim_patterns <- paste(
   c("Array arguments must be of the same size",
     "Cannot cast array of size"),
@@ -549,12 +565,22 @@ crd_store_connect <- function(store,
   # someone whose Ollama is running.
   if (inherits(cond, c("httr2_failure", "curl_error"))) return("connection")
 
-  # And within "answered and refused", the status matters. Only 404 means the
-  # model is not there; a 500, 503 or 401 has nothing to do with pulling it, and
-  # telling someone to pull in those cases is the same wrong-half-of-the-advice
-  # error one level down.
-  if (inherits(cond, "httr2_http_404")) return("model")
-  if (inherits(cond, "httr2_http")) return("service")
+  # Within "answered and refused", the status narrows it and the body settles
+  # it. A 500, 503 or 401 has nothing to do with pulling a model; and a 404 is
+  # returned both by a server missing the model and by one answering a wrong
+  # path, so only the body's `model "..."` phrase establishes "not installed".
+  # Classifying on the status alone would assert one boundary past the evidence
+  # — the same half-step the old catch-all took.
+  answered <- inherits(cond, "httr2_http") ||
+    grepl(.crd_http_patterns, msg, ignore.case = TRUE)
+  if (answered) {
+    names_a_model <- grepl(.crd_model_absent_pattern, msg)
+    if (inherits(cond, "httr2_http_404") && names_a_model) return("model")
+    if (grepl("HTTP[[:space:]]+404", msg, ignore.case = TRUE) && names_a_model) {
+      return("model")
+    }
+    return("service")
+  }
 
   if (grepl(.crd_conn_patterns, msg, ignore.case = TRUE)) return("connection")
   if (grepl(.crd_dim_patterns, msg, ignore.case = TRUE)) return("dimension")
@@ -617,13 +643,15 @@ crd_store_connect <- function(store,
 #' Naming a model nothing ever asked for is how a user ends up pulling something
 #' irrelevant.
 #'
-#' The name from the condition is **remote text**, and it is going into a command
-#' the message invites the reader to paste. So it is accepted only if it looks
-#' like a model name: Ollama's own grammar allows a namespace and a tag
-#' (`library/nomic-embed-text:latest`), and nothing else. Measured without the
-#' guard, `model "with ' quote" not found` produced
-#' `ollama pull with ' quote` — an unbalanced quote in a suggested command. The
-#' store's own record is trusted; it is local, and the package wrote it.
+#' **Both** candidates are untrusted, and the first version of this guard said
+#' otherwise. The name from the condition is remote text. The name the store
+#' records is *also* remote text: [crd_store_connect()] downloads stores from a
+#' shared bucket, so "it is local" describes where the file sits, not who wrote
+#' it — and a store recording `with ' quote and; semicolon` emitted exactly that
+#' into two suggested commands while the guard sat one branch away, unconsulted.
+#'
+#' Either way the name goes into a command the message invites the reader to
+#' paste, so both go through [.crd_is_model_name()].
 #'
 #' @param cond the condition that was caught.
 #' @param store the store being searched.
@@ -638,7 +666,7 @@ crd_store_connect <- function(store,
     if (.crd_have(named) && .crd_is_model_name(named)) return(named)
   }
   recorded <- .crd_store_meta_brief(store)$model
-  if (.crd_have(recorded)) return(recorded)
+  if (.crd_is_model_name(recorded)) return(recorded)
   "nomic-embed-text"
 }
 
@@ -695,7 +723,8 @@ crd_store_connect <- function(store,
   if (identical(reason, "connection")) {
     return(paste0(
       head,
-      "  The embedding service could not be reached. Start Ollama for hybrid search:\n",
+      "  The embedding service did not answer. If it is not running, start it; a\n",
+      "  timeout can also mean it is up and loading a model, in which case retry.\n",
       "    ollama serve && ollama pull ", .crd_fallback_model(cond, store)
     ))
   }
@@ -703,8 +732,8 @@ crd_store_connect <- function(store,
   if (identical(reason, "model")) {
     return(paste0(
       head,
-      "  The embedding service answered and refused the request, so it is running.\n",
-      "  The model it was asked for is not installed:\n",
+      "  The embedding service answered and refused the request, so it is running,\n",
+      "  and it named the model it does not have:\n",
       "    ollama pull ", .crd_fallback_model(cond, store)
     ))
   }
@@ -722,13 +751,24 @@ crd_store_connect <- function(store,
 
   if (identical(reason, "dimension")) {
     meta <- .crd_store_meta_brief(store)
+    # The recorded model is echoed only if it looks like one. This line is prose
+    # rather than a command, so the paste hazard is not the issue here -- but the
+    # value is still text out of a store pulled from a shared bucket, and
+    # "records model <arbitrary string>" is both ugly and less informative than
+    # saying the recorded value is not a model name, which is itself the finding.
+    model_part <- if (.crd_is_model_name(meta$model)) {
+      meta$model
+    } else if (.crd_have(meta$model)) {
+      "a value that is not a model name"
+    } else {
+      "unknown"
+    }
     records <- if (!.crd_have(meta$size) && !.crd_have(meta$model)) {
       ""
     } else {
       paste0("  This store holds ",
              if (.crd_have(meta$size)) paste0(meta$size, "-wide") else "unknown-width",
-             " embeddings and records model ",
-             if (.crd_have(meta$model)) meta$model else "unknown", ".\n")
+             " embeddings and records model ", model_part, ".\n")
     }
     return(paste0(
       head,
@@ -742,7 +782,8 @@ crd_store_connect <- function(store,
       "  The query embedding is a different width than this store's embeddings. A\n",
       "  connected store embeds queries with the embedder recorded inside it, so\n",
       "  the model that name resolves to on this machine is no longer the model the\n",
-      "  store was built with. Treat this store as unverified: a search that did\n",
+      "  store was built with - or that embedder was replaced in this session.\n",
+      "  Treat this store as unverified: a search that did\n",
       "  succeed would answer differently while looking healthy. Not a service\n",
       "  problem, and not something restarting Ollama can fix.\n",
       records,
@@ -841,13 +882,17 @@ crd_store_connect <- function(store,
 #' \describe{
 #'   \item{`cred_retrieval_fallback_connection`}{The embedding service could not
 #'     be reached — start Ollama.}
-#'   \item{`cred_retrieval_fallback_model`}{HTTP 404 — the service answered and
-#'     refused, so it *is* running, and the model it was asked for is not
-#'     installed.}
-#'   \item{`cred_retrieval_fallback_service`}{Any other HTTP status. The service
-#'     is running and erroring; the status is all cred knows, so no remedy is
-#'     prescribed. Kept separate from the above precisely because pulling a
-#'     model is unrelated to a 500 or a 503.}
+#'   \item{`cred_retrieval_fallback_model`}{HTTP 404 **whose body names a
+#'     model** — the service answered, so it *is* running, and it says it does
+#'     not have that model. The body matters: a 404 is also what a wrong path
+#'     prefix returns, from a server holding every model you asked for.}
+#'   \item{`cred_retrieval_fallback_service`}{Any other reply from the service.
+#'     It is running and erroring; the status is all cred knows, so no remedy is
+#'     prescribed. Kept separate from the above precisely because pulling a model
+#'     is unrelated to a 500 or a 503. This also catches an HTTP error that
+#'     arrived with no status class on it, which happens when the error body is
+#'     not JSON — `ragnar::embed_ollama()` parses it as JSON inside httr2's own
+#'     error handler, so an HTML 502 from a reverse proxy loses the class.}
 #'   \item{`cred_retrieval_fallback_dimension`}{The query embedding is a
 #'     different width than the store's embeddings. A connected store embeds
 #'     queries with the embedder recorded *inside it*, so this is not "you
