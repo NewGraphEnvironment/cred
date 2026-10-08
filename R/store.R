@@ -469,6 +469,211 @@ crd_store_connect <- function(store,
   list(score = score, metric = metric)
 }
 
+# Message fragments that identify a failure to reach the embedding service.
+#
+# Secondary to the class check in `.crd_retrieval_failure()`, not a substitute
+# for it: httr2 chains the curl error's text into `conditionMessage()`, so these
+# also match a wrapped condition, and they are the only route for an embedding
+# provider that is not httr2-based.
+.crd_conn_patterns <- paste(
+  c("Failed to connect", "Could not connect", "Couldn't connect",
+    "Connection refused", "Connection reset", "Connection timed out",
+    "Could not resolve host", "Timeout was reached", "Operation timed out",
+    "Empty reply from server"),
+  collapse = "|"
+)
+
+# Message fragments that identify an embedding-width mismatch.
+#
+# This is the one failure with no distinguishing condition class — duckdb raises
+# a plain error from its binder — so unlike the patterns above, the regex here
+# is load-bearing. Both directions of the same mismatch are listed: the read
+# side compares a query vector against the stored column, the write side casts
+# a new vector into it.
+#
+# Measured against ragnar 0.3.0 / duckdb; the premise tests in
+# test-store-fallback.R pin the text so an upstream rewording fails there.
+.crd_dim_patterns <- paste(
+  c("array_cosine_distance",
+    "Array arguments must be of the same size",
+    "Cannot cast array of size"),
+  collapse = "|"
+)
+
+#' Classify a failure of semantic retrieval
+#'
+#' `crd_search(method = "hybrid")` falls back to BM25 when semantic retrieval
+#' raises, and the four ways it can fail need four different things said about
+#' them. Guessing costs more than it looks: an embedding-width mismatch means
+#' the store was built against a different model than the one answering
+#' queries, which is the "answers differently while looking healthy" condition
+#' [crd_store_connect()]'s md5 verification exists to catch — reported as a
+#' connection problem it reads as nothing at all.
+#'
+#' Classification is by condition **class** wherever one exists, because httr2's
+#' classes are stable in a way its message wording, curl's wording and the
+#' user's locale are not. Only the dimension branch needs message matching.
+#'
+#' @param cond a condition caught from `ragnar::ragnar_retrieve()`.
+#' @return `character(1)`, one of `"connection"`, `"model"`, `"dimension"`,
+#'   `"unknown"`.
+#' @noRd
+.crd_retrieval_failure <- function(cond) {
+  msg <- paste(conditionMessage(cond), collapse = "\n")
+
+  # Class first. `httr2_failure` is a transport failure — the request never
+  # got an answer — while `httr2_http` means the service answered and refused.
+  # They are disjoint, and conflating them is how "start Ollama" ends up
+  # printed at someone whose Ollama is running.
+  if (inherits(cond, c("httr2_failure", "curl_error"))) return("connection")
+  if (inherits(cond, "httr2_http")) return("model")
+
+  if (grepl(.crd_conn_patterns, msg, ignore.case = TRUE)) return("connection")
+  if (grepl(.crd_dim_patterns, msg, ignore.case = TRUE)) return("dimension")
+
+  # Deliberately not a guess. An unrecognised failure gets its cause reported
+  # and no remedy prescribed.
+  "unknown"
+}
+
+#' What a store records about its own embeddings
+#'
+#' Read from the store rather than from the environment, so the dimension
+#' message can say what this store actually is rather than what it ought to be.
+#' Every read is tolerant: this runs while a warning is being *built*, and an
+#' error raised here would turn a recoverable fallback into a hard failure —
+#' strictly worse than the bug being fixed.
+#'
+#' @param store a connected ragnar store, or anything at all.
+#' @return `list(size = integer(1), model = character(1))`, either possibly `NA`.
+#' @noRd
+.crd_store_meta_brief <- function(store) {
+  out <- list(size = NA_integer_, model = NA_character_)
+  if (is.null(store) || !requireNamespace("DBI", quietly = TRUE)) return(out)
+
+  con <- tryCatch(store@con, error = function(e) NULL)
+  if (is.null(con)) return(out)
+
+  out$size <- tryCatch(
+    as.integer(DBI::dbGetQuery(con, "SELECT embedding_size FROM metadata")$embedding_size[1]),
+    error = function(e) NA_integer_
+  )
+  out$model <- tryCatch(.crd_store_model_from_meta(con), error = function(e) NA_character_)
+  out
+}
+
+#' Compose the fallback warning for one failure reason
+#'
+#' Split from the warning call so the text can be tested without catching a
+#' condition, and so each reason's remedy is visible in one place next to the
+#' others it must not be confused with.
+#'
+#' Every branch reports the underlying condition verbatim. That was the one
+#' thing the pre-#29 message got right, and it is the only thing that can
+#' diagnose a failure cred does not recognise.
+#'
+#' @param reason `character(1)` from [.crd_retrieval_failure()].
+#' @param cond the condition that was caught.
+#' @param store the store being searched, used only to report what it records.
+#' @return `character(1)` the warning message.
+#' @noRd
+.crd_retrieval_fallback_msg <- function(reason, cond, store = NULL) {
+  cause <- paste(conditionMessage(cond), collapse = "\n")
+  head <- paste0(
+    "Semantic retrieval failed, so crd_search() fell back to BM25.\n",
+    "  Cause: ", cause, "\n"
+  )
+
+  if (identical(reason, "connection")) {
+    return(paste0(
+      head,
+      "  The embedding service could not be reached. Start Ollama for hybrid search:\n",
+      "    ollama serve && ollama pull nomic-embed-text"
+    ))
+  }
+
+  if (identical(reason, "model")) {
+    model <- .crd_store_meta_brief(store)$model
+    if (is.na(model)) model <- "nomic-embed-text"
+    return(paste0(
+      head,
+      "  The embedding service answered and refused the request, so it is running.\n",
+      "  If the model it was asked for is not installed:\n",
+      "    ollama pull ", model
+    ))
+  }
+
+  if (identical(reason, "dimension")) {
+    meta <- .crd_store_meta_brief(store)
+    records <- if (is.na(meta$size) && is.na(meta$model)) {
+      ""
+    } else {
+      paste0("  This store records embedding width ",
+             if (is.na(meta$size)) "unknown" else meta$size,
+             " and model ",
+             if (is.na(meta$model)) "unknown" else meta$model, ".\n")
+    }
+    return(paste0(
+      head,
+      "  The query embedding is a different width than this store's, which means the\n",
+      "  store was built with a different embedding model than the one answering\n",
+      "  queries. A search that succeeded would answer differently while looking\n",
+      "  healthy, so treat this store as unverified. This is not a service problem.\n",
+      records,
+      "  Verify it against the shared manifest with crd_store_connect(), and rebuild\n",
+      "  with crd_store_build() if the embedding model has moved."
+    ))
+  }
+
+  paste0(
+    head,
+    "  cred does not recognise this failure, so no remedy is prescribed. Semantic\n",
+    "  retrieval is unavailable and the store itself may be at fault — verify it\n",
+    "  against the shared manifest with crd_store_connect()."
+  )
+}
+
+#' Frequency key for the fallback warning
+#'
+#' Keyed on reason **and** store. Keyed on the store alone, a dimension
+#' mismatch met after a connection failure would be swallowed as a repeat —
+#' the diagnosis loss of #29 arriving by another route. Keyed on the reason
+#' alone, one unreachable store would silence a second one.
+#'
+#' @param reason `character(1)` from [.crd_retrieval_failure()].
+#' @param store the store being searched, or `NULL`.
+#' @return `character(1)` id for `rlang::warn(.frequency_id = )`.
+#' @noRd
+.crd_retrieval_fallback_id <- function(reason, store = NULL) {
+  loc <- tryCatch(as.character(store@location), error = function(e) NA_character_)
+  # `is.na()` before `nzchar()`: nzchar(NA) is TRUE, so the obvious
+  # non-empty test waves an NA straight through.
+  if (length(loc) != 1L || is.na(loc) || !nzchar(loc)) loc <- "unknown-store"
+  paste0("cred_retrieval_fallback_", reason, "_", loc)
+}
+
+#' Warn that semantic retrieval failed, once per session per reason and store
+#'
+#' @param cond the condition caught from `ragnar::ragnar_retrieve()`.
+#' @param store the store being searched.
+#' @return `invisible(reason)`.
+#' @noRd
+.crd_retrieval_fallback_warn <- function(cond, store = NULL) {
+  reason <- .crd_retrieval_failure(cond)
+  rlang::warn(
+    .crd_retrieval_fallback_msg(reason, cond, store = store),
+    # Subclassed so a caller can act on the reason programmatically instead of
+    # grepping the message, and so a test can assert which branch fired.
+    class = c(paste0("cred_retrieval_fallback_", reason), "cred_retrieval_fallback"),
+    # Without this the four-line warning repeats on every call. Noise is how a
+    # warning stops being read, and this is the same channel that has to carry
+    # the store-mismatch case.
+    .frequency = "once",
+    .frequency_id = .crd_retrieval_fallback_id(reason, store)
+  )
+  invisible(reason)
+}
+
 #' Search a ragnar evidence store for passages supporting a claim
 #'
 #' Retrieves the passages most relevant to `query` and labels each with the
@@ -544,10 +749,10 @@ crd_search <- function(store, query, top_k = 5L,
     hybrid = tryCatch(
       ragnar::ragnar_retrieve(store, query, top_k = top_k),
       error = function(e) {
-        warning("Semantic retrieval failed (", conditionMessage(e), ").\n",
-                "  Falling back to BM25. Start Ollama for hybrid search:\n",
-                "    ollama serve && ollama pull nomic-embed-text",
-                call. = FALSE)
+        # Every failure still falls back — erroring here would break searches
+        # that work today, and the `method` column already tells a caller the
+        # search degraded. What the warning *says* is what #29 changed.
+        .crd_retrieval_fallback_warn(e, store = store)
         used <<- "bm25"
         ragnar::ragnar_retrieve_bm25(store, query, top_k = top_k)
       }

@@ -16,3 +16,11 @@
   free and cannot corrupt the store the #27 tests retrieve from. Red run:
   `[ FAIL 18 | WARN 0 | SKIP 0 | PASS 14 ]` — the 14 passing are the premise tests, which
   is the result wanted: every fixture reaches the branch it claims, and nothing else exists yet
+- Phases 2 and 3 — classifier, messages and frequency guard. Landed as one commit because
+  the frequency guard lives inside the same function that emits the classified warning;
+  splitting them would have meant writing code to be replaced in the next commit
+- Guard proven in both directions by three mutations, each caught by exactly the assertion
+  written for it: restoring the pre-#29 catch-all -> 8 failures; dropping `.frequency` ->
+  the once-per-session test only; keying `.frequency_id` on the store without the reason ->
+  the collapse test and the id test only. All run in a temp copy of the tree
+- `devtools::test()` `[ FAIL 0 | WARN 0 | SKIP 2 | PASS 412 ]`; `lintr::lint_package()` clean

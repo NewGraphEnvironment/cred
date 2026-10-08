@@ -64,23 +64,23 @@ error would break searches that work today.
 
 ## Phase 2: Classify the failure
 
-- [ ] `.crd_retrieval_failure(cond)` in `R/store.R` — pure, returns reason + remedy text.
+- [x] `.crd_retrieval_failure(cond)` in `R/store.R` — pure, returns reason + remedy text.
       Class checks first, mismatch regex last, `"unknown"` as the default
-- [ ] For the mismatch branch, name the store's own recorded model and width by reusing the
+- [x] For the mismatch branch, name the store's own recorded model and width by reusing the
       existing `.crd_store_model_from_meta()` (`R/store.R:973`) and the
       `SELECT embedding_size FROM metadata` read already used by `.crd_store_describe()`,
       guarded so a metadata read failure degrades to the generic message
-- [ ] Wire into `crd_search()`'s `hybrid` branch, replacing the catch-all `warning()`
-- [ ] Phase 1 tests green
+- [x] Wire into `crd_search()`'s `hybrid` branch, replacing the catch-all `warning()`
+- [x] Phase 1 tests green
 
 ## Phase 3: Frequency guard and condition classes
 
-- [ ] Add `rlang` to `Imports` (already installed transitively via dplyr; needed for
+- [x] Add `rlang` to `Imports` (already installed transitively via dplyr; needed for
       `.frequency`)
-- [ ] `rlang::warn(..., class = c("cred_retrieval_fallback_<reason>",
+- [x] `rlang::warn(..., class = c("cred_retrieval_fallback_<reason>",
       "cred_retrieval_fallback"), .frequency = "once", .frequency_id = <store>_<reason>)`
       — per store **and** reason, so two different failures do not collapse into one
-- [ ] Frequency tests green
+- [x] Frequency tests green
 
 ## Phase 4: Docs, NEWS, version
 
