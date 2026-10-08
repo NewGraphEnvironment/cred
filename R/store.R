@@ -628,7 +628,7 @@ crd_store_connect <- function(store,
   paste0(
     head,
     "  cred does not recognise this failure, so no remedy is prescribed. Semantic\n",
-    "  retrieval is unavailable and the store itself may be at fault — verify it\n",
+    "  retrieval is unavailable and the store itself may be at fault - verify it\n",
     "  against the shared manifest with crd_store_connect()."
   )
 }
@@ -684,10 +684,35 @@ crd_store_connect <- function(store,
 #' known source against one paraphrase, this searches an entire indexed corpus.
 #'
 #' `method = "hybrid"` combines semantic (vector) and lexical (BM25) retrieval
-#' and needs a running Ollama instance to embed the query. When Ollama is
-#' unreachable the search **falls back to BM25 with a warning** rather than
-#' failing: lexical retrieval needs no embedding and remains effective for the
-#' numeric and parameter-level claims this package exists to check.
+#' and needs a running Ollama instance to embed the query. When semantic
+#' retrieval fails **for any reason** the search falls back to BM25 with a
+#' warning rather than failing: lexical retrieval needs no embedding and remains
+#' effective for the numeric and parameter-level claims this package exists to
+#' check. The `method` column reports `"bm25"` when that happens, so a caller
+#' can always tell the search degraded.
+#'
+#' @section Diagnosing a fallback:
+#' The warning is subclassed by what went wrong, so a caller can act on the
+#' reason rather than grep the message. All inherit `cred_retrieval_fallback`:
+#'
+#' \describe{
+#'   \item{`cred_retrieval_fallback_connection`}{The embedding service could not
+#'     be reached — start Ollama.}
+#'   \item{`cred_retrieval_fallback_model`}{The service answered and refused the
+#'     request, so it *is* running. Usually the model is not pulled.}
+#'   \item{`cred_retrieval_fallback_dimension`}{The query embedding is a
+#'     different width than the store's, which means the store was built with a
+#'     different embedding model than the one answering queries. **Treat the
+#'     store as unverified** — a search that succeeded would answer differently
+#'     while looking healthy. Verify with [crd_store_connect()] and rebuild with
+#'     [crd_store_build()] if the model has moved. Restarting Ollama cannot
+#'     help.}
+#'   \item{`cred_retrieval_fallback_unknown`}{Unrecognised. The cause is
+#'     reported verbatim and no remedy is prescribed.}
+#' }
+#'
+#' Each fires once per session per reason and per store, so a machine without
+#' Ollama does not emit the same four lines on every call.
 #'
 #' @param store a ragnar store, from [crd_store_connect()] or
 #'   [ragnar::ragnar_store_connect()].

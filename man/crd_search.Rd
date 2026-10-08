@@ -68,11 +68,38 @@ Unlike the token-overlap search in \code{\link[=crd_pdf_srch_clm]{crd_pdf_srch_c
 known source against one paraphrase, this searches an entire indexed corpus.
 
 \code{method = "hybrid"} combines semantic (vector) and lexical (BM25) retrieval
-and needs a running Ollama instance to embed the query. When Ollama is
-unreachable the search \strong{falls back to BM25 with a warning} rather than
-failing: lexical retrieval needs no embedding and remains effective for the
-numeric and parameter-level claims this package exists to check.
+and needs a running Ollama instance to embed the query. When semantic
+retrieval fails \strong{for any reason} the search falls back to BM25 with a
+warning rather than failing: lexical retrieval needs no embedding and remains
+effective for the numeric and parameter-level claims this package exists to
+check. The \code{method} column reports \code{"bm25"} when that happens, so a caller
+can always tell the search degraded.
 }
+\section{Diagnosing a fallback}{
+
+The warning is subclassed by what went wrong, so a caller can act on the
+reason rather than grep the message. All inherit \code{cred_retrieval_fallback}:
+
+\describe{
+\item{\code{cred_retrieval_fallback_connection}}{The embedding service could not
+be reached — start Ollama.}
+\item{\code{cred_retrieval_fallback_model}}{The service answered and refused the
+request, so it \emph{is} running. Usually the model is not pulled.}
+\item{\code{cred_retrieval_fallback_dimension}}{The query embedding is a
+different width than the store's, which means the store was built with a
+different embedding model than the one answering queries. \strong{Treat the
+store as unverified} — a search that succeeded would answer differently
+while looking healthy. Verify with \code{\link[=crd_store_connect]{crd_store_connect()}} and rebuild with
+\code{\link[=crd_store_build]{crd_store_build()}} if the model has moved. Restarting Ollama cannot
+help.}
+\item{\code{cred_retrieval_fallback_unknown}}{Unrecognised. The cause is
+reported verbatim and no remedy is prescribed.}
+}
+
+Each fires once per session per reason and per store, so a machine without
+Ollama does not emit the same four lines on every call.
+}
+
 \examples{
 \dontrun{
 store <- crd_store_connect("vca_refs")

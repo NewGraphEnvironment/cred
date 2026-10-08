@@ -182,9 +182,26 @@ Shipped: [#22](https://github.com/NewGraphEnvironment/cred/issues/22) ragnar ret
   2 queries x 3 `top_k`: zero BM25 chunks were absent from the hybrid results, and hybrid
   returned 5-17 chunks where BM25 returned 3-10. `hybrid` needs Ollama but falls back to BM25
   with a warning, so it is never *less* available — a `bm25` default would discard the semantic
-  half for everyone to avoid a dependency the fallback already handles. That fallback currently
-  blames Ollama for every failure, including a store/model mismatch
-  ([#29](https://github.com/NewGraphEnvironment/cred/issues/29)).
+  half for everyone to avoid a dependency the fallback already handles.
+- **A fallback is classified by condition class, not by message text.** Measured against
+  ragnar 0.3.0: `httr2_failure` means the embedding service got no answer, `httr2_http` means
+  it answered and refused — so it is running, and "start Ollama" is the wrong half of the old
+  advice. Both survive `ragnar_retrieve()` unwrapped. Only the embedding-width mismatch has no
+  class of its own (a duckdb binder error naming `array_cosine_distance`), and it is the one
+  that matters most: it means the store was built against a different embedding model than the
+  one answering queries, the same "answers differently while looking healthy" condition
+  `crd_store_connect()`'s md5 check exists to catch. Reported as a connection problem it reads
+  as nothing at all, which is what
+  [#29](https://github.com/NewGraphEnvironment/cred/issues/29) fixed. Warnings are subclassed
+  `cred_retrieval_fallback_<reason>` and fire once per session per reason **and store** —
+  keyed on the store alone, a mismatch met after a connection failure is swallowed as a repeat.
+- **A failure shape is reachable offline by replacing a connected store's `embed`.** Setting
+  that S7 property on a copy does not reach the original, even though both share one duckdb
+  connection, so the fixtures in `tests/testthat/helper-store.R` reuse the cached store at no
+  cost. The `baseenv()` constraint below binds only an `embed` serialised in by
+  `ragnar_store_create()`; one assigned after connecting lives in the session. The exception is
+  a missing *model*, which needs a live server to answer 404 — so that fixture skips, and the
+  branch is covered unconditionally by a hand-built condition.
 - **A ragnar store can be built offline for tests.** `ragnar_store_create()` accepts any
   function for `embed`, so a deterministic local one takes the identical hybrid code path with
   no Ollama and no network (`tests/testthat/helper-store.R`). It must reference nothing outside

@@ -1,3 +1,37 @@
+# cred 0.3.2
+
+`crd_search(method = "hybrid")` caught every semantic-retrieval failure and prescribed one
+remedy: start Ollama. The cause was reported, so the warning was recoverable, but the advice
+was wrong for anything that was not a connection failure — and actively misleading for the
+one case that matters most.
+
+An embedding-width mismatch means the store was built against a different embedding model
+than the one answering queries. That is the "answers differently while looking healthy"
+condition `crd_store_connect()`'s md5 verification exists to catch. Reached through the
+fallback it produced a warning telling you to start a service that was already running, and
+then returned results, with nothing saying the store was suspect.
+
+* The failure is classified by condition **class** wherever one exists, which is stable in a
+  way httr2's wording, curl's wording and the session locale are not. `httr2_failure` is a
+  request that got no answer; `httr2_http` is a service that answered and refused — so it is
+  running, and only the `ollama pull` half of the old advice applies. Both reach
+  `crd_search()` unwrapped. Only the width mismatch needs message matching, and the text it
+  matches is a duckdb binder error, not an Ollama one
+* A width mismatch now names the embedding width and model the store itself records, says to
+  treat the store as unverified, and points at `crd_store_connect()` and `crd_store_build()`.
+  It no longer mentions the service
+* An unrecognised failure reports its cause verbatim and prescribes nothing
+* Warnings are subclassed `cred_retrieval_fallback_<reason>`, all inheriting
+  `cred_retrieval_fallback`, so a caller can act on the reason without grepping a message.
+  `?crd_search` lists them
+* They fire once per session per reason **and** per store. Keyed on the store alone a
+  mismatch met after a connection failure would be swallowed as a repeat, which is the same
+  diagnosis loss arriving by another route
+
+Every failure still falls back to BM25 and the `method` column still reports `"bm25"`, so no
+search that worked before this release behaves differently — only what is said about one that
+degrades. Adds `rlang` to Imports for the frequency guard.
+
 # cred 0.3.1
 
 `crd_search()` errored on every store built with ragnar 0.3.0. Hybrid retrieval merges

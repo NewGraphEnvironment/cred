@@ -84,19 +84,19 @@ error would break searches that work today.
 
 ## Phase 4: Docs, NEWS, version
 
-- [ ] `crd_search()` `@details` currently says the fallback is about Ollama being
+- [x] `crd_search()` `@details` currently says the fallback is about Ollama being
       unreachable (`R/store.R:480-486`) — broaden it and document the condition classes
-- [ ] `devtools::document()`, `lintr::lint_package()` (must be 0), `devtools::test()`,
+- [x] `devtools::document()`, `lintr::lint_package()` (must be 0), `devtools::test()`,
       `pkgdown::check_pkgdown()`
-- [ ] NEWS.md entry; version `0.3.1` → `0.3.2` as the final commit
-- [ ] Update the CLAUDE.md design-decision bullet that currently ends "That fallback
+- [x] NEWS.md entry; version `0.3.1` → `0.3.2` as the final commit
+- [x] Update the CLAUDE.md design-decision bullet that currently ends "That fallback
       currently blames Ollama for every failure, including a store/model mismatch (#29)"
 
 ## Validation
 
-- [ ] Tests pass
-- [ ] Guard proven in both directions — the mutation that reintroduces the catch-all must
+- [x] Tests pass
+- [x] Guard proven in both directions — the mutation that reintroduces the catch-all must
       turn a test red
-- [ ] `/code-check` clean on each commit
-- [ ] PWF checkboxes match landed work
-- [ ] `/planning-archive` on completion
+- [x] `/code-check` clean on each commit
+- [x] PWF checkboxes match landed work
+- [x] `/planning-archive` on completion

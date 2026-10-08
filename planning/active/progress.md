@@ -24,3 +24,17 @@
   the once-per-session test only; keying `.frequency_id` on the store without the reason ->
   the collapse test and the id test only. All run in a temp copy of the tree
 - `devtools::test()` `[ FAIL 0 | WARN 0 | SKIP 2 | PASS 412 ]`; `lintr::lint_package()` clean
+- Phase 4 — docs, NEWS, version 0.3.1 -> 0.3.2. `crd_search()` gains a
+  "Diagnosing a fallback" section listing the four condition classes; the CLAUDE.md
+  design-decision bullet that recorded #29 as open is replaced by two that record what was
+  settled (classify by class not text; a failure shape is reachable offline by replacing a
+  connected store's `embed`)
+- `devtools::check()`: 0 errors, 3 warnings, 4 notes — **all pre-existing on origin/main**,
+  verified line for line: non-ASCII em dashes in `R/audit.R` and `R/store.R` comments (55
+  such lines on main before this branch), and undeclared `tibble` / `openxlsx` used via
+  `::`. The repo has no R-CMD-check workflow, so none of them reddens CI. Not touched —
+  out of scope for #29, worth their own issue
+- One non-ASCII em dash I had added inside a user-facing **string** was replaced with an
+  ASCII hyphen; the ten remaining are comments, matching the file's existing style
+- `pkgdown::check_pkgdown()` clean; `lintr::lint_package()` clean;
+  `devtools::test()` `[ FAIL 0 | WARN 0 | SKIP 2 | PASS 412 ]`
