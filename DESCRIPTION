@@ -24,7 +24,7 @@ Suggests:
     rbbt,
     rmarkdown,
     shiny,
-    testthat (>= 3.0.0),
+    testthat (>= 3.1.8),
     withr
 Remotes:
     paleolimbot/rbbt,

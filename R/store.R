@@ -158,9 +158,19 @@
 #'
 #' Resolves a store by name, using the local copy when its MD5 matches the
 #' shared manifest and downloading it from `source` otherwise. Verification is
-#' the point: a store built against a different embedding model answers
-#' differently while looking perfectly healthy, so a silent local rebuild
-#' produces an artefact that is present but not trustworthy.
+#' the point: a store that is present is not thereby trustworthy, and a silent
+#' local rebuild produces an artefact that looks perfectly healthy.
+#'
+#' **What the MD5 compare can and cannot see.** It answers "is this the file the
+#' manifest describes" — a stale copy, a truncated download, a local rebuild
+#' nobody pushed. It is structurally unable to see a store whose *embedding
+#' model* has moved underneath it, because that store's bytes are exactly the
+#' ones the manifest recorded. The manifest carries `embedding_model` and
+#' `embedding_size`, and [crd_store_push()] compares them, but no connect-time
+#' comparison exists yet (NewGraphEnvironment/cred#30). Until it does, a
+#' model mismatch surfaces downstream as a
+#' `cred_retrieval_fallback_dimension` warning from [crd_search()] — see
+#' "Diagnosing a fallback" there.
 #'
 #' `source` has **no default value**. Configure it with
 #' `options(cred.store_source = )` or the `CRED_STORE_SOURCE` environment
@@ -475,6 +485,12 @@ crd_store_connect <- function(store,
 # for it: httr2 chains the curl error's text into `conditionMessage()`, so these
 # also match a wrapped condition, and they are the only route for an embedding
 # provider that is not httr2-based.
+# Message fragments that identify a failure to reach the embedding service.
+#
+# Secondary to the class check in `.crd_retrieval_failure()`, not a substitute
+# for it: httr2 chains the curl error's text into `conditionMessage()`, so these
+# also match a wrapped condition, and they are the only route for an embedding
+# provider that is not httr2-based.
 .crd_conn_patterns <- paste(
   c("Failed to connect", "Could not connect", "Couldn't connect",
     "Connection refused", "Connection reset", "Connection timed out",
@@ -487,15 +503,22 @@ crd_store_connect <- function(store,
 #
 # This is the one failure with no distinguishing condition class — duckdb raises
 # a plain error from its binder — so unlike the patterns above, the regex here
-# is load-bearing. Both directions of the same mismatch are listed: the read
-# side compares a query vector against the stored column, the write side casts
-# a new vector into it.
+# is load-bearing.
+#
+# Both patterns describe a *size* disagreement, and neither names a function.
+# `array_cosine_distance` on its own is NOT a pattern here, deliberately: duckdb
+# also raises "No function matches the given name and argument types
+# 'array_cosine_distance(FLOAT[2], INTEGER_LITERAL)'" when an embedder returns
+# the wrong *type* or a zero-length vector, which is not a store problem at all.
+# Matching the function name would prescribe "rebuild the store" off a substring
+# — the same remedy-from-a-guess that #29 exists to remove. The size phrase is
+# metric-agnostic in the same way (`array_distance` raises it verbatim), so
+# dropping the name costs no coverage.
 #
 # Measured against ragnar 0.3.0 / duckdb; the premise tests in
 # test-store-fallback.R pin the text so an upstream rewording fails there.
 .crd_dim_patterns <- paste(
-  c("array_cosine_distance",
-    "Array arguments must be of the same size",
+  c("Array arguments must be of the same size",
     "Cannot cast array of size"),
   collapse = "|"
 )
@@ -503,30 +526,35 @@ crd_store_connect <- function(store,
 #' Classify a failure of semantic retrieval
 #'
 #' `crd_search(method = "hybrid")` falls back to BM25 when semantic retrieval
-#' raises, and the four ways it can fail need four different things said about
-#' them. Guessing costs more than it looks: an embedding-width mismatch means
-#' the store was built against a different model than the one answering
-#' queries, which is the "answers differently while looking healthy" condition
-#' [crd_store_connect()]'s md5 verification exists to catch — reported as a
-#' connection problem it reads as nothing at all.
+#' raises, and the ways it can fail need different things said about them.
+#' Guessing costs more than it looks: an embedding-width mismatch means the
+#' store's own recorded embedder no longer produces vectors of the width the
+#' store holds, so the store is not answering the questions it appears to be —
+#' reported as a connection problem that reads as nothing at all.
 #'
 #' Classification is by condition **class** wherever one exists, because httr2's
 #' classes are stable in a way its message wording, curl's wording and the
 #' user's locale are not. Only the dimension branch needs message matching.
 #'
 #' @param cond a condition caught from `ragnar::ragnar_retrieve()`.
-#' @return `character(1)`, one of `"connection"`, `"model"`, `"dimension"`,
-#'   `"unknown"`.
+#' @return `character(1)`, one of `"connection"`, `"model"`, `"service"`,
+#'   `"dimension"`, `"unknown"`.
 #' @noRd
 .crd_retrieval_failure <- function(cond) {
   msg <- paste(conditionMessage(cond), collapse = "\n")
 
-  # Class first. `httr2_failure` is a transport failure — the request never
-  # got an answer — while `httr2_http` means the service answered and refused.
-  # They are disjoint, and conflating them is how "start Ollama" ends up
-  # printed at someone whose Ollama is running.
+  # Class first. `httr2_failure` is a transport failure — the request never got
+  # an answer — while `httr2_http` means the service answered and refused. They
+  # are disjoint, and conflating them is how "start Ollama" ends up printed at
+  # someone whose Ollama is running.
   if (inherits(cond, c("httr2_failure", "curl_error"))) return("connection")
-  if (inherits(cond, "httr2_http")) return("model")
+
+  # And within "answered and refused", the status matters. Only 404 means the
+  # model is not there; a 500, 503 or 401 has nothing to do with pulling it, and
+  # telling someone to pull in those cases is the same wrong-half-of-the-advice
+  # error one level down.
+  if (inherits(cond, "httr2_http_404")) return("model")
+  if (inherits(cond, "httr2_http")) return("service")
 
   if (grepl(.crd_conn_patterns, msg, ignore.case = TRUE)) return("connection")
   if (grepl(.crd_dim_patterns, msg, ignore.case = TRUE)) return("dimension")
@@ -538,14 +566,18 @@ crd_store_connect <- function(store,
 
 #' What a store records about its own embeddings
 #'
-#' Read from the store rather than from the environment, so the dimension
-#' message can say what this store actually is rather than what it ought to be.
-#' Every read is tolerant: this runs while a warning is being *built*, and an
-#' error raised here would turn a recoverable fallback into a hard failure —
-#' strictly worse than the bug being fixed.
+#' Read from the store rather than from the environment, so a message can say
+#' what this store actually is rather than what it ought to be.
+#'
+#' Every read is tolerant, and every result is length-checked by the caller:
+#' this runs while a warning is being *built*, and an error raised here would
+#' turn a recoverable fallback into a hard failure — strictly worse than the bug
+#' being fixed. A `metadata` table without the column yields `NULL`, and
+#' `as.integer(NULL)` is `integer(0)`, on which `if (is.na(x))` errors with
+#' "argument is of length zero".
 #'
 #' @param store a connected ragnar store, or anything at all.
-#' @return `list(size = integer(1), model = character(1))`, either possibly `NA`.
+#' @return `list(size = , model = )`, each either a length-1 value or `NA`.
 #' @noRd
 .crd_store_meta_brief <- function(store) {
   out <- list(size = NA_integer_, model = NA_character_)
@@ -554,12 +586,67 @@ crd_store_connect <- function(store,
   con <- tryCatch(store@con, error = function(e) NULL)
   if (is.null(con)) return(out)
 
-  out$size <- tryCatch(
+  size <- tryCatch(
     as.integer(DBI::dbGetQuery(con, "SELECT embedding_size FROM metadata")$embedding_size[1]),
     error = function(e) NA_integer_
   )
-  out$model <- tryCatch(.crd_store_model_from_meta(con), error = function(e) NA_character_)
+  model <- tryCatch(.crd_store_model_from_meta(con), error = function(e) NA_character_)
+
+  if (length(size) == 1L) out$size <- size
+  if (length(model) == 1L) out$model <- model
   out
+}
+
+#' Is a value usable in a message?
+#'
+#' One place to ask "did that read give me something to print", so no branch of
+#' the message builder has to remember that `is.na()` on a zero-length value
+#' errors rather than returning `FALSE`.
+#'
+#' @param x any value.
+#' @return `TRUE` when `x` is a single non-missing, non-empty value.
+#' @noRd
+.crd_have <- function(x) {
+  length(x) == 1L && !is.na(x) && nzchar(as.character(x))
+}
+
+#' The model name to name in a remedy
+#'
+#' In order of how much it is actually known: the model the service itself said
+#' it could not find, then the one the store records, then the package default.
+#' Naming a model nothing ever asked for is how a user ends up pulling something
+#' irrelevant.
+#'
+#' @param cond the condition that was caught.
+#' @param store the store being searched.
+#' @return `character(1)`.
+#' @noRd
+.crd_fallback_model <- function(cond, store = NULL) {
+  msg <- paste(conditionMessage(cond), collapse = "\n")
+  # Ollama's 404 body: model "nomic-embed-text" not found, try pulling it first
+  hit <- regmatches(msg, regexpr('model[[:space:]]+"[^"]+"', msg))
+  if (length(hit) == 1L) {
+    named <- sub('^model[[:space:]]+"([^"]+)"$', "\\1", hit)
+    if (.crd_have(named)) return(named)
+  }
+  recorded <- .crd_store_meta_brief(store)$model
+  if (.crd_have(recorded)) return(recorded)
+  "nomic-embed-text"
+}
+
+#' Indent the continuation lines of a caught condition's message
+#'
+#' httr2 and rlang chain a cause across several lines, and the later ones arrive
+#' flush left. Dropped into a message whose own lines are indented, the remedy
+#' then reads as part of the cause — which defeats the point of separating them.
+#'
+#' @param cause `character(1)`, possibly multi-line.
+#' @return `character(1)` with every line after the first indented.
+#' @noRd
+.crd_indent_cause <- function(cause) {
+  lines <- strsplit(paste(cause, collapse = "\n"), "\n", fixed = TRUE)[[1]]
+  if (length(lines) <= 1L) return(paste(lines, collapse = "\n"))
+  paste(c(lines[1], paste0("         ", lines[-1])), collapse = "\n")
 }
 
 #' Compose the fallback warning for one failure reason
@@ -578,58 +665,82 @@ crd_store_connect <- function(store,
 #' @return `character(1)` the warning message.
 #' @noRd
 .crd_retrieval_fallback_msg <- function(reason, cond, store = NULL) {
-  cause <- paste(conditionMessage(cond), collapse = "\n")
   head <- paste0(
     "Semantic retrieval failed, so crd_search() fell back to BM25.\n",
-    "  Cause: ", cause, "\n"
+    "  Cause: ", .crd_indent_cause(conditionMessage(cond)), "\n"
   )
 
   if (identical(reason, "connection")) {
     return(paste0(
       head,
       "  The embedding service could not be reached. Start Ollama for hybrid search:\n",
-      "    ollama serve && ollama pull nomic-embed-text"
+      "    ollama serve && ollama pull ", .crd_fallback_model(cond, store)
     ))
   }
 
   if (identical(reason, "model")) {
-    model <- .crd_store_meta_brief(store)$model
-    if (is.na(model)) model <- "nomic-embed-text"
     return(paste0(
       head,
       "  The embedding service answered and refused the request, so it is running.\n",
-      "  If the model it was asked for is not installed:\n",
-      "    ollama pull ", model
+      "  The model it was asked for is not installed:\n",
+      "    ollama pull ", .crd_fallback_model(cond, store)
+    ))
+  }
+
+  if (identical(reason, "service")) {
+    # Reachable, refusing, and not a missing model. Nothing here identifies a
+    # remedy, so none is offered — the status above is the diagnosis.
+    return(paste0(
+      head,
+      "  The embedding service answered with an error, so it is running and this is\n",
+      "  not a connection problem. The status above is all cred knows; pulling a\n",
+      "  model or restarting the server may be unrelated to it."
     ))
   }
 
   if (identical(reason, "dimension")) {
     meta <- .crd_store_meta_brief(store)
-    records <- if (is.na(meta$size) && is.na(meta$model)) {
+    records <- if (!.crd_have(meta$size) && !.crd_have(meta$model)) {
       ""
     } else {
-      paste0("  This store records embedding width ",
-             if (is.na(meta$size)) "unknown" else meta$size,
-             " and model ",
-             if (is.na(meta$model)) "unknown" else meta$model, ".\n")
+      paste0("  This store holds ",
+             if (.crd_have(meta$size)) paste0(meta$size, "-wide") else "unknown-width",
+             " embeddings and records model ",
+             if (.crd_have(meta$model)) meta$model else "unknown", ".\n")
     }
     return(paste0(
       head,
-      "  The query embedding is a different width than this store's, which means the\n",
-      "  store was built with a different embedding model than the one answering\n",
-      "  queries. A search that succeeded would answer differently while looking\n",
-      "  healthy, so treat this store as unverified. This is not a service problem.\n",
+      # The mechanism, stated as narrowly as it can be established. A connected
+      # store embeds queries with its OWN recorded embedder -- ragnar
+      # unserialises it out of the store -- so this is not "you queried with a
+      # different model". It is that the embedder no longer returns the width
+      # the store holds: the model that name resolves to on this machine is not
+      # the model the store was built with, or the embedder was replaced in
+      # this session.
+      "  The query embedding is a different width than this store's embeddings. A\n",
+      "  connected store embeds queries with the embedder recorded inside it, so\n",
+      "  the model that name resolves to on this machine is no longer the model the\n",
+      "  store was built with. Treat this store as unverified: a search that did\n",
+      "  succeed would answer differently while looking healthy. Not a service\n",
+      "  problem, and not something restarting Ollama can fix.\n",
       records,
-      "  Verify it against the shared manifest with crd_store_connect(), and rebuild\n",
-      "  with crd_store_build() if the embedding model has moved."
+      # NOT crd_store_connect(). Its verification is an md5 compare against the
+      # manifest, which answers "is this the file the manifest describes" and is
+      # structurally unable to see a model change -- the connect-time model
+      # check does not exist (see #30). Prescribing it here would be a remedy
+      # that cannot detect the condition, which is precisely the defect #29 is.
+      "  Compare what the store records against what the service now returns, then\n",
+      "  re-pull the model or rebuild with crd_store_build():\n",
+      "    ncol(ragnar::embed_ollama('probe', model = '",
+      .crd_fallback_model(cond, store), "'))"
     ))
   }
 
   paste0(
     head,
     "  cred does not recognise this failure, so no remedy is prescribed. Semantic\n",
-    "  retrieval is unavailable and the store itself may be at fault - verify it\n",
-    "  against the shared manifest with crd_store_connect()."
+    "  retrieval is unavailable and the store itself may be at fault - confirm it is\n",
+    "  the file the manifest describes with crd_store_connect()."
   )
 }
 
@@ -640,15 +751,20 @@ crd_store_connect <- function(store,
 #' the diagnosis loss of #29 arriving by another route. Keyed on the reason
 #' alone, one unreachable store would silence a second one.
 #'
+#' The store half is its `location`, not its `name`. `ragnar_store_connect()`
+#' falls back to `unique_store_name()` when the store records no name, and that
+#' is a per-session counter (`store_001`), so two different stores can carry one
+#' name while two copies of one store at different paths cannot share a path.
+#'
 #' @param reason `character(1)` from [.crd_retrieval_failure()].
 #' @param store the store being searched, or `NULL`.
 #' @return `character(1)` id for `rlang::warn(.frequency_id = )`.
 #' @noRd
 .crd_retrieval_fallback_id <- function(reason, store = NULL) {
   loc <- tryCatch(as.character(store@location), error = function(e) NA_character_)
-  # `is.na()` before `nzchar()`: nzchar(NA) is TRUE, so the obvious
-  # non-empty test waves an NA straight through.
-  if (length(loc) != 1L || is.na(loc) || !nzchar(loc)) loc <- "unknown-store"
+  # `.crd_have()` rather than `nzchar()` directly: nzchar(NA) is TRUE, so the
+  # obvious non-empty test waves an NA straight through.
+  if (!.crd_have(loc)) loc <- "unknown-store"
   paste0("cred_retrieval_fallback_", reason, "_", loc)
 }
 
@@ -660,14 +776,19 @@ crd_store_connect <- function(store,
 #' @noRd
 .crd_retrieval_fallback_warn <- function(cond, store = NULL) {
   reason <- .crd_retrieval_failure(cond)
+  # The message is composed even on a call whose warning the frequency guard
+  # will suppress, which costs two metadata reads on an already-open connection
+  # for the dimension branch. `rlang:::needs_signal()` is not exported, so there
+  # is no supported way to ask first; the reads are local and cheap enough that
+  # restructuring for it would buy less than it complicates.
   rlang::warn(
     .crd_retrieval_fallback_msg(reason, cond, store = store),
     # Subclassed so a caller can act on the reason programmatically instead of
     # grepping the message, and so a test can assert which branch fired.
     class = c(paste0("cred_retrieval_fallback_", reason), "cred_retrieval_fallback"),
-    # Without this the four-line warning repeats on every call. Noise is how a
-    # warning stops being read, and this is the same channel that has to carry
-    # the store-mismatch case.
+    # Without this the warning repeats on every call. Noise is how a warning
+    # stops being read, and this is the same channel that has to carry the
+    # store-mismatch case.
     .frequency = "once",
     .frequency_id = .crd_retrieval_fallback_id(reason, store)
   )
@@ -698,15 +819,23 @@ crd_store_connect <- function(store,
 #' \describe{
 #'   \item{`cred_retrieval_fallback_connection`}{The embedding service could not
 #'     be reached — start Ollama.}
-#'   \item{`cred_retrieval_fallback_model`}{The service answered and refused the
-#'     request, so it *is* running. Usually the model is not pulled.}
+#'   \item{`cred_retrieval_fallback_model`}{HTTP 404 — the service answered and
+#'     refused, so it *is* running, and the model it was asked for is not
+#'     installed.}
+#'   \item{`cred_retrieval_fallback_service`}{Any other HTTP status. The service
+#'     is running and erroring; the status is all cred knows, so no remedy is
+#'     prescribed. Kept separate from the above precisely because pulling a
+#'     model is unrelated to a 500 or a 503.}
 #'   \item{`cred_retrieval_fallback_dimension`}{The query embedding is a
-#'     different width than the store's, which means the store was built with a
-#'     different embedding model than the one answering queries. **Treat the
-#'     store as unverified** — a search that succeeded would answer differently
-#'     while looking healthy. Verify with [crd_store_connect()] and rebuild with
-#'     [crd_store_build()] if the model has moved. Restarting Ollama cannot
-#'     help.}
+#'     different width than the store's embeddings. A connected store embeds
+#'     queries with the embedder recorded *inside it*, so this is not "you
+#'     queried with a different model" — it is that the model that name resolves
+#'     to on this machine is no longer the model the store was built with.
+#'     **Treat the store as unverified**: a search that did succeed would answer
+#'     differently while looking healthy. Compare what the store records against
+#'     what the service now returns, then re-pull or rebuild with
+#'     [crd_store_build()]. Restarting Ollama cannot help, and neither can
+#'     [crd_store_connect()], whose MD5 compare cannot see a model change.}
 #'   \item{`cred_retrieval_fallback_unknown`}{Unrecognised. The cause is
 #'     reported verbatim and no remedy is prescribed.}
 #' }

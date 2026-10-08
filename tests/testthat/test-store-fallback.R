@@ -99,23 +99,26 @@ test_that(".crd_retrieval_failure separates a connection failure from everything
   )
 })
 
-test_that(".crd_retrieval_failure classifies an HTTP response as a service refusal", {
+test_that(".crd_retrieval_failure separates a missing model from any other HTTP status", {
   # The service answered. Whatever is wrong, it is not that Ollama is down, so
-  # this must not land in "connection".
-  http <- rlang::error_cnd(
+  # neither of these may land in "connection".
+  http404 <- rlang::error_cnd(
     class = c("httr2_http_404", "httr2_http", "httr2_error", "rlang_error"),
     message = 'HTTP 404 Not Found.\nmodel "nomic-embed-text" not found, try pulling it first'
   )
-  expect_identical(.crd_retrieval_failure(http), "model")
+  expect_identical(.crd_retrieval_failure(http404), "model")
 
-  # Not only 404 — any status means reachable-but-refused.
-  expect_identical(
-    .crd_retrieval_failure(rlang::error_cnd(
-      class = c("httr2_http_500", "httr2_http", "httr2_error", "rlang_error"),
-      message = "HTTP 500 Internal Server Error."
-    )),
-    "model"
-  )
+  # And only 404 means the model is absent. A 500, 503 or 401 has nothing to do
+  # with pulling a model, so classifying them together would reinstate the
+  # wrong-half-of-the-advice error this issue is about, one level down.
+  for (status in c(401L, 403L, 500L, 503L)) {
+    cnd <- rlang::error_cnd(
+      class = c(paste0("httr2_http_", status), "httr2_http", "httr2_error",
+                "rlang_error"),
+      message = paste0("HTTP ", status, ".")
+    )
+    expect_identical(.crd_retrieval_failure(cnd), "service")
+  }
 })
 
 test_that(".crd_retrieval_failure classifies an embedding-width mismatch", {
@@ -130,6 +133,33 @@ test_that(".crd_retrieval_failure classifies an embedding-width mismatch", {
   expect_identical(
     .crd_retrieval_failure(simpleError(
       "Conversion Error: Cannot cast array of size 16 to array of size 8 when casting from source column embedding"
+    )),
+    "dimension"
+  )
+})
+
+test_that("a duckdb error merely NAMING the distance function is not a mismatch", {
+  # The pattern set deliberately excludes the bare function name. duckdb raises
+  # this when an embedder returns the wrong TYPE or a zero-length vector, which
+  # is not a store problem — and the dimension remedy ("treat this store as
+  # unverified", "rebuild") is expensive and wrong for it. Matching a substring
+  # of a function name to prescribe a rebuild is the same remedy-from-a-guess
+  # that #29 exists to remove.
+  expect_identical(
+    .crd_retrieval_failure(simpleError(paste(
+      "Binder Error: No function matches the given name and argument types",
+      "'array_cosine_distance(FLOAT[2], INTEGER_LITERAL)'.",
+      "You might need to add explicit type casts."
+    ))),
+    "unknown"
+  )
+
+  # And the size phrase classifies without the function name present, so
+  # dropping the name costs no coverage. ragnar's other metrics raise the same
+  # phrase from a differently-named function.
+  expect_identical(
+    .crd_retrieval_failure(simpleError(
+      "Binder Error: array_distance: Array arguments must be of the same size"
     )),
     "dimension"
   )
@@ -162,25 +192,46 @@ test_that("only a connection failure is told to start Ollama", {
 
   # The claim of #29, as an assertion. A message that prescribes starting a
   # service that is already running is worse than one that prescribes nothing.
-  for (reason in c("dimension", "unknown")) {
+  for (reason in c("service", "dimension", "unknown")) {
     msg <- .crd_retrieval_fallback_msg(reason, simpleError("something went wrong"))
     expect_no_match(msg, "ollama serve")
     expect_no_match(msg, "(?i)start ollama", perl = TRUE)
   }
 })
 
-test_that("a dimension mismatch points at store verification, not at Ollama", {
+test_that("a dimension mismatch prescribes a check that can actually see it", {
   msg <- .crd_retrieval_fallback_msg(
     "dimension",
     simpleError("Binder Error: array_cosine_distance: Array arguments must be of the same size")
   )
-  expect_match(msg, "crd_store_connect")
-  # Says what is actually wrong, in the words this package already uses for it.
-  expect_match(msg, "(?i)embedding model", perl = TRUE)
+  # THE assertion of this block, and the one that nearly went the other way.
+  # crd_store_connect() verifies md5 against the manifest: it answers "is this
+  # the file the manifest describes" and is structurally unable to see a model
+  # change, because such a store's bytes are exactly the recorded ones. Sending
+  # the user there would be a remedy that cannot detect the condition — which
+  # is the defect #29 *is*, reintroduced inside its own fix.
+  expect_no_match(msg, "crd_store_connect")
+  expect_match(msg, "crd_store_build", fixed = TRUE)
+  expect_match(msg, "embed_ollama", fixed = TRUE)
+
+  # Says what is actually wrong, narrowly. A connected store embeds queries with
+  # its own recorded embedder, so the claim is about the model that name
+  # resolves to, not about the caller having chosen a different one.
+  expect_match(msg, "(?i)no longer the model the", perl = TRUE)
   expect_no_match(msg, "ollama serve")
 })
 
-test_that("a service refusal names the pull, not the start", {
+test_that("the unknown message may point at crd_store_connect, because md5 CAN see that", {
+  # The complement of the test above, and the reason the two are not
+  # interchangeable. For an unrecognised failure the file itself is a live
+  # suspect — stale, truncated, locally rebuilt — and that is exactly what an
+  # md5 compare against the manifest detects.
+  msg <- .crd_retrieval_fallback_msg("unknown", simpleError("something odd"))
+  expect_match(msg, "crd_store_connect", fixed = TRUE)
+  expect_match(msg, "(?i)the file the manifest describes", perl = TRUE)
+})
+
+test_that("a missing model names the pull, not the start", {
   msg <- .crd_retrieval_fallback_msg(
     "model",
     simpleError('HTTP 404 Not Found.\nmodel "nomic-embed-text" not found, try pulling it first')
@@ -189,6 +240,40 @@ test_that("a service refusal names the pull, not the start", {
   # Ollama answered, so telling the user to start it is the wrong half of the
   # old advice.
   expect_no_match(msg, "ollama serve")
+})
+
+test_that("a remedy names the model that was actually refused, not a default", {
+  # Telling someone to pull a model nothing ever asked for sends them to fix
+  # something that is not broken. The service names the model in its own 404
+  # body, so that is the most authoritative source available.
+  msg <- .crd_retrieval_fallback_msg(
+    "model",
+    simpleError('HTTP 404 Not Found.\nmodel "mxbai-embed-large" not found, try pulling it first')
+  )
+  expect_match(msg, "ollama pull mxbai-embed-large", fixed = TRUE)
+  expect_no_match(msg, "nomic-embed-text")
+})
+
+test_that("a connection remedy names the store's recorded model, not a hardcoded one", {
+  # The branch that kept the old inaccuracy: crd_store_build(model = ) is
+  # parameterised and the store records what it used, so naming a constant here
+  # would be wrong for any store not built with the default.
+  store <- local_ragnar_store_named()
+  expect_identical(.crd_store_meta_brief(store)$model, "nomic-embed-text")
+
+  msg <- .crd_retrieval_fallback_msg("connection",
+                                     simpleError("Connection refused"),
+                                     store = store)
+  expect_match(msg, "ollama pull nomic-embed-text", fixed = TRUE)
+})
+
+test_that("a service error prescribes nothing, because the status is all we know", {
+  msg <- .crd_retrieval_fallback_msg("service",
+                                     simpleError("HTTP 503 Service Unavailable."))
+  expect_no_match(msg, "ollama serve")
+  expect_no_match(msg, "ollama pull")
+  expect_match(msg, "(?i)running", perl = TRUE)
+  expect_match(msg, "HTTP 503 Service Unavailable.", fixed = TRUE)
 })
 
 test_that("every message reports the underlying condition verbatim", {
@@ -200,34 +285,71 @@ test_that("every message reports the underlying condition verbatim", {
   }
 })
 
-test_that("the dimension message reports the store's own recorded width", {
+test_that("the dimension message reports the width AND model the store records", {
   # Naming what the store was built at is the difference between "something is
-  # mismatched" and "this store is 16-wide and your model is not".
-  store <- local_ragnar_store()
+  # mismatched" and "this store holds 16-wide embeddings from nomic-embed-text".
+  #
+  # The model half needs a store whose serialised embedder actually contains a
+  # `model = "..."` literal, because that is what .crd_store_model_from_meta()
+  # regexes out of the deparsed function. Asserting only the width let a
+  # mutation stubbing the model lookup to NA pass.
+  store <- local_ragnar_store_named()
   msg <- .crd_retrieval_fallback_msg(
     "dimension",
     simpleError("Binder Error: array_cosine_distance: Array arguments must be of the same size"),
     store = store
   )
-  expect_match(msg, "16")
+  expect_match(msg, "16-wide", fixed = TRUE)
+  expect_match(msg, "records model nomic-embed-text", fixed = TRUE)
 })
 
-test_that("the dimension message degrades rather than failing when metadata is unreadable", {
+test_that("every message degrades rather than failing when metadata is unreadable", {
   # A store whose metadata cannot be read must still produce a warning. An
   # error raised while BUILDING a warning would convert a recoverable fallback
-  # into a hard failure — strictly worse than the bug being fixed.
-  expect_no_error(
-    msg <- .crd_retrieval_fallback_msg("dimension", simpleError("mismatch"),
-                                       store = "not a store at all")
-  )
-  expect_match(msg, "crd_store_connect")
+  # into a hard failure — strictly worse than the bug being fixed, and the
+  # stated invariant of .crd_store_meta_brief().
+  for (reason in .crd_fallback_reasons()) {
+    expect_no_error(
+      msg <- .crd_retrieval_fallback_msg(reason, simpleError("mismatch"),
+                                         store = "not a store at all")
+    )
+    expect_match(msg, "mismatch", fixed = TRUE)
+  }
+})
+
+test_that("a zero-length metadata read does not error inside the message builder", {
+  # The specific shape: a metadata table without the column yields NULL, and
+  # as.integer(NULL) is integer(0), on which `if (is.na(x))` errors with
+  # "argument is of length zero" rather than returning FALSE. The guard has to
+  # be a length check, not an is.na() check.
+  expect_false(.crd_have(integer(0)))
+  expect_false(.crd_have(character(0)))
+  expect_false(.crd_have(NA_integer_))
+  expect_false(.crd_have(""))
+  expect_false(.crd_have(c(1L, 2L)))
+  expect_true(.crd_have(16L))
+  expect_true(.crd_have("nomic-embed-text"))
+})
+
+test_that("a multi-line cause is indented so the remedy does not read as part of it", {
+  # httr2 chains its cause across several lines and the later ones arrive flush
+  # left. Dropped into an indented message the remedy then reads as more cause,
+  # which defeats the separation the message is built around.
+  msg <- .crd_retrieval_fallback_msg("connection", simpleError(
+    "Failed to perform HTTP request.\nCaused by error:\n! Could not connect"
+  ))
+  lines <- strsplit(msg, "\n", fixed = TRUE)[[1]]
+  cause_at <- grep("Caused by error:", lines, fixed = TRUE)
+  expect_length(cause_at, 1L)
+  expect_match(lines[cause_at], "^ +", perl = TRUE)
+  expect_match(lines[cause_at + 1L], "^ +! Could not connect", perl = TRUE)
 })
 
 # --- crd_search(), end to end on each failure shape -----------------------
 
 test_that("crd_search() warns with a reason-specific class and still returns BM25 rows", {
   store <- local_ragnar_store_failing("connection")
-  local_reset_fallback_warnings(store)
+  local_fallback_warnings_always()
 
   # Assert on the class, not the text. A test that greps an interpolated
   # message cannot see the claim around it, and the class is the part a caller
@@ -245,7 +367,7 @@ test_that("crd_search() warns with a reason-specific class and still returns BM2
 
 test_that("crd_search() reports a dimension mismatch as its own reason", {
   store <- local_ragnar_store_failing("dimension")
-  local_reset_fallback_warnings(store)
+  local_fallback_warnings_always()
 
   cnd <- NULL
   out <- withCallingHandlers(
@@ -256,7 +378,10 @@ test_that("crd_search() reports a dimension mismatch as its own reason", {
     }
   )
   expect_s3_class(cnd, "cred_retrieval_fallback_dimension")
-  expect_match(conditionMessage(cnd), "crd_store_connect")
+  # Not crd_store_connect(): its md5 compare cannot see a model change, so
+  # sending the user there is a remedy that cannot detect the condition.
+  expect_no_match(conditionMessage(cnd), "crd_store_connect")
+  expect_match(conditionMessage(cnd), "crd_store_build", fixed = TRUE)
   expect_no_match(conditionMessage(cnd), "ollama serve")
   expect_gt(nrow(out), 0L)
   expect_identical(unique(out$method), "bm25")
@@ -264,7 +389,7 @@ test_that("crd_search() reports a dimension mismatch as its own reason", {
 
 test_that("crd_search() falls back on an unrecognised failure without prescribing a remedy", {
   store <- local_ragnar_store_failing("unknown")
-  local_reset_fallback_warnings(store)
+  local_fallback_warnings_always()
 
   cnd <- NULL
   out <- withCallingHandlers(
@@ -277,6 +402,31 @@ test_that("crd_search() falls back on an unrecognised failure without prescribin
   expect_s3_class(cnd, "cred_retrieval_fallback_unknown")
   expect_no_match(conditionMessage(cnd), "ollama serve")
   expect_match(conditionMessage(cnd), "vss_idx")
+  expect_gt(nrow(out), 0L)
+  expect_identical(unique(out$method), "bm25")
+})
+
+test_that("crd_search() reports a missing model as its own reason, end to end", {
+  # The branch with no offline route: the server has to answer in order to
+  # answer 404. Skipped rather than dropped — Phase 1 claimed all four branches
+  # were covered end to end, and three of four is not four.
+  skip_if_not(.crd_ollama_reachable(), "no local Ollama answering")
+  store <- local_ragnar_store_failing("model")
+  local_fallback_warnings_always()
+
+  cnd <- NULL
+  out <- withCallingHandlers(
+    crd_search(store, .crd_test_query(), top_k = 3L),
+    cred_retrieval_fallback = function(w) {
+      cnd <<- w
+      invokeRestart("muffleWarning")
+    }
+  )
+  expect_s3_class(cnd, "cred_retrieval_fallback_model")
+  expect_match(conditionMessage(cnd), "ollama pull")
+  expect_no_match(conditionMessage(cnd), "ollama serve")
+  # The model named is the one that was refused, not the package default.
+  expect_match(conditionMessage(cnd), "cred-no-such-model-29", fixed = TRUE)
   expect_gt(nrow(out), 0L)
   expect_identical(unique(out$method), "bm25")
 })
@@ -315,6 +465,9 @@ test_that("two different failures do not collapse into one warning", {
   # by a different route.
   conn <- local_ragnar_store_failing("connection")
   dim_store <- local_ragnar_store_failing("dimension")
+  # Both are copies of ONE cached store, so they share a `location`. That is
+  # what makes this block discriminating: the ids can only differ by reason.
+  expect_identical(conn@location, dim_store@location)
   local_reset_fallback_warnings(conn)
 
   expect_warning(crd_search(conn, .crd_test_query(), top_k = 3L),
@@ -323,15 +476,45 @@ test_that("two different failures do not collapse into one warning", {
                  class = "cred_retrieval_fallback_dimension")
 })
 
+test_that("one unreachable store does not silence another", {
+  # The other half of the key, and the half a mutation could remove unnoticed:
+  # dropping `location` from the id left every test in this file green.
+  a <- local_ragnar_store_failing("connection")
+  b <- local_ragnar_store_failing("connection")
+  b@location <- paste0(a@location, "-second-store")
+  expect_false(identical(a@location, b@location))
+
+  local_reset_fallback_warnings(a)
+  local_reset_fallback_warnings(b)
+
+  expect_warning(crd_search(a, .crd_test_query(), top_k = 3L),
+                 class = "cred_retrieval_fallback_connection")
+  # Same reason, different store, so it has not been said yet.
+  expect_warning(crd_search(b, .crd_test_query(), top_k = 3L),
+                 class = "cred_retrieval_fallback_connection")
+})
+
 test_that("the frequency id varies with the reason and with the store", {
   store <- local_ragnar_store()
-  ids <- vapply(c("connection", "model", "dimension", "unknown"),
-                function(r) .crd_retrieval_fallback_id(r, store), character(1))
-  expect_length(unique(ids), 4L)
+  reasons <- .crd_fallback_reasons()
+  ids <- vapply(reasons, function(r) .crd_retrieval_fallback_id(r, store),
+                character(1))
+  expect_length(unique(ids), length(reasons))
+
+  # Varying the STORE, which the reason loop above cannot see. Replacing the id
+  # with paste0(prefix, reason) — dropping the store half entirely — passed
+  # every other test in this file.
+  other <- store
+  other@location <- paste0(store@location, "-elsewhere")
+  expect_false(identical(
+    .crd_retrieval_fallback_id("connection", store),
+    .crd_retrieval_fallback_id("connection", other)
+  ))
 
   # And a store with no readable location still yields a usable id rather than
   # erroring inside the warning path.
   expect_no_error(id <- .crd_retrieval_fallback_id("connection", NULL))
   expect_type(id, "character")
   expect_length(id, 1L)
+  expect_no_error(.crd_retrieval_fallback_id("connection", "not a store"))
 })

@@ -83,15 +83,23 @@ reason rather than grep the message. All inherit \code{cred_retrieval_fallback}:
 \describe{
 \item{\code{cred_retrieval_fallback_connection}}{The embedding service could not
 be reached — start Ollama.}
-\item{\code{cred_retrieval_fallback_model}}{The service answered and refused the
-request, so it \emph{is} running. Usually the model is not pulled.}
+\item{\code{cred_retrieval_fallback_model}}{HTTP 404 — the service answered and
+refused, so it \emph{is} running, and the model it was asked for is not
+installed.}
+\item{\code{cred_retrieval_fallback_service}}{Any other HTTP status. The service
+is running and erroring; the status is all cred knows, so no remedy is
+prescribed. Kept separate from the above precisely because pulling a
+model is unrelated to a 500 or a 503.}
 \item{\code{cred_retrieval_fallback_dimension}}{The query embedding is a
-different width than the store's, which means the store was built with a
-different embedding model than the one answering queries. \strong{Treat the
-store as unverified} — a search that succeeded would answer differently
-while looking healthy. Verify with \code{\link[=crd_store_connect]{crd_store_connect()}} and rebuild with
-\code{\link[=crd_store_build]{crd_store_build()}} if the model has moved. Restarting Ollama cannot
-help.}
+different width than the store's embeddings. A connected store embeds
+queries with the embedder recorded \emph{inside it}, so this is not "you
+queried with a different model" — it is that the model that name resolves
+to on this machine is no longer the model the store was built with.
+\strong{Treat the store as unverified}: a search that did succeed would answer
+differently while looking healthy. Compare what the store records against
+what the service now returns, then re-pull or rebuild with
+\code{\link[=crd_store_build]{crd_store_build()}}. Restarting Ollama cannot help, and neither can
+\code{\link[=crd_store_connect]{crd_store_connect()}}, whose MD5 compare cannot see a model change.}
 \item{\code{cred_retrieval_fallback_unknown}}{Unrecognised. The cause is
 reported verbatim and no remedy is prescribed.}
 }

@@ -38,3 +38,19 @@
   ASCII hyphen; the ten remaining are comments, matching the file's existing style
 - `pkgdown::check_pkgdown()` clean; `lintr::lint_package()` clean;
   `devtools::test()` `[ FAIL 0 | WARN 0 | SKIP 2 | PASS 412 ]`
+- Phase 5 — folded in the plan review (returned mid-Phase-4, 3 blockers / 9 gaps, claims
+  verified empirically on its side). Three findings were defects **inside this issue's own
+  fix**: a regex matching a function name rather than a size complaint; a remedy pointing at
+  a verification that cannot detect the condition; and all HTTP statuses collapsed into
+  "pull the model". The second is #29's defect reintroduced by its fix, and it was also
+  already asserted in `?crd_store_connect` — corrected there too, with
+  [#30](https://github.com/NewGraphEnvironment/cred/issues/30) filed for the missing
+  connect-time check
+- Two mutations had survived the suite (dropping `location` from the frequency id, stubbing
+  the store-model lookup to NA). Both now caught; the model-lookup gap was a fixture bug of
+  mine — `model <- "x"` in the body, where the regex wants `model = "x"`, so a defaulted
+  formal is the right shape and matches what `embed_ollama()` actually looks like
+- Mutation battery after the fixes, 8 for 8 caught: G1 id key, G3 model lookup, B1 pattern,
+  B2 remedy, B3 status split, G6 length guard, AC3 indentation, G4 model naming
+- `devtools::test()` `[ FAIL 0 | WARN 0 | SKIP 2 | PASS 463 ]`; lintr clean;
+  `pkgdown::check_pkgdown()` clean

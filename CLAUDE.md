@@ -184,17 +184,35 @@ Shipped: [#22](https://github.com/NewGraphEnvironment/cred/issues/22) ragnar ret
   with a warning, so it is never *less* available — a `bm25` default would discard the semantic
   half for everyone to avoid a dependency the fallback already handles.
 - **A fallback is classified by condition class, not by message text.** Measured against
-  ragnar 0.3.0: `httr2_failure` means the embedding service got no answer, `httr2_http` means
-  it answered and refused — so it is running, and "start Ollama" is the wrong half of the old
-  advice. Both survive `ragnar_retrieve()` unwrapped. Only the embedding-width mismatch has no
-  class of its own (a duckdb binder error naming `array_cosine_distance`), and it is the one
-  that matters most: it means the store was built against a different embedding model than the
-  one answering queries, the same "answers differently while looking healthy" condition
-  `crd_store_connect()`'s md5 check exists to catch. Reported as a connection problem it reads
-  as nothing at all, which is what
-  [#29](https://github.com/NewGraphEnvironment/cred/issues/29) fixed. Warnings are subclassed
-  `cred_retrieval_fallback_<reason>` and fire once per session per reason **and store** —
-  keyed on the store alone, a mismatch met after a connection failure is swallowed as a repeat.
+  ragnar 0.3.0: `httr2_failure` means the embedding service got no answer; `httr2_http` means it
+  answered and refused, so it is running and "start Ollama" is the wrong half of the old advice;
+  and within that, only a **404** means the model is absent — a 500 or 503 has nothing to do
+  with pulling one. All survive `ragnar_retrieve()` unwrapped. Warnings are subclassed
+  `cred_retrieval_fallback_<reason>` and fire once per session per reason **and store** — keyed
+  on the store alone, a mismatch met after a connection failure is swallowed as a repeat.
+  [#29](https://github.com/NewGraphEnvironment/cred/issues/29).
+- **Match a size complaint, never a function name.** The embedding-width mismatch is the one
+  failure with no class of its own, so its regex is load-bearing — and the obvious pattern is
+  the wrong one. duckdb also raises `No function matches the given name and argument types
+  'array_cosine_distance(FLOAT[2], INTEGER_LITERAL)'` when an embedder returns the wrong *type*
+  or a zero-length vector, which is not a store problem at all; matching the function name
+  prescribes an expensive rebuild off a substring. `Array arguments must be of the same size` is
+  both specific and metric-agnostic — `array_distance` raises it verbatim — so dropping the name
+  costs no coverage.
+- **`crd_store_connect()`'s md5 compare cannot see a model change, so never prescribe it for
+  one.** It answers "is this the file the manifest describes" — stale, truncated, locally
+  rebuilt. A store whose embedding model moved underneath it has *exactly* the bytes the
+  manifest recorded. `.crd_check_model()` does compare model and width, and it runs on **push**,
+  not on connect ([#30](https://github.com/NewGraphEnvironment/cred/issues/30)). The first draft
+  of #29's mismatch warning sent users there, which would have been a remedy that cannot detect
+  the condition — the defect #29 *is*, reintroduced inside its own fix. The repo's own
+  `?crd_store_connect` asserted the same thing and was corrected in the same pass: when a claim
+  like this turns out to be wrong, grep the sentence rather than fixing the one instance quoted.
+- **A connected store embeds queries with its own recorded embedder.** `ragnar_store_connect()`
+  does `embed <- unserialize(metadata$embed_func[[1L]])`, so a width mismatch is *not* "you
+  queried with a different model" — that is not reachable without overriding `@embed`. It is
+  that the model that name resolves to on this machine is no longer the one the store was built
+  with. State the mechanism you can establish, not the one the issue assumed.
 - **A failure shape is reachable offline by replacing a connected store's `embed`.** Setting
   that S7 property on a copy does not reach the original, even though both share one duckdb
   connection, so the fixtures in `tests/testthat/helper-store.R` reuse the cached store at no

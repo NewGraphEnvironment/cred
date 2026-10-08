@@ -17,10 +17,27 @@ then returned results, with nothing saying the store was suspect.
   running, and only the `ollama pull` half of the old advice applies. Both reach
   `crd_search()` unwrapped. Only the width mismatch needs message matching, and the text it
   matches is a duckdb binder error, not an Ollama one
-* A width mismatch now names the embedding width and model the store itself records, says to
-  treat the store as unverified, and points at `crd_store_connect()` and `crd_store_build()`.
-  It no longer mentions the service
-* An unrecognised failure reports its cause verbatim and prescribes nothing
+* A width mismatch names the width and model the store itself records, says to treat the store
+  as unverified, and prescribes the comparison that can actually see the condition — what the
+  store records against what the service now returns, then a re-pull or `crd_store_build()`.
+  It deliberately does **not** send you to `crd_store_connect()`: that verification is an md5
+  compare against the manifest, and a store whose embedding model moved underneath it has
+  exactly the bytes the manifest recorded, so the compare is structurally unable to see it.
+  Prescribing it would have been a remedy that cannot detect the condition, which is the
+  defect this release fixes. `?crd_store_connect` no longer claims otherwise, and the missing
+  connect-time check is [#30](https://github.com/NewGraphEnvironment/cred/issues/30)
+* The diagnosis is also stated more narrowly than the issue framed it. A connected store embeds
+  queries with the embedder ragnar unserialises out of the store itself, so a mismatch is not
+  "you queried with a different model" — it is that the model that name resolves to on this
+  machine is no longer the one the store was built with
+* HTTP 404 and every other HTTP status are separate reasons. Only 404 means the model is not
+  installed; a 500 or 503 has nothing to do with pulling one, so
+  `cred_retrieval_fallback_service` reports the status and prescribes nothing
+* A remedy names the model that was actually refused — the service names it in its own 404 body
+  — falling back to the one the store records, and only then to the package default. The
+  connection branch no longer hardcodes `nomic-embed-text` either
+* An unrecognised failure reports its cause verbatim and prescribes no remedy beyond confirming
+  the file is the one the manifest describes, which is the one thing md5 *can* answer
 * Warnings are subclassed `cred_retrieval_fallback_<reason>`, all inheriting
   `cred_retrieval_fallback`, so a caller can act on the reason without grepping a message.
   `?crd_search` lists them
@@ -30,7 +47,12 @@ then returned results, with nothing saying the store was suspect.
 
 Every failure still falls back to BM25 and the `method` column still reports `"bm25"`, so no
 search that worked before this release behaves differently — only what is said about one that
-degrades. Adds `rlang` to Imports for the frequency guard.
+degrades. Adds `rlang` to Imports for the frequency guard, and raises the `testthat` floor to
+3.1.8, which the suite already required.
+
+Out of scope, filed as [#30](https://github.com/NewGraphEnvironment/cred/issues/30): the
+build-side probe `.crd_ollama_check()` still conflates starting the server with pulling the
+model, and `method = "vss"` raises its condition unclassified.
 
 # cred 0.3.1
 
