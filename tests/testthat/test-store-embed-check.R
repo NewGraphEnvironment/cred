@@ -735,3 +735,138 @@ test_that("the warning-reset helper covers every frequency scheme cred emits", {
   expect_match(paste(deparse(local_reset_fallback_warnings), collapse = " "),
                ".crd_all_warning_ids", fixed = TRUE)
 })
+
+# --- Round 4: the download site, and the emitters' own ids ------------------
+
+# The DOWNLOAD branch of crd_store_connect(), reached with no bucket.
+#
+# Round 3 covered the verified path by mocking `.crd_manifest_read`, but only
+# the md5-match return ever ran: its N2a/N2b mutations dropped `entry` and
+# `check_model` from BOTH verified sites at once, so one test on one site turned
+# them red while the download site stayed unexecuted. A mutation applied to N
+# sites at once certifies coverage of exactly one of them.
+#
+# `.crd_aws` is the only other function on this path that leaves the process, so
+# mocking it alongside the manifest read makes the whole branch local: the mock
+# copies the fixture to the `.part-<pid>` destination the real `aws s3 cp` would
+# have written, and the manifest's md5 is taken from that same file, so the
+# post-download verify passes for the right reason.
+local_mocked_download_of <- function(fixture, model = "nomic-embed-text (ollama)",
+                                     size = 8L, env = parent.frame()) {
+  md5 <- tolower(unname(tools::md5sum(fixture)))
+  testthat::local_mocked_bindings(
+    .crd_aws = function(args, profile = "", clean_stdout = FALSE) {
+      # `args` is c("s3", "cp", "<src>", "<dest>"); the real CLI writes dest.
+      file.copy(fixture, args[[4]], overwrite = TRUE)
+      list(out = character(), err = character(), status = 0L)
+    },
+    .env = env
+  )
+  withr::local_options(cred.store_source = "s3://bucket/prefix/", .local_envir = env)
+  invisible(md5)
+}
+
+test_that("the download path forwards the manifest entry and check_model", {
+  skip_if_not_installed("ragnar")
+  skip_if_not_installed("duckdb")
+  fixture <- local_store_copy_bad_width()
+
+  # A destination that does NOT exist, so the md5-match return cannot be taken
+  # and the download branch is the only way through.
+  dir <- withr::local_tempdir()
+  name <- "downloaded_store"
+  target <- file.path(dir, paste0(name, ".duckdb"))
+  expect_false(file.exists(target))
+
+  md5 <- local_mocked_download_of(fixture)
+  local_mocked_bindings(
+    .crd_manifest_read = function(source, profile = "") {
+      list(stores = stats::setNames(
+        list(list(documents = 12L, chunks = 99L, md5 = md5,
+                  embedding_size = 8L,
+                  embedding_model = "nomic-embed-text (ollama)")),
+        name
+      ))
+    }
+  )
+
+  # check_model forwarded: the downloaded store's recorded width is 8 and its
+  # embedder returns 16, so the default refuses.
+  expect_error(suppressMessages(crd_store_connect(name, dir = dir)),
+               class = "cred_store_embedding_mismatch")
+  expect_true(file.exists(target))
+
+  # ...and the escape is honoured on this branch too.
+  unlink(target)
+  out <- suppressMessages(crd_store_connect(name, dir = dir, check_model = FALSE))
+  expect_true(DBI::dbIsValid(out@con))
+  try(DBI::dbDisconnect(out@con, shutdown = TRUE), silent = TRUE)
+})
+
+test_that("the download path forwards the entry, so the label tier can fire there", {
+  skip_if_not_installed("ragnar")
+  skip_if_not_installed("duckdb")
+  src <- as.character(local_ragnar_store_named()@location)
+  fixture <- tempfile(fileext = ".duckdb")
+  expect_true(file.copy(src, fixture))
+  on.exit(unlink(fixture), add = TRUE)
+
+  dir <- withr::local_tempdir()
+  name <- "labelled_store"
+  md5 <- local_mocked_download_of(fixture, size = 16L)
+  local_mocked_bindings(
+    .crd_manifest_read = function(source, profile = "") {
+      list(stores = stats::setNames(
+        list(list(documents = 4L, chunks = 40L, md5 = md5,
+                  embedding_size = 16L,
+                  embedding_model = "nomic-embed-text (ollama)")),
+        name
+      ))
+    }
+  )
+  local_fallback_warnings_always()
+
+  cnd <- NULL
+  out <- withCallingHandlers(
+    suppressMessages(crd_store_connect(name, dir = dir)),
+    cred_store_model_label_mismatch = function(w) {
+      cnd <<- w
+      invokeRestart("muffleWarning")
+    }
+  )
+  expect_s3_class(cnd, "cred_store_model_label_mismatch")
+  expect_match(conditionMessage(cnd), "mxbai-embed-large", fixed = TRUE)
+  try(DBI::dbDisconnect(out@con, shutdown = TRUE), silent = TRUE)
+})
+
+test_that("every frequency id an emitter passes is one the reset helper re-arms", {
+  # Round 3's finding 5, reproduced inside its own fix. `.crd_all_warning_ids()`
+  # restates the three id FUNCTIONS, and the test above restates the same three
+  # — so pointing an emitter's `.frequency_id` at a fourth function escapes
+  # both, leaving `.crd_store_label_id()` defined, unused and still "covered".
+  #
+  # The axis that matters is which ids the EMITTERS pass, so walk the namespace
+  # for them rather than listing them here.
+  ns <- asNamespace("cred")
+  used <- character()
+  for (nm in ls(ns, all.names = TRUE)) {
+    obj <- get(nm, envir = ns)
+    if (!is.function(obj)) next
+    src <- paste(deparse(obj), collapse = " ")
+    hits <- regmatches(
+      src,
+      gregexpr("\\.frequency_id[[:space:]]*=[[:space:]]*[._a-zA-Z][._a-zA-Z0-9]*\\(", src)
+    )[[1]]
+    if (length(hits) == 0L) next
+    used <- c(used, trimws(sub("^\\.frequency_id[[:space:]]*=[[:space:]]*(.*)\\($", "\\1", hits)))
+  }
+  used <- unique(used)
+
+  # The premise: the walk found the emitters. A regex that matched nothing would
+  # make the assertion below vacuously true — the failure mode this whole review
+  # kept hitting.
+  expect_gte(length(used), 3L)
+
+  reset_src <- paste(deparse(.crd_all_warning_ids), collapse = " ")
+  for (u in used) expect_match(reset_src, u, fixed = TRUE, info = u)
+})

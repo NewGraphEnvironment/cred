@@ -169,3 +169,24 @@ Five findings, all fixed and all mutation-checked (N1-N7 above):
   warnings for this store". The label id was inline, so the helper had to restate it — extracted
   to `.crd_store_label_id()` and the reset set now derived
 - 628 passes, 0 lints
+
+### /code-check round 4 — two findings, both inside round 3's fixes
+
+- **The download site had never been executed.** Round 3 covered `verify = TRUE` by mocking
+  `.crd_manifest_read`, but only the md5-match return ever ran: its mutations dropped `entry`
+  and `check_model` from *both* verified sites at once, so one test on one site turned them red.
+  A `stop()` placed before the download branch was silent. Covered now by mocking `.crd_aws`
+  alongside the manifest read — the mock writes the `.part-<pid>` file the real `aws s3 cp`
+  would have, and the manifest's md5 comes from that same file so the post-download verify
+  passes for the right reason
+- **General lesson, worth carrying out of this issue:** *a mutation applied to N sites at once
+  certifies coverage of exactly one of them.* Mutate one site at a time, or the table
+  over-claims in the direction it exists to prevent
+- **Round 3's finding 5 reproduced inside its own fix.** `.crd_all_warning_ids()` derived from
+  the three id *functions* and its test restated the same three, so pointing an emitter's
+  `.frequency_id` at a fourth function escaped both. The guard now walks the namespace for what
+  the **emitters** actually pass
+- Round 4 also closed enumeration B *mechanically* rather than per-site: running both changed
+  test files twice in one session gives identical results, so no assertion is green because of
+  rlang frequency state in either direction
+- 639 passes, 0 lints. M-A, M-B, P2, P5 each fire

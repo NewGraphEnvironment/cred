@@ -191,6 +191,29 @@ the helper. Pinning the *wrapper's* route through the derived set is what closes
 shape as Phase 1's assertion that `.crd_retrieval_fallback_msg()` still calls
 `.crd_embed_remedy()`.
 
+Four more after round 4, which re-computed the enumeration (43 code decision points, 50 test
+assertions) rather than carrying round 3's numbers forward:
+
+| mutation | failures |
+|---|---|
+| M-A drop `entry` at the **download** site only | 0 → **2** |
+| M-B hardcode `check_model = TRUE` at the download site | 0 → **1** |
+| P2 `stop()` before the download branch | 0 → **2** |
+| P5 an emitter passes a 4th id function outside the reset set | 0 → **1** |
+
+**The lesson from M-A/M-B is general and worth carrying out of this issue:** round 3's N2a/N2b
+dropped the arguments from *both* verified return sites at once, so a single test on the
+md5-match site turned them red — while the download site had never been executed by any test at
+all (P2 was silent). **A mutation applied to N sites at once certifies coverage of exactly one of
+them.** Mutate one site at a time, or the table over-claims in exactly the direction it exists
+to prevent.
+
+P5 is round 3's finding 5 reproduced inside its own fix, one axis over: the fix made
+`.crd_all_warning_ids()` derive from the three id *functions*, and its test restated the same
+three — so pointing an emitter's `.frequency_id` at a fourth function escaped both while leaving
+`.crd_store_label_id()` defined, unused and apparently covered. The axis that matters is which
+ids the **emitters** pass, so the guard now walks the namespace for them.
+
 ## The mechanism, as round 3 named it
 
 Every defect across the three rounds is **a check whose reference was restated rather than
