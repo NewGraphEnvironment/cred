@@ -2,9 +2,8 @@
 
 Resolves a store by name, using the local copy when its MD5 matches the
 shared manifest and downloading it from `source` otherwise. Verification
-is the point: a store built against a different embedding model answers
-differently while looking perfectly healthy, so a silent local rebuild
-produces an artefact that is present but not trustworthy.
+is the point: a store that is present is not thereby trustworthy, and a
+silent local rebuild produces an artefact that looks perfectly healthy.
 
 ## Usage
 
@@ -56,6 +55,19 @@ A `ragnar` store object, as returned by
 [`ragnar::ragnar_store_connect()`](https://ragnar.tidyverse.org/reference/ragnar_store_create.html).
 
 ## Details
+
+**What the MD5 compare can and cannot see.** It answers "is this the
+file the manifest describes" — a stale copy, a truncated download, a
+local rebuild nobody pushed. It is structurally unable to see a store
+whose *embedding model* has moved underneath it, because that store's
+bytes are exactly the ones the manifest recorded. The manifest carries
+`embedding_model` and `embedding_size`, and
+[`crd_store_push()`](https://newgraphenvironment.github.io/cred/reference/crd_store_push.md)
+compares them, but no connect-time comparison exists yet
+(NewGraphEnvironment/cred#30). Until it does, a model mismatch surfaces
+downstream as a `cred_retrieval_fallback_dimension` warning from
+[`crd_search()`](https://newgraphenvironment.github.io/cred/reference/crd_search.md)
+— see "Diagnosing a fallback" there.
 
 `source` has **no default value**. Configure it with
 `options(cred.store_source = )` or the `CRED_STORE_SOURCE` environment

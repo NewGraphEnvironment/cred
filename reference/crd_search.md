@@ -90,10 +90,63 @@ entire indexed corpus.
 
 `method = "hybrid"` combines semantic (vector) and lexical (BM25)
 retrieval and needs a running Ollama instance to embed the query. When
-Ollama is unreachable the search **falls back to BM25 with a warning**
-rather than failing: lexical retrieval needs no embedding and remains
-effective for the numeric and parameter-level claims this package exists
-to check.
+semantic retrieval fails **for any reason** the search falls back to
+BM25 with a warning rather than failing: lexical retrieval needs no
+embedding and remains effective for the numeric and parameter-level
+claims this package exists to check. The `method` column reports
+`"bm25"` when that happens, so a caller can always tell the search
+degraded.
+
+## Diagnosing a fallback
+
+The warning is subclassed by what went wrong, so a caller can act on the
+reason rather than grep the message. All inherit
+`cred_retrieval_fallback`:
+
+- `cred_retrieval_fallback_connection`:
+
+  The embedding service could not be reached — start Ollama.
+
+- `cred_retrieval_fallback_model`:
+
+  HTTP 404 **whose body names a model** — the service answered, so it
+  *is* running, and it says it does not have that model. The body
+  matters: a 404 is also what a wrong path prefix returns, from a server
+  holding every model you asked for.
+
+- `cred_retrieval_fallback_service`:
+
+  Any other reply from the service. It is running and erroring; the
+  status is all cred knows, so no remedy is prescribed. Kept separate
+  from the above precisely because pulling a model is unrelated to a 500
+  or a 503. This also catches an HTTP error that arrived with no status
+  class on it, which happens when the error body is not JSON —
+  [`ragnar::embed_ollama()`](https://ragnar.tidyverse.org/reference/embed_ollama.html)
+  parses it as JSON inside httr2's own error handler, so an HTML 502
+  from a reverse proxy loses the class.
+
+- `cred_retrieval_fallback_dimension`:
+
+  The query embedding is a different width than the store's embeddings.
+  A connected store embeds queries with the embedder recorded *inside
+  it*, so this is not "you queried with a different model" — it is that
+  the model that name resolves to on this machine is no longer the model
+  the store was built with. **Treat the store as unverified**: a search
+  that did succeed would answer differently while looking healthy.
+  Compare what the store records against what the service now returns,
+  then re-pull or rebuild with
+  [`crd_store_build()`](https://newgraphenvironment.github.io/cred/reference/crd_store_build.md).
+  Restarting Ollama cannot help, and neither can
+  [`crd_store_connect()`](https://newgraphenvironment.github.io/cred/reference/crd_store_connect.md),
+  whose MD5 compare cannot see a model change.
+
+- `cred_retrieval_fallback_unknown`:
+
+  Unrecognised. The cause is reported verbatim and no remedy is
+  prescribed.
+
+Each fires once per session per reason and per store, so a machine
+without Ollama does not emit the same four lines on every call.
 
 ## Examples
 

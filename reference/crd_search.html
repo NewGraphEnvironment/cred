@@ -11,7 +11,7 @@ rather than chased back through a file path."><meta property="og:image" content=
 
     <a class="navbar-brand me-2" href="../index.html">cred</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.3.1</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.3.2</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -116,10 +116,57 @@ the request when a fallback occurred.</p></li>
     <p>Unlike the token-overlap search in <code><a href="crd_pdf_srch_clm.html">crd_pdf_srch_clm()</a></code>, which scores one
 known source against one paraphrase, this searches an entire indexed corpus.</p>
 <p><code>method = "hybrid"</code> combines semantic (vector) and lexical (BM25) retrieval
-and needs a running Ollama instance to embed the query. When Ollama is
-unreachable the search <strong>falls back to BM25 with a warning</strong> rather than
-failing: lexical retrieval needs no embedding and remains effective for the
-numeric and parameter-level claims this package exists to check.</p>
+and needs a running Ollama instance to embed the query. When semantic
+retrieval fails <strong>for any reason</strong> the search falls back to BM25 with a
+warning rather than failing: lexical retrieval needs no embedding and remains
+effective for the numeric and parameter-level claims this package exists to
+check. The <code>method</code> column reports <code>"bm25"</code> when that happens, so a caller
+can always tell the search degraded.</p>
+    </div>
+    <div class="section level2">
+    <h2 id="diagnosing-a-fallback">Diagnosing a fallback<a class="anchor" aria-label="anchor" href="#diagnosing-a-fallback"></a></h2>
+
+
+<p>The warning is subclassed by what went wrong, so a caller can act on the
+reason rather than grep the message. All inherit <code>cred_retrieval_fallback</code>:</p>
+<dl><dt><code>cred_retrieval_fallback_connection</code></dt>
+<dd><p>The embedding service could not
+be reached — start Ollama.</p></dd>
+
+<dt><code>cred_retrieval_fallback_model</code></dt>
+<dd><p>HTTP 404 <strong>whose body names a
+model</strong> — the service answered, so it <em>is</em> running, and it says it does
+not have that model. The body matters: a 404 is also what a wrong path
+prefix returns, from a server holding every model you asked for.</p></dd>
+
+<dt><code>cred_retrieval_fallback_service</code></dt>
+<dd><p>Any other reply from the service.
+It is running and erroring; the status is all cred knows, so no remedy is
+prescribed. Kept separate from the above precisely because pulling a model
+is unrelated to a 500 or a 503. This also catches an HTTP error that
+arrived with no status class on it, which happens when the error body is
+not JSON — <code><a href="https://ragnar.tidyverse.org/reference/embed_ollama.html" class="external-link">ragnar::embed_ollama()</a></code> parses it as JSON inside httr2's own
+error handler, so an HTML 502 from a reverse proxy loses the class.</p></dd>
+
+<dt><code>cred_retrieval_fallback_dimension</code></dt>
+<dd><p>The query embedding is a
+different width than the store's embeddings. A connected store embeds
+queries with the embedder recorded <em>inside it</em>, so this is not "you
+queried with a different model" — it is that the model that name resolves
+to on this machine is no longer the model the store was built with.
+<strong>Treat the store as unverified</strong>: a search that did succeed would answer
+differently while looking healthy. Compare what the store records against
+what the service now returns, then re-pull or rebuild with
+<code><a href="crd_store_build.html">crd_store_build()</a></code>. Restarting Ollama cannot help, and neither can
+<code><a href="crd_store_connect.html">crd_store_connect()</a></code>, whose MD5 compare cannot see a model change.</p></dd>
+
+<dt><code>cred_retrieval_fallback_unknown</code></dt>
+<dd><p>Unrecognised. The cause is
+reported verbatim and no remedy is prescribed.</p></dd>
+
+
+</dl><p>Each fires once per session per reason and per store, so a machine without
+Ollama does not emit the same four lines on every call.</p>
     </div>
 
     <div class="section level2">
