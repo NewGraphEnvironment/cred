@@ -409,7 +409,7 @@ directly when it matters — the deploy commit, not the run status:
 
 ```bash
 git fetch -q origin gh-pages && git log -1 --format='%s' FETCH_HEAD
-# "Deploying to gh-pages from @ owner/repo@<sha> 🚀"  <- is <sha> your HEAD?
+# "Deploying to gh-pages from @ owner/repo@<sha> 🚀"  <- the last NON-BOT commit? A bot commit never deploys
 ```
 
 GitHub can create a workflow run minutes after the push that triggered it, and
@@ -434,6 +434,8 @@ exists. The remedy is detection: check the deploy provenance, and re-dispatch
 commit changed nothing the site publishes — confirm via `.Rbuildignore` / `_pkgdown.yml`
 rather than assuming.
 
+*2 lines of evidence for this rule are in `conventions/ci-monitoring.md`, which `/code-check` reads in full.*
+
 ## Don't push to the default branch between a merge and its CI settling
 
 The r-lib templates set `concurrency` with `cancel-in-progress: true`, so a second push
@@ -454,7 +456,7 @@ green on their own SHA. Holding it cost about three minutes.
 
 Where a push has already gone out and cancelled something, `/gh-pr-merge` step 10 has the
 reading: `cancelled`/`skipped` is `⊘ superseded`, not `✗ failed`, and the thing to confirm
-is that the **newer** SHA's run passed. Do not re-dispatch the cancelled one.
+is that the newest **non-bot** SHA's run passed. Do not re-dispatch the cancelled one.
 
 ## Don't use `gh run watch` to wait
 
@@ -490,6 +492,16 @@ gh run view <id> --log-failed | grep -iE 'error|fatal' | head
 If it died in dependency setup, rerun once. If it dies the same way again it is the
 upstream CDN, and the honest move is to say so and stop — not to keep spending runs on
 something no change in the repo can fix.
+
+## A citation run failing "fetch first" beside a green twin lost a push race
+Before reading a red `Update CITATION.cff` as a broken release, find a green run of it on the same or a later SHA (not earlier), then confirm `git show origin/main:CITATION.cff` carries the released version and date.
+
+*5 lines of evidence for this rule are in `conventions/ci-monitoring.md`, which `/code-check` reads in full.*
+
+## A hung setup step holds the concurrency group for six hours
+A run `in_progress` long past its usual duration, with a newer run of it `pending` behind, is a hang: confirm no step moved (`gh run view <id> --json jobs`), then `gh run cancel <id>`; the lasting fix is `timeout-minutes:`.
+
+*4 lines of evidence for this rule are in `conventions/ci-monitoring.md`, which `/code-check` reads in full.*
 
 ## A job-level `concurrency` group must vary with the matrix, or the jobs cancel each other
 
@@ -542,6 +554,11 @@ Before planning to re-run a workflow on a feature branch, check how it is trigge
 Key a CI waiter on the SHA you pushed, never on the default branch's tip: a bot commit made with `GITHUB_TOKEN` (an `update-citation-cff` auto-commit, a docs regen) lands on top of yours and, by GitHub's design, triggers no workflow run, so a loop waiting for runs on the tip waits forever.
 
 The tip moves seconds after a release push, which is exactly when a waiter is started. The bot commit also needs no check of its own when it only touches a file the site does not publish; confirm the deploy provenance instead (the `gh-pages` subject names the SHA that was built).
+
+*1 line of evidence for this rule is in `conventions/ci-monitoring.md`, which `/code-check` reads in full.*
+
+## A pending run cancelled by a `concurrency` group runs no steps, so its failure alarm never fires
+With `cancel-in-progress: false`, GitHub keeps one running and one pending run per group, and a newer run cancels the pending one before its job starts. An `if: failure() || cancelled()` alarm step is part of that job, so it never runs and the displaced run disappears silently. Count on the next scheduled run to pick the work up, or dispatch it by hand. Do not write that the alarm covers it.
 
 *1 line of evidence for this rule is in `conventions/ci-monitoring.md`, which `/code-check` reads in full.*
 
@@ -621,6 +638,9 @@ A package built from a `git worktree` ships `.git` (a file holding the developer
 
 ### A database driver's value is not a base R type — and it fails twice
 A column fetched through DBI does not arrive as the base type its SQL type suggests.
+
+### A value compared as `::text` in SQL has PostgreSQL's spelling, not R's
+Write native types from R and cast once in SQL.
 
 ### arrow dplyr backend: no grouped slice — bridge to duckdb
 - arrow's dplyr backend errors on grouped `slice_max`/`slice_min` (`arrow_not_supported("Slicing grouped data")`).
@@ -823,6 +843,27 @@ Run `LOAD icu` on the connection before any query that needs it (`epoch()`, `yea
 ### `fs::path()` collapses the `//` after a URL scheme, so it cannot build URLs
 Join a URL with `paste(base, key, sep = "/")` or `file.path()`, never `fs::path()`: `fs::path("https://x.ca/b", "k.tif")` is `"https:/x.ca/b/k.tif"`, because fs normalises the doubled separator, and the result is not a valid URL.
 
+### R's default curl user-agent fails on canada.ca, and the error names HTTP/2, not the agent
+Set a user-agent on every R fetch of a `canada.ca` page, because R's default fails there with an HTTP/2 error that never mentions the agent.
+
+### `climr::downscale()` returns its reference-period row even with `return_refperiod = FALSE`
+Keep only the observed series (`DATASET == "<obs_ts_dataset>"`, four-digit `PERIOD`) before averaging climr output over years.
+
+### A `function(...)` mock hides arguments the real callee no longer accepts
+Stubbing a callee with `function(...) invisible("mock")` accepts any argument name, so a wrapper still passing a parameter the callee dropped stays green while every real call errors with `unused argument`.
+
+### `expect_message(regexp = "...$")` never matches, because `message()` appends `"\n"`
+The condition message carries the trailing newline, so an end anchor fails and the test reports "did not throw a message" even though the message printed.
+
+### `load_all()` refuses an installed dependency below the `Imports:` floor, so measure old-against-new from a frozen worktree
+Run the old-dependency side of a before/after comparison from a `git worktree` of the pre-bump commit, and install the new version only after those runs finish.
+
+### `tryCatch()` nests its handlers, so a `stop()` in one is caught by a later one
+Record the condition in the handler (`hit <<- TRUE`) and raise after `tryCatch()` returns.
+
+### `fs::file_move()` onto an existing directory nests the source inside it
+Move a directory into place with `base::file.rename()` and check its return value, which is FALSE where the target is a non-empty directory, a symlink or a file.
+
 # Code Check — Shell
 Tool-level traps in bash, sed, git and `gh`, and in the host toolchain those commands depend on.
 
@@ -851,6 +892,9 @@ Use three-dot `git diff a...b` for what a branch changed; two-dot compares the t
 
 ### Heredoc precedence in pipelines
 - `cmd1 | cmd2 <<EOF` — the heredoc binds to `cmd2` (the rightmost simple command).
+
+### A heredoc whose body contains its own delimiter ends early, and the rest runs as shell
+Give an outer heredoc a delimiter its body cannot contain, or run the script from a file.
 
 ### Paths
 - Hardcoded absolute paths (`/Users/airvine/...`) break for other users
@@ -968,6 +1012,24 @@ Supply a default ssh command only when `GIT_SSH_COMMAND`, `core.sshCommand` and 
 
 ### `conda run` captures its child's output, so a pipe gets nothing
 `conda run -n env cmd` buffers the child's stdout and re-emits it, and that re-emission does not reach a pipe.
+
+### `exit` inside a loop condition ends the shell, not the test
+Count instead: `while :; do left=0; for i in $ids; do done_yet "$i" || left=$((left+1)); done; [ "$left" -eq 0 ] && break; sleep 90; done`.
+
+### A failed `cd` lets every later command run in the directory you were already in
+Write `cd "$D" || exit 1` (or `cd "$D" && …`), never `cd "$D"; …`: without the guard, a missing directory prints one error and the rest of the line runs wherever the shell stood, including its file writes.
+
+### macOS `/bin/bash` 3.2 quote-matches a heredoc inside `$( )`, so an apostrophe in the body is a syntax error
+Pass multi-line text through a file (`--body-file`, `-F`) rather than `"$(cat <<'EOF' … EOF)"`: bash 3.2 scans the command substitution for balanced quotes before it sees the heredoc, so `it's` in a quoted heredoc body fails with ``unexpected EOF while looking for matching `''``, while …`
+
+### A skill's bash blocks run as separate calls, so each block must check the state the last one left
+Open every block after the first with guards on what it inherits: re-set its variables, confirm the path is the expected tree, and refuse edits or commits the previous block did not check.
+
+### An apostrophe in a `${VAR:?message}` inside double quotes is an unterminated quote
+Keep apostrophes out of the message of a `"${VAR:?…}"` guard (`the REL: line of step 5`, not `step 5's REL: line`): bash 3.2 and 5 both read the `'` as opening a quote, and the whole script fails to parse before the guard can run.
+
+### A `git push` can land and still report failure, so confirm the ref rather than the exit code
+After a rejected push, read the remote ref before concluding anything: `git fetch -q origin && git merge-base --is-ancestor HEAD origin/<branch>`.
 
 # Code Check — Spatial
 terra, sf, bcdata, GDAL/OGR CLIs.
@@ -1119,7 +1181,7 @@ Do the hex swap in **one** helper and omit `<Icon><href>` entirely.
 It reports the verdict in text and returns success either way, so the exit status carries no information at all:
 
 ### `terra::rast()` on a SpatRaster returns an empty template, not a copy
-Pass a SpatRaster through as is (`if (inherits(x, "SpatRaster")) x else terra::rast(x)`): `rast(x)` on one builds a new raster with the same geometry and **no values**, so a function that normalises its input with `terra::rast()` silently receives an all-empty grid when handed an object rather …
+Pass a SpatRaster through as is (`if (inherits(x, "SpatRaster")) x else terra::rast(x)`): `rast(x)` on one returns a template with the same geometry and **no values**.
 
 ### `terra::rasterize(filename = , datatype = <integer>)` writes the background as 0, not NA
 Rasterise in memory and then `writeRaster(datatype = …)`: written directly through `filename` with an integer `datatype` (INT1U, INT2S), cells no polygon covers come out as 0, while the file's NoData is 255, so they read back as data (terra 1.9.46 and 1.9.50; rspatial/terra#2195).
@@ -1149,7 +1211,7 @@ Read with `promote_to_multi = FALSE` whenever a layer will be written back.
 Run it on the invalid rows only (`!st_is_valid(x)`), or keep the original geometry and use the made-valid copy just for the computation.
 
 ### terra: `unique()` and `freq()` on a factor return its labels, not its codes
-Read a factor raster's codes from a copy with its levels stripped (`levels(y) <- NULL`, or `set.cats(y, layer = 1, value = NULL)` on a copy you own), never from `terra::unique(x)[, 1]` or `terra::freq(x)$value`: on a factor both return the active category's labels, so matching …
+Read a factor raster's codes from a copy with its levels stripped (`levels(y) <- NULL`), never from `terra::unique(x)[, 1]` or `terra::freq(x)$value`, which on a factor return the active category's labels.
 
 ### A GDAL failure partway through `sf::st_read()` returns the rows read so far, with only a warning
 Treat any warning during a read whose completeness matters as a failed read: wrap it in `withCallingHandlers(st_read(...), warning = function(w) stop(...))`, retry, then stop.
@@ -1170,7 +1232,22 @@ Hold any raw WFS read to the server's own count.
 To tell a throttle from any other bcdata failure, record the status off the request itself (wrap `crul:::crul_fetch`), not from the message.
 
 ### sf and terra can link different GDALs, so a probe through one says nothing about the other
-Check `sf::sf_extSoftVersion()[["GDAL"]]` and `terra::gdal()` before concluding that "GDAL" cannot read something: one R session can hold two GDALs (a CRAN binary of sf bundles its own, terra built against Homebrew links another), and a driver or codec missing from one may be present in the …
+Check `sf::sf_extSoftVersion()[["GDAL"]]` and `terra::gdal()` before concluding that "GDAL" cannot read something: one R session can hold two GDALs, and a driver or codec missing from one may be present in the other.
+
+### `atan2(0, 0)` is 0, so two points at one place have a bearing of due north
+Treat a zero-length step as having no heading: test the step length before taking its azimuth, and return `NA` rather than a bearing when it is 0, because `atan2(0, 0)` returns 0 with no warning, and that reads as north.
+
+### gdalwarp writes INTO an existing destination and keeps its grid
+Delete the output before re-warping to the same path (`unlink(out)` before `sf::gdal_utils("warp", ...)`, or pass `-overwrite`).
+
+### GDAL caches a failed `/vsicurl/` open, so an in-process retry sends no request
+Before retrying a `/vsicurl/` read in the same process, set `CPL_VSIL_CURL_NON_CACHED` to the URL's prefix.
+
+### THREDDS NCSS returns one time step unless the request says `temporal=all`
+Add `&temporal=all` (or an explicit `time_start`/`time_end`) to every NetCDF Subset Service grid request: without it NCSS answers with a single time step (the one nearest "now"), a valid NetCDF that passes a signature check, so assert the layer count after reading.
+
+### BC's water rights licence view repeats a row per licensee, so deduplicate before summing quantities
+Keep one row per licence, purpose, point of diversion, `QUANTITY_FLAG` and units before summing `QUANTITY` from `WHSE_WATER_MANAGEMENT.WLS_WATER_RIGHTS_LICENCES_SV`: the view carries a row per licensee, identical but for `OBJECTID` and `WLS_WRL_SYSID`.
 
 # Code Check Conventions
 Structured checklist for reviewing diffs before commit.
@@ -1794,6 +1871,17 @@ It breaks **Always Away** directly: an unattended run that stops for approval on
   predicted, and the one that blocks is the one you did not.
 - Diagnostic: if a run keeps stopping for approval, look at whether the loop sits
   inside or outside the process boundary before adding allowlist entries.
+
+### A subagent that must not know the answer must be a Plan or Explore type
+
+A `general-purpose` subagent carries the project's `CLAUDE.md`, and `Plan` and `Explore` do not, so a
+blind reader, a blind reviewer or any control that must not see prior results is spawned as `Plan` or
+`Explore`. Check it rather than trusting the brief: a canary of each type, given no tools and asked only
+whether its context mentions the term in question, settles it in seconds. Neither type can write, so take
+its output from the transcript by script, not by retyping, and audit the transcript's tool calls for reads
+outside what it was given.
+
+*4 lines of evidence for this rule are in `conventions/karpathy.md`, which `/code-check` reads in full.*
 
 ---
 
