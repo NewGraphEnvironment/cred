@@ -154,6 +154,232 @@
   entry
 }
 
+#' How wide is the vector an embedder returned?
+#'
+#' [ragnar::embed_ollama()] returns a matrix with one row per input, so `ncol()`
+#' is the width. Nothing obliges a custom embedder to do the same, and `ncol()`
+#' on a bare vector is `NULL` — which the comparison downstream would then error
+#' on, turning a check that is supposed to degrade quietly into a hard failure
+#' at connect.
+#'
+#' @param x whatever an embedder returned.
+#' @return `integer(1)` width, or `NA_integer_` when none can be read.
+#' @noRd
+.crd_embed_width <- function(x) {
+  if (is.null(x)) return(NA_integer_)
+  n <- if (!is.null(ncol(x))) {
+    ncol(x)
+  } else if (is.atomic(x)) {
+    length(x)
+  } else {
+    NA_integer_
+  }
+  n <- suppressWarnings(as.integer(n))
+  # A zero-width result is not a width. It is what an embedder returns when it
+  # has failed without raising, and comparing it would report a mismatch whose
+  # remedy ("re-pull the model") has nothing to do with the cause.
+  if (length(n) != 1L || is.na(n) || n < 1L) return(NA_integer_)
+  n
+}
+
+#' Where a store lives, for keying a once-per-session warning
+#'
+#' The `location`, not the `name`: `ragnar_store_connect()` falls back to
+#' `unique_store_name()` when a store records no name, and that is a per-session
+#' counter (`store_001`), so two different stores can carry one name while two
+#' copies of one store at different paths cannot share a path.
+#'
+#' @param store a connected ragnar store, or anything at all.
+#' @return `character(1)`.
+#' @noRd
+.crd_store_loc <- function(store = NULL) {
+  loc <- tryCatch(as.character(store@location), error = function(e) NA_character_)
+  # `.crd_have()` rather than `nzchar()` directly: nzchar(NA) is TRUE, so the
+  # obvious non-empty test waves an NA straight through.
+  if (!.crd_have(loc)) "unknown-store" else loc
+}
+
+#' Frequency key for the connect-time "could not check" warning
+#'
+#' A **separate** scheme from [.crd_retrieval_fallback_id()], and that is the
+#' whole point. Keyed the same way, a "could not check (connection)" emitted by
+#' [crd_store_connect()] would consume the once-per-session slot that
+#' [crd_search()]'s fallback warning needs for the same reason on the same
+#' store — so the search would then degrade to BM25 silently, which is the
+#' diagnosis loss #29 exists to end, arriving from the other side.
+#'
+#' It lives in a function rather than inline so a test can ask the code what
+#' key it uses instead of restating it. A test that rebuilds the expected key
+#' from a literal cannot fail when the code's key changes — measured: it did
+#' not.
+#'
+#' @param reason `character(1)` from [.crd_retrieval_failure()].
+#' @param store the store being checked, or `NULL`.
+#' @return `character(1)` id for `rlang::warn(.frequency_id = )`.
+#' @noRd
+.crd_store_probe_id <- function(reason, store = NULL) {
+  paste0("cred_store_probe_", reason, "_", .crd_store_loc(store))
+}
+
+#' Check a connected store's embeddings against the service and the manifest
+#'
+#' The check [crd_store_connect()]'s md5 compare cannot perform. That compare
+#' answers "is this the file the manifest describes" — stale, truncated, locally
+#' rebuilt — and is structurally unable to see a store whose embedding model
+#' moved underneath it, because such a store has **exactly** the bytes the
+#' manifest recorded (NewGraphEnvironment/cred#30).
+#'
+#' The probe is the load-bearing half, and it uses the store's **own** recorded
+#' embedder: `ragnar_store_connect()` does
+#' `embed <- unserialize(metadata$embed_func[[1L]])`, so this is not a model
+#' name reconstructed from a string, it is the function that will actually embed
+#' queries against this store. Comparing its width against the store's own
+#' `embedding_size` is exactly the condition that otherwise surfaces downstream
+#' as a `cred_retrieval_fallback_dimension` warning from [crd_search()].
+#'
+#' **Width is the detectable part.** A model whose weights changed while its
+#' dimension stayed the same is invisible here, and to every other check in this
+#' package. The remedy text does not imply otherwise.
+#'
+#' Severity tracks the evidence, which is why only one tier errors:
+#'
+#' * **Probe ran, widths differ** — error. Semantic retrieval against this store
+#'   is structurally broken, which is the same "do not trust results" severity
+#'   the md5 mismatch already errors on.
+#' * **Manifest label disagrees with the store's own record** — warning. The
+#'   manifest's `embedding_model` comes from the pusher's environment:
+#'   [.crd_store_describe()] falls back to `CRED_EMBED_MODEL` when it cannot
+#'   read the store's `embed_func`. It is a label, and the weaker half of the
+#'   pair.
+#' * **Probe could not run** — not a mismatch at all, and not grounds to refuse
+#'   a store. A dead Ollama says nothing about this file, and BM25 retrieval
+#'   needs no embedding. Classified by [.crd_retrieval_failure()] and reported
+#'   once per session per reason and store.
+#' * **No embedder recorded, or `embedding_size` unreadable** — skipped in
+#'   silence. There is nothing to compare, and the push side already warns about
+#'   an unreadable size, so repeating it on every connect is noise.
+#'
+#' @param store a connected ragnar store.
+#' @param entry `list` manifest entry for this store, or `NULL` on the
+#'   `verify = FALSE` path where no manifest was read.
+#' @param name `character(1)` store name, for the message.
+#' @return `NULL`, invisibly. Errors on a confirmed width mismatch.
+#' @noRd
+.crd_check_store_embedding <- function(store, entry = NULL, name = NULL) {
+  if (!.crd_have(name)) name <- basename(.crd_store_loc(store))
+  meta <- .crd_store_meta_brief(store)
+
+  # Tier 2 first, because it is the one that does not need the size.
+  if (!is.null(entry) && .crd_have(entry$embedding_model) &&
+        .crd_is_model_name(meta$model) &&
+        !identical(.crd_model_norm(entry$embedding_model[1]),
+                   .crd_model_norm(meta$model))) {
+    rlang::warn(
+      paste0(
+        "The manifest and the store disagree about which model embedded '", name, "'.\n",
+        "  the store records:  ", meta$model, "\n",
+        "  the manifest says:  ", entry$embedding_model[1], "\n",
+        "  The store's own record is the stronger of the two: the manifest's label\n",
+        "  comes from whoever pushed it, and crd_store_push() falls back to\n",
+        "  CRED_EMBED_MODEL when it cannot read the store. Results are still\n",
+        "  self-consistent; what is wrong is one of the two labels."
+      ),
+      class = c("cred_store_model_label_mismatch", "cred_store_embedding_check"),
+      .frequency = "once",
+      .frequency_id = paste0("cred_store_model_label_", .crd_store_loc(store))
+    )
+  }
+
+  if (!.crd_have(meta$size)) return(invisible(NULL))
+
+  embed <- tryCatch(store@embed, error = function(e) NULL)
+  if (!is.function(embed)) return(invisible(NULL))
+
+  probe <- tryCatch(embed("cred embedding width probe"), error = function(e) e)
+
+  if (inherits(probe, "condition")) {
+    reason <- .crd_retrieval_failure(probe)
+    rlang::warn(
+      paste0(
+        "Could not check the embedding model for '", name, "' — the probe failed.\n",
+        "  This is not evidence about the store. BM25 retrieval needs no embedding\n",
+        "  and is unaffected; semantic retrieval will not work until this does.\n",
+        "  Cause: ", .crd_indent_cause(conditionMessage(probe)), "\n",
+        .crd_embed_remedy(reason, probe, store = store, context = "connect")
+      ),
+      class = c(paste0("cred_store_probe_failed_", reason),
+                "cred_store_probe_failed", "cred_store_embedding_check"),
+      .frequency = "once",
+      .frequency_id = .crd_store_probe_id(reason, store)
+    )
+    return(invisible(NULL))
+  }
+
+  got <- .crd_embed_width(probe)
+  if (!.crd_have(got) || identical(got, as.integer(meta$size))) return(invisible(NULL))
+
+  model_part <- if (.crd_is_model_name(meta$model)) meta$model else "unknown"
+  rlang::abort(
+    paste0(
+      "Embedding width mismatch for '", name, "'.\n",
+      "  this store holds:                  ", meta$size, "-wide embeddings",
+      if (.crd_is_model_name(meta$model)) paste0(", model ", meta$model) else "", "\n",
+      "  its recorded embedder now returns: ", got, "-wide\n",
+      "  A connected store embeds queries with the embedder recorded inside it, so\n",
+      "  the model that name resolves to on this machine is no longer the model the\n",
+      "  store was built with. Semantic retrieval would answer differently while\n",
+      "  looking healthy, and the md5 compare cannot see it: this store has exactly\n",
+      "  the bytes the manifest recorded.\n",
+      "    ollama pull ", .crd_fallback_model(store = store), "\n",
+      "  or rebuild with crd_store_build(). BM25 retrieval needs no embedding and is\n",
+      "  unaffected, so pass check_model = FALSE to open the store anyway."
+    ),
+    class = c("cred_store_embedding_mismatch", "cred_store_embedding_check"),
+    store_size = as.integer(meta$size),
+    embed_width = got,
+    store_model = meta$model
+  )
+}
+
+
+#' Open a store and run the connect-time checks on it
+#'
+#' One tail for every path out of [crd_store_connect()]. It had three separate
+#' `return(ragnar::ragnar_store_connect(...))` sites, and a check wired into two
+#' of them would leave the third — the `verify = FALSE` offline route — silently
+#' unprotected while every unit test passed. A guard that one caller of a shared
+#' harness misses is its own entry in `code-check.md`.
+#'
+#' @param local_path `character(1)` path to the `.duckdb` store.
+#' @param read_only `logical(1)` passed through to ragnar.
+#' @param entry `list` manifest entry, or `NULL` when none was read.
+#' @param name `character(1)` store name, for messages.
+#' @param check_model `logical(1)` run [.crd_check_store_embedding()].
+#' @return A connected ragnar store.
+#' @noRd
+.crd_store_open <- function(local_path, read_only, entry = NULL, name = NULL,
+                            check_model = TRUE) {
+  store <- ragnar::ragnar_store_connect(local_path, read_only = read_only)
+  if (!isTRUE(check_model)) return(store)
+
+  # Until #30 nothing could fail after the connect returned, so there was
+  # nothing to clean up. The check needs `store@con` and `store@embed`, so it
+  # has to run after, and a mismatch now errors with a live duckdb connection
+  # open and unreferenced. Same `complete <- FALSE` shape crd_store_build()
+  # uses. (The predicted follow-on -- that a retry under a different
+  # `read_only` would then be refused -- does NOT reproduce on ragnar 0.3.0:
+  # read-write then read-only on one file both succeed, measured. The leak is
+  # worth closing on its own.)
+  ok <- FALSE
+  on.exit(
+    if (!ok) try(DBI::dbDisconnect(store@con, shutdown = TRUE), silent = TRUE),
+    add = TRUE
+  )
+  .crd_check_store_embedding(store, entry = entry, name = name)
+  ok <- TRUE
+  store
+}
+
 #' Connect to a ragnar evidence store, pulling and verifying it if needed
 #'
 #' Resolves a store by name, using the local copy when its MD5 matches the
@@ -206,11 +432,13 @@ crd_store_connect <- function(store,
                               dir = "data/rag",
                               profile = Sys.getenv("AWS_PROFILE"),
                               read_only = TRUE,
-                              verify = TRUE) {
+                              verify = TRUE,
+                              check_model = TRUE) {
   chk::chk_string(store)
   chk::chk_string(dir)
   chk::chk_flag(read_only)
   chk::chk_flag(verify)
+  chk::chk_flag(check_model)
   .crd_need(c("ragnar", "DBI", "duckdb"))
 
   if (grepl("[.]duckdb$", store)) {
@@ -228,7 +456,11 @@ crd_store_connect <- function(store,
            call. = FALSE)
     }
     message("Opening ", local_path, " unverified (verify = FALSE).")
-    return(ragnar::ragnar_store_connect(local_path, read_only = read_only))
+    # No manifest was read, so there is no entry to compare a label against --
+    # but the probe does not need one, and this is the path a user reaches by
+    # default when no source is configured.
+    return(.crd_store_open(local_path, read_only, name = name,
+                           check_model = check_model))
   }
 
   source <- .crd_store_source(source)
@@ -238,7 +470,8 @@ crd_store_connect <- function(store,
         identical(tolower(unname(tools::md5sum(local_path))), entry$md5)) {
     message("Using local ", local_path, " (md5 matches manifest; ",
             entry$documents, " docs, ", entry$chunks, " chunks).")
-    return(ragnar::ragnar_store_connect(local_path, read_only = read_only))
+    return(.crd_store_open(local_path, read_only, entry = entry, name = name,
+                           check_model = check_model))
   }
 
   if (file.exists(local_path)) {
@@ -275,7 +508,8 @@ crd_store_connect <- function(store,
 
   message("Downloaded ", name, " (", entry$documents, " docs, ", entry$chunks,
           " chunks, embedded with ", entry$embedding_model, ").")
-  ragnar::ragnar_store_connect(local_path, read_only = read_only)
+  .crd_store_open(local_path, read_only, entry = entry, name = name,
+                  check_model = check_model)
 }
 
 # Which end of each retrieval metric counts as "better", and the roster of
@@ -653,7 +887,10 @@ crd_store_connect <- function(store,
 #' Either way the name goes into a command the message invites the reader to
 #' paste, so both go through [.crd_is_model_name()].
 #'
-#' @param cond the condition that was caught.
+#' @param cond the condition that was caught, or `NULL` where there is none —
+#'   [.crd_check_store_embedding()]'s mismatch path has no caught condition,
+#'   because the probe it is reporting on SUCCEEDED. The first tier simply has
+#'   no evidence to offer then.
 #' @param store the store being searched.
 #' @param requested `character(1)` the model the caller explicitly asked for, or
 #'   `NULL`. Sits above the hardcoded default and below both pieces of
@@ -662,13 +899,15 @@ crd_store_connect <- function(store,
 #'   itself named or the one the store records.
 #' @return `character(1)`.
 #' @noRd
-.crd_fallback_model <- function(cond, store = NULL, requested = NULL) {
-  msg <- paste(conditionMessage(cond), collapse = "\n")
-  # Ollama's 404 body: model "nomic-embed-text" not found, try pulling it first
-  hit <- regmatches(msg, regexpr('model[[:space:]]+"[^"]+"', msg))
-  if (length(hit) == 1L) {
-    named <- sub('^model[[:space:]]+"([^"]+)"$', "\\1", hit)
-    if (.crd_have(named) && .crd_is_model_name(named)) return(named)
+.crd_fallback_model <- function(cond = NULL, store = NULL, requested = NULL) {
+  if (!is.null(cond)) {
+    msg <- paste(conditionMessage(cond), collapse = "\n")
+    # Ollama's 404 body: model "nomic-embed-text" not found, try pulling it first
+    hit <- regmatches(msg, regexpr('model[[:space:]]+"[^"]+"', msg))
+    if (length(hit) == 1L) {
+      named <- sub('^model[[:space:]]+"([^"]+)"$', "\\1", hit)
+      if (.crd_have(named) && .crd_is_model_name(named)) return(named)
+    }
   }
   recorded <- .crd_store_meta_brief(store)$model
   if (.crd_is_model_name(recorded)) return(recorded)
@@ -734,9 +973,22 @@ crd_store_connect <- function(store,
 #' @param model `character(1)` the model the caller asked for, or `NULL`. Only
 #'   used to name a model in a remedy when neither the condition nor the store
 #'   names one -- see [.crd_fallback_model()].
+#' @param context `character(1)` which caller is asking. Only the two
+#'   store-flavoured branches read it, and only to avoid prescribing something
+#'   that cannot apply: the `unknown` remedy sends a searcher to
+#'   [crd_store_connect()] to rule the file out, which is nonsense said to
+#'   [crd_store_build()] -- the store does not exist yet -- and circular said
+#'   from inside connect itself.
+#'
+#'   `store`-absence would be the obvious discriminator and is the wrong one:
+#'   `store` is optional for every caller and the existing tests pass none while
+#'   still expecting the searcher's text, so absence means "not supplied here",
+#'   not "there is no store".
 #' @return `character(1)` the remedy, with no trailing newline.
 #' @noRd
-.crd_embed_remedy <- function(reason, cond, store = NULL, model = NULL) {
+.crd_embed_remedy <- function(reason, cond, store = NULL, model = NULL,
+                              context = c("search", "build", "connect")) {
+  context <- match.arg(context)
   if (identical(reason, "connection")) {
     return(paste0(
       "  The embedding service did not answer. If it is not running, start it; a\n",
@@ -770,7 +1022,7 @@ crd_store_connect <- function(store,
     ))
   }
 
-  if (identical(reason, "dimension")) {
+  if (identical(reason, "dimension") && identical(context, "search")) {
     meta <- .crd_store_meta_brief(store)
     # The recorded model is echoed only if it looks like one. This line is prose
     # rather than a command, so the paste hazard is not the issue here -- but the
@@ -819,6 +1071,22 @@ crd_store_connect <- function(store,
     ))
   }
 
+  # The fallthrough, and the one branch whose remedy is about the STORE rather
+  # than the service -- so it is the one that has to know who is asking.
+  if (identical(context, "build")) {
+    return(paste0(
+      "  cred does not recognise this failure, so no remedy is prescribed. The store\n",
+      "  cannot be built without embeddings, and nothing here says why this model\n",
+      "  could not produce one."
+    ))
+  }
+  if (identical(context, "connect")) {
+    return(paste0(
+      "  cred does not recognise this failure, so no remedy is prescribed. Semantic\n",
+      "  retrieval will not work until it does; BM25 needs no embedding and is\n",
+      "  unaffected."
+    ))
+  }
   paste0(
     "  cred does not recognise this failure, so no remedy is prescribed. Semantic\n",
     "  retrieval is unavailable and the store itself may be at fault - confirm it is\n",
@@ -1186,7 +1454,8 @@ crd_search <- function(store, query, top_k = 5L,
 
   stop("Could not embed with Ollama model '", model, "'.\n",
        "  Cause: ", .crd_indent_cause(conditionMessage(cond)), "\n",
-       .crd_embed_remedy(.crd_retrieval_failure(cond), cond, model = model),
+       .crd_embed_remedy(.crd_retrieval_failure(cond), cond, model = model,
+                         context = "build"),
        call. = FALSE)
 }
 

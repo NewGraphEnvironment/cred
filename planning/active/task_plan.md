@@ -71,18 +71,21 @@ Enabling change for 2, 3 and 4, and the fix for "two accounts of one dead port".
 
 ## Phase 4: The connect-time check
 
-- [ ] `.crd_embed_width(x)` — `ncol()` on a matrix, `length()` on a vector, `NA` otherwise
-- [ ] `.crd_check_store_embedding(store, entry = NULL, name)` — the four tiers, every read
+- [x] `.crd_embed_width(x)` — `ncol()` on a matrix, `length()` on a vector, `NA` otherwise
+- [x] `.crd_check_store_embedding(store, entry = NULL, name)` — the four tiers, every read
       tolerant; reuse `.crd_model_norm()`. **Not** `.crd_check_model()`, which compares against
       *other* stores
-- [ ] `crd_store_connect()` gains `check_model = TRUE`; its three
+- [x] `crd_store_connect()` gains `check_model = TRUE`; its three
       `return(ragnar_store_connect(...))` sites collapse into one tail helper so the check cannot
       be added to two paths and missed on the third
-- [ ] "Could not check" uses `rlang::warn(.frequency = "once")`, keyed on reason **and** store
+- [x] "Could not check" uses `rlang::warn(.frequency = "once")`, keyed on reason **and** store
       location
-- [ ] Offline fixtures: fixture store is 16-wide, `.crd_test_embed_narrow` is 8-wide; `@embed` on
-      a **copy** reaches neither the original nor the shared duckdb connection
-- [ ] Mutation table: restore the defect and prove each guard fires
+- [x] Offline fixtures — **the planned one was wrong.** `@embed` on a copy of the cached store
+      shares its duckdb connection, so `.crd_store_open()`'s failure cleanup closed the *shared*
+      connection and every later test file lost retrieval. Replaced by a throwaway `file.copy()`
+      of the store with `UPDATE metadata SET embedding_size = 8` — no mocked bindings, real
+      `ragnar_store_connect()` unserialise path
+- [x] Mutation table: restore the defect and prove each guard fires
 
 ## Phase 5: The stale-claim sweep, docs, NEWS, version
 
@@ -110,3 +113,24 @@ of **md5**, false of connect as a whole. Grep the sentence, not the one instance
 
 Detecting a model whose **weights** changed at constant width — no local signal exists for it.
 The docs say so rather than implying the check is complete.
+
+## Mutation table
+
+Run in an isolated copy of the tree, control green:
+
+| mutation | failures |
+|---|---|
+| M1 delete the check from `.crd_store_open()`'s tail | 3 |
+| M2 `.crd_embed_width()` always `NA` | 10 |
+| M3 restore `.crd_ollama_check()`'s old fixed remedy | 8 |
+| M4 probe warning reuses the search fallback id | 1 |
+| M5 check warns unconditionally | 4 |
+| M6 vss branch unwrapped again | 9 |
+| control | **0** |
+
+M2, M4 and M5 first reported **0** — three broken probes, not three test gaps. M2 and M5 used
+`perl -0`, where `^` anchors to the start of the *file*, and bash expanded the `$` in
+`meta$size`; redone in Python they fire. M4 was a real gap: the collision test rebuilt the
+expected id from a literal, so changing the code's id could not fail it. Fixed by extracting
+`.crd_store_probe_id()` and adding the behavioural test — connect warns, then the search on the
+same store must still warn.

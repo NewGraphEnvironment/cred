@@ -55,3 +55,30 @@
 - `bm25` left unwrapped on purpose: it needs no embedding, so wrapping it would turn a search
   that still works on a broken-embedder store into an error. Pinned by its own test
 - Next: Phase 4 — the connect-time check
+
+### Phase 4 — the connect-time check, plus the plan review
+
+- `.crd_embed_width()`, `.crd_store_loc()`, `.crd_store_probe_id()`,
+  `.crd_check_store_embedding()`, `.crd_store_open()`; `crd_store_connect(check_model = TRUE)`
+- Plan review (Plan agent, read-only, spawned at the baseline and folded in on arrival) returned
+  five blockers. Triaged by probe, in both directions:
+  - **B5 confirmed and fixed** — `.crd_ollama_check()`'s `unknown` remedy told a caller of
+    `crd_store_build()` to verify the file with `crd_store_connect()`, *before the store exists*.
+    Reproduced in one call. Fixed with an explicit `context` argument, because `store`-absence is
+    the wrong discriminator: an existing test passes no store and correctly expects the
+    searcher's text
+  - **B4 half-confirmed** — the leaked connection is real and now cleaned up with `on.exit`. The
+    predicted consequence, that a retry under a different `read_only` would be refused, does
+    **not** reproduce on ragnar 0.3.0: read-write then read-only on one file both succeed
+  - **B2/G6 confirmed** — the planned fixture could not reach the error through
+    `crd_store_connect()`; replaced with an on-disk copy, which also removed the mocking
+  - **B3 already avoided** (distinct id prefix) but **untested**; the test added for it was
+    itself defective, found by mutation M4
+  - **B1 already resolved** in the landed design: the tail runs on all three paths
+  - **G1/G2/G3/G4/O1/O2/Ac2/S1 already satisfied** by the implementation, which had diverged
+    from the plan's one-line specs in exactly the ways asked for
+  - **Ac4 partly disproved** — the review is right that the two `expect_no_match` assertions must
+    **not** reverse, and the plan was wrong to say they should. Reasoning accepted and recorded
+    in Phase 5
+- `devtools::test()`: 587 pass, 0 fail. `lintr::lint_package()`: 0 lints
+- Next: Phase 5 — the corrected sweep, docs, NEWS, version
