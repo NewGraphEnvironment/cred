@@ -751,8 +751,7 @@ test_that("the warning-reset helper covers every frequency scheme cred emits", {
 # copies the fixture to the `.part-<pid>` destination the real `aws s3 cp` would
 # have written, and the manifest's md5 is taken from that same file, so the
 # post-download verify passes for the right reason.
-local_mocked_download_of <- function(fixture, model = "nomic-embed-text (ollama)",
-                                     size = 8L, env = parent.frame()) {
+local_mocked_download_of <- function(fixture, env = parent.frame()) {
   md5 <- tolower(unname(tools::md5sum(fixture)))
   testthat::local_mocked_bindings(
     .crd_aws = function(args, profile = "", clean_stdout = FALSE) {
@@ -813,7 +812,7 @@ test_that("the download path forwards the entry, so the label tier can fire ther
 
   dir <- withr::local_tempdir()
   name <- "labelled_store"
-  md5 <- local_mocked_download_of(fixture, size = 16L)
+  md5 <- local_mocked_download_of(fixture)
   local_mocked_bindings(
     .crd_manifest_read = function(source, profile = "") {
       list(stores = stats::setNames(

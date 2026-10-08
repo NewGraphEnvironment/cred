@@ -238,3 +238,33 @@ M2, M4 and M5 first reported **0** — three broken probes, not three test gaps.
 expected id from a literal, so changing the code's id could not fail it. Fixed by extracting
 `.crd_store_probe_id()` and adding the behavioural test — connect warns, then the search on the
 same store must still warn.
+
+## Review loop outcome
+
+Five rounds. Rounds 1-4 each found real defects, and **every round from 2 on found at least one
+inside the previous round's fix** — which is the one condition that keeps the loop open, so it
+was terminated by a computed enumeration rather than by a quiet round.
+
+Round 5: **closed, computed.** 43 code decision points — 32 covered by a measured mutation, 3
+behaviour-preserving, 5 unreachable, 3 cosmetic-and-accepted, **0 uncovered and consequential**.
+50 test-side absence assertions, closed mechanically by running both changed test files twice in
+one session and getting identical results, so nothing is green because of rlang frequency state
+in either direction. For the first time the loop's signature does not appear, and it was looked
+for on both axes earlier fixes failed on.
+
+### Known limits, recorded rather than chased
+
+- The namespace walk that checks every `.frequency_id` an emitter passes **cannot see a
+  brand-new emitter that passes a bare variable** rather than a call. Round 5 reports that gap as
+  *unproven-closed* rather than open — a mutation of that shape goes red, but via a sibling
+  assertion, so the walk is not what caught it. Recorded here rather than papered over.
+- Three decision points are uncovered by choice, all cosmetic (no user-visible consequence
+  established by any round).
+
+### One lesson that belongs outside this issue
+
+**A mutation applied to N sites at once certifies coverage of exactly one of them**, and the
+cheap guard is to prove a branch runs at all — a `stop()` at the top of it must turn something
+red — before trusting any mutation on it. That is general, not about cred, and belongs in
+`soul/conventions/code-check.md` beside "Restore the bug and prove the guard fires". Drafted, not
+yet filed: a soul convention edit is its own change.

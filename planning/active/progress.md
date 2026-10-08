@@ -190,3 +190,20 @@ Five findings, all fixed and all mutation-checked (N1-N7 above):
   test files twice in one session gives identical results, so no assertion is green because of
   rlang frequency state in either direction
 - 639 passes, 0 lints. M-A, M-B, P2, P5 each fire
+
+### /code-check round 5 — closed
+
+- **0 findings.** 43 code decision points: 32 covered by a measured mutation, 3
+  behaviour-preserving, 5 unreachable, 3 cosmetic-and-accepted, 0 uncovered and consequential.
+  50 test-side assertions closed mechanically by a double run in one session
+- All four of round 4's probes now fire on the site they name, and M-D confirms both halves of
+  the new download test are load-bearing
+- For the first time in five rounds the loop's signature — a defect inside the previous round's
+  fix — does not appear, and it was looked for on both axes earlier fixes failed on
+- Took round 5's second note: `local_mocked_download_of()`'s `model`/`size` formals went dead
+  when the manifest mock moved inline, so a call site passing `size = 16L` read as load-bearing
+  and was not. Removed
+- Left round 5's first note recorded rather than chased: the namespace walk cannot see an emitter
+  passing a bare variable id, and round 5 calls that gap unproven-closed rather than open
+- Spend: 6 subagents (1 plan review + 5 review rounds), over the usual bound. The justification
+  is the signature above — four consecutive rounds found a defect inside the previous fix
