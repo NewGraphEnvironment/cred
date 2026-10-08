@@ -143,3 +143,16 @@ were defects **inside this issue's own fix** — the same class the issue is abo
 - [x] **A1, G9, O2** plan text corrected above
 - [x] **S1, S2, S3** out of scope, named in #30 and in NEWS rather than left to read as
       oversights
+
+## Phase 6: Own-probe finding — the model name is remote text
+
+- [x] `.crd_fallback_model()` parsed a model name out of the service's 404 body and
+      interpolated it into `ollama pull <name>` with no guard. Probed:
+      `model "with ' quote" not found` produced `ollama pull with ' quote`, an unbalanced
+      quote in a line the message invites the reader to paste. The message is printed and
+      never executed, so this is not about what a hostile string would *do* — it is that a
+      suggested command has to read as the command it is
+- [x] `.crd_is_model_name()` whitelists Ollama's own grammar (namespace and tag), and the
+      composed message falls back to the store's record rather than quoting a rejected name.
+      The store's own record is trusted: it is local and this package wrote it
+- [x] Mutation (accept any non-empty name) caught by 8 assertions — 13 for 13 overall

@@ -617,6 +617,14 @@ crd_store_connect <- function(store,
 #' Naming a model nothing ever asked for is how a user ends up pulling something
 #' irrelevant.
 #'
+#' The name from the condition is **remote text**, and it is going into a command
+#' the message invites the reader to paste. So it is accepted only if it looks
+#' like a model name: Ollama's own grammar allows a namespace and a tag
+#' (`library/nomic-embed-text:latest`), and nothing else. Measured without the
+#' guard, `model "with ' quote" not found` produced
+#' `ollama pull with ' quote` — an unbalanced quote in a suggested command. The
+#' store's own record is trusted; it is local, and the package wrote it.
+#'
 #' @param cond the condition that was caught.
 #' @param store the store being searched.
 #' @return `character(1)`.
@@ -627,11 +635,25 @@ crd_store_connect <- function(store,
   hit <- regmatches(msg, regexpr('model[[:space:]]+"[^"]+"', msg))
   if (length(hit) == 1L) {
     named <- sub('^model[[:space:]]+"([^"]+)"$', "\\1", hit)
-    if (.crd_have(named)) return(named)
+    if (.crd_have(named) && .crd_is_model_name(named)) return(named)
   }
   recorded <- .crd_store_meta_brief(store)$model
   if (.crd_have(recorded)) return(recorded)
   "nomic-embed-text"
+}
+
+#' Does this look like a model name, and nothing else?
+#'
+#' Deliberately a whitelist. The point is not to predict what a hostile string
+#' would do — the message is printed, never executed — but that a line offered
+#' as "paste this" must read as the command it is. Anything carrying a quote,
+#' a space or a shell metacharacter fails that regardless of intent.
+#'
+#' @param x `character(1)`.
+#' @return `TRUE` when `x` is plausibly a model name.
+#' @noRd
+.crd_is_model_name <- function(x) {
+  .crd_have(x) && grepl("^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$", x)
 }
 
 #' Indent the continuation lines of a caught condition's message

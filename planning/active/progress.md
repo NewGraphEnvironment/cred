@@ -54,3 +54,10 @@
   B2 remedy, B3 status split, G6 length guard, AC3 indentation, G4 model naming
 - `devtools::test()` `[ FAIL 0 | WARN 0 | SKIP 2 | PASS 463 ]`; lintr clean;
   `pkgdown::check_pkgdown()` clean
+- Phase 6 — own probe of the regex edge cases found that the model name in a remedy comes
+  from the service's 404 body unguarded, and lands in a line the message tells the reader to
+  paste. Whitelisted to Ollama's grammar. Full battery now 13 for 13
+- Two fresh code-review agents were spawned on the cumulative diff (one general, one scoped
+  to the *mechanism* behind the three defects the plan review found inside this fix). Work
+  continued rather than waiting on them, per the convention; findings land as follow-up
+  commits on this branch

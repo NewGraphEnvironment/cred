@@ -254,6 +254,31 @@ test_that("a remedy names the model that was actually refused, not a default", {
   expect_no_match(msg, "nomic-embed-text")
 })
 
+test_that("a model name from the service is accepted only if it looks like one", {
+  # The name arrives in a remote 404 body and goes into a line the message
+  # invites the reader to paste. It is printed, never executed, so this is not
+  # about what a hostile string would *do* — it is that a suggested command has
+  # to read as the command it is. Measured without the guard:
+  # `model "with ' quote" not found` produced `ollama pull with ' quote`.
+  expect_true(.crd_is_model_name("nomic-embed-text"))
+  expect_true(.crd_is_model_name("library/nomic-embed-text:latest"))
+  expect_true(.crd_is_model_name("mxbai-embed-large"))
+
+  expect_false(.crd_is_model_name("with ' quote"))
+  expect_false(.crd_is_model_name("a; rm -rf /"))
+  expect_false(.crd_is_model_name("$(whoami)"))
+  expect_false(.crd_is_model_name("two words"))
+  expect_false(.crd_is_model_name("-leading-dash"))
+  expect_false(.crd_is_model_name(strrep("x", 200L)))
+
+  # And the composed message falls back rather than quoting it.
+  msg <- .crd_retrieval_fallback_msg(
+    "model", simpleError('HTTP 404.\nmodel "with \' quote" not found')
+  )
+  expect_match(msg, "ollama pull nomic-embed-text", fixed = TRUE)
+  expect_no_match(msg, "ollama pull with", fixed = TRUE)
+})
+
 test_that("a connection remedy names the store's recorded model, not a hardcoded one", {
   # The branch that kept the old inaccuracy: crd_store_build(model = ) is
   # parameterised and the store records what it used, so naming a constant here
