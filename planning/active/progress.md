@@ -76,3 +76,15 @@
   name-interpolation sites all guarded, the three reason lists computed to agree (now a
   test), and 27 of 27 mutations caught
 - `devtools::test()` `[ FAIL 0 | WARN 0 | SKIP 2 | PASS 502 ]`; lintr and check_pkgdown clean
+- Phase 8 — folded in code-review round 1 (ran concurrently with round 2; verified at
+  2be5761). It found two defects the mechanism round did not, both the "fixture that cannot
+  reach the failure mode" shape and both mine: a block asserting the store's recorded model
+  is used could not fail, because the fixture recorded the same literal as the hardcoded
+  default (measured — deleting that whole tier left the suite green at 502); and the
+  dimension premise test pinned 9 characters of a 40-character pattern, so an upstream
+  reword left green the one test whose job is to fail naming the cause
+- Battery now 29 for 29. Round 1 also probed clean, with evidence, several things that were
+  assumptions until it checked: `testthat::teardown_env()` is run-scoped not file-scoped, so
+  the fixtures' shared duckdb connection carries no cross-file hazard; `rlang::warn()`
+  applies no cli formatting in this package, so a brace-laden duckdb cause survives verbatim
+- `devtools::test()` `[ FAIL 0 | WARN 0 | SKIP 2 | PASS 504 ]`; lintr clean

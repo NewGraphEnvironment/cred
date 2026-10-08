@@ -198,3 +198,37 @@ Enumerated mechanically by parsing the functions rather than grepping or recalli
   so the "two lists that happen to agree" mechanism is enforced rather than checked once
 - **27 mutations, 27 caught**, including all five of round 2's survivors and each of the 10
   connection patterns individually
+
+## Phase 8: Fold in code-review round 1
+
+Round 1 ran concurrently with round 2 and verified its claims at `2be5761`. It independently
+closed three things round 2 had already fixed, and found two the mechanism round did not —
+both in the test suite, both of the "fixture that cannot reach the failure mode" shape:
+
+- [x] **A block titled "names the store's recorded model, *not a hardcoded one*" could not
+      fail.** The named fixture recorded `nomic-embed-text`, the identical literal to
+      `.crd_fallback_model()`'s hardcoded last-resort default, so the assertion passed whether
+      the store-recorded tier was read or deleted. Measured: deleting that tier left the whole
+      suite green at 502 passes. The fixture, not the assertion, was the thing that could not
+      fail — so the fixture now records `mxbai-embed-large`, and the block asserts the default
+      is *absent*. NEWS's claim that the connection branch no longer hardcodes a model now has
+      a test that can fail
+- [x] **The dimension premise test pinned 9 characters of a 40-character pattern** (`"same
+      size"`), directly under a comment saying the matched text is pinned here. Simulating an
+      upstream reword turned 6 assertions red and left that one green — the test whose whole
+      job is to fail *naming the cause*. It now asserts against `.crd_dim_patterns` itself, and
+      the reword turns it red at line 48
+
+Probed clean by round 1, with evidence, so these are settled rather than unexamined:
+classifier ordering (9 mutations, 8 caught); `.crd_have()` / `.crd_indent_cause()` /
+`.crd_fallback_model()` edge cases including multi-match, embedded newline and embedded quote;
+`rlang::warn()` applies no cli formatting in `cred`, so a brace-laden duckdb cause survives
+verbatim; `testthat::teardown_env()` is **run**-scoped rather than file-scoped, so the shared
+duckdb connection in the fixtures carries no cross-file teardown hazard; and
+`rlib_warning_verbosity = "verbose"` returns from `needs_signal()` *before* `env_poke()` in
+rlang 1.3.0, so the helper's isolation claim is accurate and nothing leaks across files.
+
+### Termination, restated
+
+**29 mutations, 29 caught**, including both of round 1's measured survivors. The enumeration
+from Phase 7 still holds and is now enforced by a test rather than re-checked.

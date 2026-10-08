@@ -212,6 +212,13 @@ local_ragnar_store_failing <- function(reason = c("connection", "model",
 # Without this, every message that names the store's model falls through to the
 # hardcoded default and a mutation stubbing the lookup out stays green.
 #
+# The literal must NOT be `nomic-embed-text`, which is `.crd_fallback_model()`'s
+# hardcoded last-resort default. With the two the same, every assertion that the
+# store's recorded model reaches a message passes identically whether the lookup
+# works or has been deleted — measured: removing the store-recorded tier
+# entirely left the whole suite green at 502 passes. The fixture, not the
+# assertion, was the thing that could not fail.
+#
 # The literal has to appear as `model = "..."`, which means a defaulted formal
 # rather than a `model <- "..."` in the body: the regex wants `=`, and R's
 # deparser preserves `<-` as `<-`. A defaulted formal is also the shape
@@ -221,7 +228,7 @@ local_ragnar_store_failing <- function(reason = c("connection", "model",
 #
 # `embed` is serialised into the store by `ragnar_store_create()`, so this must
 # reference nothing outside base R (see property 3 at the top of this file).
-.crd_test_embed_named <- function(x, model = "nomic-embed-text") {
+.crd_test_embed_named <- function(x, model = "mxbai-embed-large") {
   dim_n <- 16L
   t(vapply(x, function(s) {
     v <- numeric(dim_n)

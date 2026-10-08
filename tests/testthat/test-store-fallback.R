@@ -41,7 +41,11 @@ test_that("the dimension fixture raises a bare error naming array_cosine_distanc
   # error — so the regex is load-bearing and the text it matches is pinned here.
   expect_false(inherits(cnd, "httr2_error"))
   expect_match(conditionMessage(cnd), "array_cosine_distance")
-  expect_match(conditionMessage(cnd), "same size")
+  # Pinned against the pattern the classifier actually uses, not a fragment of
+  # it. Asserting "same size" matched 9 characters of a 40-character pattern, so
+  # an upstream reword that broke classification left THIS test — the one whose
+  # whole job is to fail naming the cause — green.
+  expect_match(conditionMessage(cnd), .crd_dim_patterns)
 })
 
 test_that("the unknown fixture raises an error carrying none of the known shapes", {
@@ -374,12 +378,15 @@ test_that("a connection remedy names the store's recorded model, not a hardcoded
   # parameterised and the store records what it used, so naming a constant here
   # would be wrong for any store not built with the default.
   store <- local_ragnar_store_named()
-  expect_identical(.crd_store_meta_brief(store)$model, "nomic-embed-text")
+  # Deliberately NOT the package default: with the two literals the same, this
+  # block passed whether the store-recorded tier was read or deleted.
+  expect_identical(.crd_store_meta_brief(store)$model, "mxbai-embed-large")
 
   msg <- .crd_retrieval_fallback_msg("connection",
                                      simpleError("Connection refused"),
                                      store = store)
-  expect_match(msg, "ollama pull nomic-embed-text", fixed = TRUE)
+  expect_match(msg, "ollama pull mxbai-embed-large", fixed = TRUE)
+  expect_no_match(msg, "nomic-embed-text", fixed = TRUE)
 })
 
 test_that("a service error prescribes nothing, because the status is all we know", {
@@ -402,7 +409,7 @@ test_that("every message reports the underlying condition verbatim", {
 
 test_that("the dimension message reports the width AND model the store records", {
   # Naming what the store was built at is the difference between "something is
-  # mismatched" and "this store holds 16-wide embeddings from nomic-embed-text".
+  # mismatched" and "this store holds 16-wide embeddings from mxbai-embed-large".
   #
   # The model half needs a store whose serialised embedder actually contains a
   # `model = "..."` literal, because that is what .crd_store_model_from_meta()
@@ -415,7 +422,8 @@ test_that("the dimension message reports the width AND model the store records",
     store = store
   )
   expect_match(msg, "16-wide", fixed = TRUE)
-  expect_match(msg, "records model nomic-embed-text", fixed = TRUE)
+  expect_match(msg, "records model mxbai-embed-large", fixed = TRUE)
+  expect_no_match(msg, "nomic-embed-text", fixed = TRUE)
 })
 
 test_that("every message degrades rather than failing when metadata is unreadable", {
