@@ -690,7 +690,12 @@ test_that("the classifier, the message builder and the test helper agree on the 
   # it was wired for one of three contexts, and the other two fell through to
   # the "cred does not recognise this failure" text for a reason the classifier
   # had recognised. Enumerate the product.
-  contexts <- c("search", "build", "connect")
+  # Derived from the function, not typed here. Round 1 widened this guard from
+  # `reason` to `reason x context` and then hardcoded the context roster, which
+  # is the same defect one level out: a fourth context added to `match.arg()`
+  # with a falling-through `dimension` dispatch left the widened guard green.
+  contexts <- eval(formals(.crd_embed_remedy)$context)
+  expect_gt(length(contexts), 1L)
   for (ctx in contexts) {
     fallthrough <- .crd_embed_remedy("unknown", simpleError("a cause"), context = ctx)
     for (r in setdiff(.crd_fallback_reasons(), "unknown")) {

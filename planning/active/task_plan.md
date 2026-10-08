@@ -157,6 +157,21 @@ branch did not, so a mutant that handed back a shut-down connection on **every**
 left the suite green at 587 passes. The table itself was built to prove the absence of exactly
 that, and it had the gap.
 
+Five more after round 2, every one a guard that decides **not** to act:
+
+| mutation | failures |
+|---|---|
+| M9 delete the whole `on.exit` cleanup in `.crd_store_open()` | 0 → **1** |
+| M10 drop `.crd_model_norm()` from the label compare | 0 → **1** |
+| M11 drop `.crd_is_model_name(meta$model)` from the label tier | 0 → **1** |
+| M13 drop `!.crd_have(got)` from the width compare | 0 → **1** |
+| M14 a 4th `context` whose `dimension` dispatch falls through | 0 → **1** |
+
+M9's first fix was itself vacuous and the mutation caught it: `local_store_copy_bad_width()`
+calls `DBI::dbDisconnect()` on its own, so a counter armed before the fixture was built sat at 1
+however the cleanup behaved. M14 is only meaningful as the *pair* — the derived roster goes red
+on a 4th context, the roster round 1 hardcoded stays green.
+
 M2, M4 and M5 first reported **0** — three broken probes, not three test gaps. M2 and M5 used
 `perl -0`, where `^` anchors to the start of the *file*, and bash expanded the `$` in
 `meta$size`; redone in Python they fire. M4 was a real gap: the collision test rebuilt the

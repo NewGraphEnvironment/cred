@@ -1197,8 +1197,11 @@ crd_store_connect <- function(store,
     paste0(
       'Semantic retrieval failed, and method = "vss" has no fallback.\n',
       .crd_embed_remedy(reason, cond, store = store), "\n",
-      '  Both other methods still work on this store: "hybrid" would have\n',
-      '  degraded to BM25 with a warning, and "bm25" needs no embedding at all.'
+      # Says what is true of the METHODS, not of the store. Asserting the other
+      # two "still work on this store" contradicted the `unknown` remedy
+      # directly above it, which says the store itself may be at fault.
+      '  "hybrid" degrades to BM25 with a warning, and "bm25" needs no\n',
+      "  embedding at all."
     ),
     # Subclassed by reason, in the same scheme as the fallback warning, so a
     # caller can branch on the two channels identically.

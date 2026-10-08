@@ -311,6 +311,12 @@ test_that("a manifest model label that disagrees with the store warns, and does 
 
 test_that("a provider suffix in the manifest label is not a mismatch", {
   store <- local_ragnar_store_named()
+  # Without this the block CANNOT FAIL. The label warning is
+  # `.frequency = "once"` keyed on the store's location, and the block above
+  # already spent that slot on the same cached store -- so rlang muffles this
+  # one whatever the code does. Measured: removing .crd_model_norm() from the
+  # compare, which is the exact defect this test rejects, left the suite green.
+  local_fallback_warnings_always()
   entry <- list(embedding_model = "mxbai-embed-large (ollama)", embedding_size = 16L)
 
   # `.crd_model_norm()` exists because every existing manifest entry records the
@@ -506,4 +512,75 @@ test_that("a default connect returns a store whose connection is still usable", 
   res <- crd_search(out, .crd_test_query(), top_k = 3L, method = "bm25")
   expect_gt(nrow(res), 0L)
   try(DBI::dbDisconnect(out@con, shutdown = TRUE), silent = TRUE)
+})
+
+test_that("a failed connect closes the connection it opened", {
+  skip_if_not_installed("ragnar")
+  # /code-check round 2: the round-1 fix guarded `ok <- TRUE` -- the cleanup's
+  # SUCCESS branch -- and left the handler itself uncovered. Deleting the whole
+  # `ok <- FALSE` / on.exit pair kept the suite green at 602, which is the
+  # connection leak this branch exists to have closed.
+  #
+  # The intuitive discriminator does not work and should not be reached for:
+  # after an aborted connect, reopening the same file read-write succeeds on
+  # this duckdb, so "can I reconnect" cannot tell a closed handle from a leaked
+  # one. Observing the call the cleanup makes can.
+  # Build the fixture BEFORE arming the counter. local_store_copy_bad_width()
+  # calls DBI::dbDisconnect() itself to close the connection it used for the
+  # UPDATE, so counting from before it leaves the counter at 1 whatever the
+  # cleanup does -- measured: the first version of this test passed against a
+  # mutant with the whole on.exit block deleted. Same vacuity mechanism this
+  # round was reporting, reproduced inside its own fix.
+  copy <- local_store_copy_bad_width()
+
+  real <- DBI::dbDisconnect
+  closed <- 0L
+  local_mocked_bindings(
+    dbDisconnect = function(conn, ...) {
+      closed <<- closed + 1L
+      real(conn, ...)
+    },
+    .package = "DBI"
+  )
+
+  expect_error(suppressMessages(crd_store_connect(copy, verify = FALSE)),
+               class = "cred_store_embedding_mismatch")
+  expect_gt(closed, 0L)
+})
+
+test_that("an unreadable probe result is not reported as a width mismatch", {
+  store <- local_ragnar_store()
+  odd <- store
+  # `.crd_embed_width()` reads this as NA, and the tier that compares widths is
+  # the one that ERRORS. Without the `!.crd_have(got)` guard a connect aborts
+  # with "its recorded embedder now returns: NA-wide" -- a hard failure on a
+  # store that is fine, from the check whose own roxygen promises to degrade
+  # quietly. Measured: dropping that guard left the suite green.
+  odd@embed <- function(x) list(1, 2)
+  local_fallback_warnings_always()
+
+  expect_true(is.na(.crd_embed_width(odd@embed("probe"))))
+  expect_silent(expect_null(.crd_check_store_embedding(odd, name = "fixture")))
+})
+
+test_that("a store recording no model name does not warn about the manifest label", {
+  store <- local_ragnar_store()
+  # `.crd_store_model_from_meta()` returns NA whenever a store's embed_func
+  # carries no `model = "..."` literal — any store not built by
+  # crd_store_build(). Without the `.crd_is_model_name(meta$model)` guard, every
+  # such store warns `the store records: NA` against the manifest's label on
+  # EVERY connect. Reachable in production, and measured green without the
+  # guard.
+  #
+  # local_fallback_warnings_always() matters here as much as the assertion: the
+  # label warning is frequency-guarded, so without it a muffled warning and an
+  # absent one are the same observation.
+  local_fallback_warnings_always()
+  expect_true(is.na(.crd_store_meta_brief(store)$model))
+
+  expect_silent(expect_null(.crd_check_store_embedding(
+    store,
+    entry = list(embedding_model = "nomic-embed-text (ollama)", embedding_size = 16L),
+    name = "fixture"
+  )))
 })

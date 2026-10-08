@@ -117,3 +117,28 @@
   three contexts: the enumeration was over `reason`, the dispatch over `reason x context`.
   Extended to the product
 - 602 passes, 0 lints. Both fixes mutation-checked (M7, M8) before committing
+
+### /code-check round 2 — five findings, one of them inside round 1's fix
+
+- **Round 1's fix, one level out.** It widened the drift guard from `reason` to
+  `reason x context` and then *hardcoded* the context roster, while `match.arg()`'s list is the
+  source of truth. Now derived with `eval(formals(.crd_embed_remedy)$context)`. The pair is what
+  proves it: a 4th context with a falling-through `dimension` dispatch reddens the derived
+  roster and leaves the hardcoded one green
+- **A test that could not fail.** "A provider suffix is not a mismatch" ran after a block that
+  had already spent the label warning's once-per-session slot on the same cached store, so rlang
+  muffled it whatever the code did — removing `.crd_model_norm()` from the compare, the exact
+  defect the test rejects, left the suite green. Fixed with `local_fallback_warnings_always()`
+- **The cleanup handler was still uncovered** — round 1 guarded `ok <- TRUE`, not the `on.exit`
+  itself. And the obvious discriminator does not work: after an aborted connect, reopening the
+  file read-write succeeds on this duckdb. Observing `DBI::dbDisconnect` does
+- **Both "must not fire on a healthy store" guards were uncovered**, one of them reachable in
+  production: without `.crd_is_model_name(meta$model)`, any store whose `embed_func` has no
+  `model = "..."` literal warns `records: NA` against the manifest on every connect
+- **The vss error contradicted itself** for `reason = "unknown"`: "the store itself may be at
+  fault", then two lines later "Both other methods still work on this store". The closing line
+  now says what is true of the methods, not of the store
+- My own fix for the cleanup was **vacuous and the mutation run caught it**:
+  `local_store_copy_bad_width()` calls `DBI::dbDisconnect()` itself, so the counter was already
+  1 before the connect. Same mechanism the round was reporting, reproduced inside its own fix
+- 611 passes, 0 lints. All five mutation-checked
