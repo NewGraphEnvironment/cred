@@ -38,11 +38,21 @@ A \code{ragnar} store object, as returned by
 \description{
 Resolves a store by name, using the local copy when its MD5 matches the
 shared manifest and downloading it from \code{source} otherwise. Verification is
-the point: a store built against a different embedding model answers
-differently while looking perfectly healthy, so a silent local rebuild
-produces an artefact that is present but not trustworthy.
+the point: a store that is present is not thereby trustworthy, and a silent
+local rebuild produces an artefact that looks perfectly healthy.
 }
 \details{
+\strong{What the MD5 compare can and cannot see.} It answers "is this the file the
+manifest describes" — a stale copy, a truncated download, a local rebuild
+nobody pushed. It is structurally unable to see a store whose \emph{embedding
+model} has moved underneath it, because that store's bytes are exactly the
+ones the manifest recorded. The manifest carries \code{embedding_model} and
+\code{embedding_size}, and \code{\link[=crd_store_push]{crd_store_push()}} compares them, but no connect-time
+comparison exists yet (NewGraphEnvironment/cred#30). Until it does, a
+model mismatch surfaces downstream as a
+\code{cred_retrieval_fallback_dimension} warning from \code{\link[=crd_search]{crd_search()}} — see
+"Diagnosing a fallback" there.
+
 \code{source} has \strong{no default value}. Configure it with
 \code{options(cred.store_source = )} or the \code{CRED_STORE_SOURCE} environment
 variable, in the shape \verb{s3://<bucket>/<prefix>/}. Pushing a store is out of

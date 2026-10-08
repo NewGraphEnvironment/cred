@@ -68,11 +68,50 @@ Unlike the token-overlap search in \code{\link[=crd_pdf_srch_clm]{crd_pdf_srch_c
 known source against one paraphrase, this searches an entire indexed corpus.
 
 \code{method = "hybrid"} combines semantic (vector) and lexical (BM25) retrieval
-and needs a running Ollama instance to embed the query. When Ollama is
-unreachable the search \strong{falls back to BM25 with a warning} rather than
-failing: lexical retrieval needs no embedding and remains effective for the
-numeric and parameter-level claims this package exists to check.
+and needs a running Ollama instance to embed the query. When semantic
+retrieval fails \strong{for any reason} the search falls back to BM25 with a
+warning rather than failing: lexical retrieval needs no embedding and remains
+effective for the numeric and parameter-level claims this package exists to
+check. The \code{method} column reports \code{"bm25"} when that happens, so a caller
+can always tell the search degraded.
 }
+\section{Diagnosing a fallback}{
+
+The warning is subclassed by what went wrong, so a caller can act on the
+reason rather than grep the message. All inherit \code{cred_retrieval_fallback}:
+
+\describe{
+\item{\code{cred_retrieval_fallback_connection}}{The embedding service could not
+be reached — start Ollama.}
+\item{\code{cred_retrieval_fallback_model}}{HTTP 404 \strong{whose body names a
+model} — the service answered, so it \emph{is} running, and it says it does
+not have that model. The body matters: a 404 is also what a wrong path
+prefix returns, from a server holding every model you asked for.}
+\item{\code{cred_retrieval_fallback_service}}{Any other reply from the service.
+It is running and erroring; the status is all cred knows, so no remedy is
+prescribed. Kept separate from the above precisely because pulling a model
+is unrelated to a 500 or a 503. This also catches an HTTP error that
+arrived with no status class on it, which happens when the error body is
+not JSON — \code{ragnar::embed_ollama()} parses it as JSON inside httr2's own
+error handler, so an HTML 502 from a reverse proxy loses the class.}
+\item{\code{cred_retrieval_fallback_dimension}}{The query embedding is a
+different width than the store's embeddings. A connected store embeds
+queries with the embedder recorded \emph{inside it}, so this is not "you
+queried with a different model" — it is that the model that name resolves
+to on this machine is no longer the model the store was built with.
+\strong{Treat the store as unverified}: a search that did succeed would answer
+differently while looking healthy. Compare what the store records against
+what the service now returns, then re-pull or rebuild with
+\code{\link[=crd_store_build]{crd_store_build()}}. Restarting Ollama cannot help, and neither can
+\code{\link[=crd_store_connect]{crd_store_connect()}}, whose MD5 compare cannot see a model change.}
+\item{\code{cred_retrieval_fallback_unknown}}{Unrecognised. The cause is
+reported verbatim and no remedy is prescribed.}
+}
+
+Each fires once per session per reason and per store, so a machine without
+Ollama does not emit the same four lines on every call.
+}
+
 \examples{
 \dontrun{
 store <- crd_store_connect("vca_refs")

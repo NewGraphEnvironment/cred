@@ -1,3 +1,67 @@
+# cred 0.3.2
+
+`crd_search(method = "hybrid")` caught every semantic-retrieval failure and prescribed one
+remedy: start Ollama. The cause was reported, so the warning was recoverable, but the advice
+was wrong for anything that was not a connection failure — and actively misleading for the
+one case that matters most.
+
+An embedding-width mismatch means the store was built against a different embedding model
+than the one answering queries. That is the "answers differently while looking healthy"
+condition `crd_store_connect()`'s md5 verification exists to catch. Reached through the
+fallback it produced a warning telling you to start a service that was already running, and
+then returned results, with nothing saying the store was suspect.
+
+* The failure is classified by condition **class** wherever one exists, which is stable in a
+  way httr2's wording, curl's wording and the session locale are not. `httr2_failure` is a
+  request that got no answer; `httr2_http` is a service that answered and refused — so it is
+  running, and only the `ollama pull` half of the old advice applies. Both reach
+  `crd_search()` unwrapped. Only the width mismatch needs message matching, and the text it
+  matches is a duckdb binder error, not an Ollama one
+* A width mismatch names the width and model the store itself records, says to treat the store
+  as unverified, and prescribes the comparison that can actually see the condition — what the
+  store records against what the service now returns, then a re-pull or `crd_store_build()`.
+  It deliberately does **not** send you to `crd_store_connect()`: that verification is an md5
+  compare against the manifest, and a store whose embedding model moved underneath it has
+  exactly the bytes the manifest recorded, so the compare is structurally unable to see it.
+  Prescribing it would have been a remedy that cannot detect the condition, which is the
+  defect this release fixes. `?crd_store_connect` no longer claims otherwise, and the missing
+  connect-time check is [#30](https://github.com/NewGraphEnvironment/cred/issues/30)
+* The diagnosis is also stated more narrowly than the issue framed it. A connected store embeds
+  queries with the embedder ragnar unserialises out of the store itself, so a mismatch is not
+  "you queried with a different model" — it is that the model that name resolves to on this
+  machine is no longer the one the store was built with
+* A reply from the service is classified by status **and body**. Only a 404 *whose body names
+  a model* means the model is absent — a 404 is also what a wrong path prefix returns, from a
+  server holding every model you asked for — so `cred_retrieval_fallback_service` carries
+  every other reply and prescribes nothing. An HTTP error that arrives with **no status class
+  on it** lands there too: `ragnar::embed_ollama()` parses the error body as JSON inside
+  httr2's own error handler, so an HTML 502 from a reverse proxy loses the class, and without
+  that route it would have been reported as a possibly-corrupt store and sent the user to
+  re-download it
+* Any model name that reaches a suggested command is checked against Ollama's own grammar
+  first. Both candidates are untrusted: the name in a 404 body is remote text, and so is the
+  one a store records, because stores are downloaded from a shared bucket
+* A remedy names the model that was actually refused — the service names it in its own 404 body
+  — falling back to the one the store records, and only then to the package default. The
+  connection branch no longer hardcodes `nomic-embed-text` either
+* An unrecognised failure reports its cause verbatim and prescribes no remedy beyond confirming
+  the file is the one the manifest describes, which is the one thing md5 *can* answer
+* Warnings are subclassed `cred_retrieval_fallback_<reason>`, all inheriting
+  `cred_retrieval_fallback`, so a caller can act on the reason without grepping a message.
+  `?crd_search` lists them
+* They fire once per session per reason **and** per store. Keyed on the store alone a
+  mismatch met after a connection failure would be swallowed as a repeat, which is the same
+  diagnosis loss arriving by another route
+
+Every failure still falls back to BM25 and the `method` column still reports `"bm25"`, so no
+search that worked before this release behaves differently — only what is said about one that
+degrades. Adds `rlang` to Imports for the frequency guard, and raises the `testthat` floor to
+3.1.8, which the suite already required.
+
+Out of scope, filed as [#30](https://github.com/NewGraphEnvironment/cred/issues/30): the
+build-side probe `.crd_ollama_check()` still conflates starting the server with pulling the
+model, and `method = "vss"` raises its condition unclassified.
+
 # cred 0.3.1
 
 `crd_search()` errored on every store built with ragnar 0.3.0. Hybrid retrieval merges
