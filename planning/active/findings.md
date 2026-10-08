@@ -107,3 +107,4 @@ tests/testthat/test-store-fallback.R:294, :504  two assertions that deliberately
 
 | Error | Resolution |
 |-------|------------|
+| `test-store-fallback.R:650` premise `expect_gt(length(from_msg), 1L)` went red after the Phase 1 refactor | Not a text change — the guard parses the function holding the `identical(reason, ...)` branches, and they moved to `.crd_embed_remedy()`. Retargeted the grep; added an assertion that the wrapper still calls the shared builder, so the retarget cannot hide a future private copy |

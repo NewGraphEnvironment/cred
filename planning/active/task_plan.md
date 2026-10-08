@@ -46,11 +46,14 @@ while keeping its width is invisible to any check here. The docs say so.
 
 Enabling change for 2, 3 and 4, and the fix for "two accounts of one dead port".
 
-- [ ] `.crd_embed_remedy(reason, cond, store = NULL)` carries the per-reason body
-- [ ] `.crd_retrieval_fallback_msg()` becomes `head + remedy`, keeping its exact current text
-- [ ] `tests/testthat/test-store-fallback.R` stays green **untouched** — any required edit there
-      means the refactor was not pure
-- [ ] `store = NULL` stays safe in the `dimension` branch (`.crd_store_meta_brief(NULL)` is all-`NA`)
+- [x] `.crd_embed_remedy(reason, cond, store = NULL)` carries the per-reason body
+- [x] `.crd_retrieval_fallback_msg()` becomes `head + remedy`, keeping its exact current text
+- [x] `tests/testthat/test-store-fallback.R` stays green — the text is byte-identical across 40
+      reason x cause x store combinations (verified against `HEAD:R/store.R`). The one edit is
+      the structural drift guard at `:634`, which parses the function holding the branches and
+      so had to follow them; it gained an assertion that the wrapper still routes through
+      `.crd_embed_remedy()`
+- [x] `store = NULL` stays safe in the `dimension` branch (`.crd_store_meta_brief(NULL)` is all-`NA`)
 
 ## Phase 2: `.crd_ollama_check()` on the shared remedy
 

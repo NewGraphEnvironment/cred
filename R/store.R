@@ -699,30 +699,34 @@ crd_store_connect <- function(store,
   paste(c(lines[1], paste0("         ", lines[-1])), collapse = "\n")
 }
 
-#' Compose the fallback warning for one failure reason
+#' What to say about one embedding failure, independent of who is asking
 #'
-#' Split from the warning call so the text can be tested without catching a
-#' condition, and so each reason's remedy is visible in one place next to the
-#' others it must not be confused with.
+#' The remedy for a dead port does not depend on whether the caller was
+#' [crd_search()] falling back, [crd_store_build()] refusing to start, or
+#' [crd_store_connect()] unable to probe. Before this was shared,
+#' `.crd_ollama_check()` printed `ollama serve` **and** `ollama pull` for every
+#' error while `crd_search()` separated them — two accounts of the same dead
+#' port, which is the thing #29 set out to remove and #30 finished.
 #'
-#' Every branch reports the underlying condition verbatim. That was the one
-#' thing the pre-#29 message got right, and it is the only thing that can
-#' diagnose a failure cred does not recognise.
+#' Each caller supplies its own opening line and appends this. The reason-to-
+#' remedy mapping lives here once, so the remedies stay visible next to the
+#' others they must not be confused with.
+#'
+#' `store` is genuinely optional: `.crd_ollama_check()` has no store, and
+#' [.crd_store_meta_brief()] returns all-`NA` for `NULL`, which the `dimension`
+#' branch already handles by omitting the "this store holds" line. That branch
+#' is not reachable from a bare `embed_ollama()` probe anyway — the patterns it
+#' matches are duckdb binder errors raised while querying a store — so no
+#' caller without a store can land there in practice.
 #'
 #' @param reason `character(1)` from [.crd_retrieval_failure()].
 #' @param cond the condition that was caught.
 #' @param store the store being searched, used only to report what it records.
-#' @return `character(1)` the warning message.
+#' @return `character(1)` the remedy, with no trailing newline.
 #' @noRd
-.crd_retrieval_fallback_msg <- function(reason, cond, store = NULL) {
-  head <- paste0(
-    "Semantic retrieval failed, so crd_search() fell back to BM25.\n",
-    "  Cause: ", .crd_indent_cause(conditionMessage(cond)), "\n"
-  )
-
+.crd_embed_remedy <- function(reason, cond, store = NULL) {
   if (identical(reason, "connection")) {
     return(paste0(
-      head,
       "  The embedding service did not answer. If it is not running, start it; a\n",
       "  timeout can also mean it is up and loading a model, in which case retry.\n",
       "    ollama serve && ollama pull ", .crd_fallback_model(cond, store)
@@ -731,7 +735,6 @@ crd_store_connect <- function(store,
 
   if (identical(reason, "model")) {
     return(paste0(
-      head,
       "  The embedding service answered and refused the request, so it is running,\n",
       "  and it named the model it does not have:\n",
       "    ollama pull ", .crd_fallback_model(cond, store)
@@ -742,7 +745,6 @@ crd_store_connect <- function(store,
     # Reachable, refusing, and not a missing model. Nothing here identifies a
     # remedy, so none is offered — the status above is the diagnosis.
     return(paste0(
-      head,
       "  The embedding service answered with an error, so it is running and this is\n",
       "  not a connection problem. The status above is all cred knows; pulling a\n",
       "  model or restarting the server may be unrelated to it."
@@ -771,7 +773,6 @@ crd_store_connect <- function(store,
              " embeddings and records model ", model_part, ".\n")
     }
     return(paste0(
-      head,
       # The mechanism, stated as narrowly as it can be established. A connected
       # store embeds queries with its OWN recorded embedder -- ragnar
       # unserialises it out of the store -- so this is not "you queried with a
@@ -800,10 +801,33 @@ crd_store_connect <- function(store,
   }
 
   paste0(
-    head,
     "  cred does not recognise this failure, so no remedy is prescribed. Semantic\n",
     "  retrieval is unavailable and the store itself may be at fault - confirm it is\n",
     "  the file the manifest describes with crd_store_connect()."
+  )
+}
+
+#' Compose the fallback warning for one failure reason
+#'
+#' Split from the warning call so the text can be tested without catching a
+#' condition. The per-reason body is [.crd_embed_remedy()], shared with the two
+#' other callers that have to say something about an embedding failure; only
+#' the opening two lines are specific to a `crd_search()` fallback.
+#'
+#' Every branch reports the underlying condition verbatim. That was the one
+#' thing the pre-#29 message got right, and it is the only thing that can
+#' diagnose a failure cred does not recognise.
+#'
+#' @param reason `character(1)` from [.crd_retrieval_failure()].
+#' @param cond the condition that was caught.
+#' @param store the store being searched, used only to report what it records.
+#' @return `character(1)` the warning message.
+#' @noRd
+.crd_retrieval_fallback_msg <- function(reason, cond, store = NULL) {
+  paste0(
+    "Semantic retrieval failed, so crd_search() fell back to BM25.\n",
+    "  Cause: ", .crd_indent_cause(conditionMessage(cond)), "\n",
+    .crd_embed_remedy(reason, cond, store = store)
   )
 }
 

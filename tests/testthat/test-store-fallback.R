@@ -631,11 +631,23 @@ test_that("the classifier, the message builder and the test helper agree on the 
     gsub('.*return\\("([a-z]+)"\\).*', "\\1", grep('return\\("', cls, value = TRUE))
   ))
 
-  msg <- deparse(.crd_retrieval_fallback_msg)
+  # Parse the function that HOLDS the branches, which is the remedy builder --
+  # #30 moved them out of `.crd_retrieval_fallback_msg()` so that
+  # `.crd_ollama_check()` and `crd_search(method = "vss")` could say the same
+  # thing about the same failure. Pointed at the wrapper instead, this grep
+  # matches nothing and `from_msg` is empty, which is what the premise
+  # assertion below exists to catch.
+  msg <- deparse(.crd_embed_remedy)
   from_msg <- sort(unique(
     gsub('.*identical\\(reason, "([a-z]+)"\\).*', "\\1",
          grep('identical\\(reason, "', msg, value = TRUE))
   ))
+
+  # ...and that the wrapper still routes through it. Retargeting the grep above
+  # would otherwise keep this test green while the fallback message grew its own
+  # private copy of the branches -- the exact drift the whole block is for.
+  expect_match(paste(deparse(.crd_retrieval_fallback_msg), collapse = " "),
+               ".crd_embed_remedy", fixed = TRUE)
 
   # The classifier's last reason is a bare literal rather than a return() call,
   # so derive it as such instead of assuming it — this assertion is what makes
