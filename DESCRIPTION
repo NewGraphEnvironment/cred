@@ -1,6 +1,6 @@
 Package: cred
 Title: Citation Review and Evidence Documentation
-Version: 0.3.2
+Version: 0.4.0
 Date: 2026-10-08
 Authors@R:
     person("Al", "Irvine", , "al@newgraphenvironment.com", role = c("aut", "cre"),

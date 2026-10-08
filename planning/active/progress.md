@@ -82,3 +82,21 @@
     in Phase 5
 - `devtools::test()`: 587 pass, 0 fail. `lintr::lint_package()`: 0 lints
 - Next: Phase 5 — the corrected sweep, docs, NEWS, version
+
+### Phase 5 — sweep, docs, NEWS, 0.4.0
+
+- `?crd_store_connect` rewritten: two layers rather than one, which sees what, what *neither*
+  sees (a weights change at constant width), and that the probe executes code recorded in the
+  store — ragnar pins the model into `embed_func` but not `base_url`, so an Ollama store's probe
+  never leaves the machine while an `embed_openai()` store bills a request on every connect
+- `@param verify` corrected: it stops contacting `source`, and no longer claims to be "fully
+  offline", which `check_model` made false
+- Sweep covered 8 sites, including the two the plan missed. The plan's instruction to reverse
+  two assertions was itself wrong and was not followed — reasoning recorded in the test comments
+- `NEWS.md` 0.3.2's internal contradiction corrected in place with a note; version 0.4.0
+- `devtools::test()` 587 pass / 0 fail · `lintr` 0 lints · `pkgdown::check_pkgdown()` clean
+- `devtools::check()`: 0 errors, 3 warnings, 4 notes — **identical on a worktree of
+  `origin/main`**, so all pre-existing. Filed as
+  [#32](https://github.com/NewGraphEnvironment/cred/issues/32) rather than fixed here, since the
+  fixes touch `DESCRIPTION` and `R/audit.R` for reasons unrelated to #30. The one new
+  non-ASCII instance this branch added was fixed, so the count is unchanged by it

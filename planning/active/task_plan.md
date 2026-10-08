@@ -92,21 +92,38 @@ Enabling change for 2, 3 and 4, and the fix for "two accounts of one dead port".
 #29's correct statement that connect *cannot* see a model change becomes half-true: still true
 of **md5**, false of connect as a whole. Grep the sentence, not the one instance.
 
-- [ ] `R/store.R:169-170` (`@details`) and `:790-793` (dimension remedy comment)
-- [ ] `R/store.R:905` / `man/crd_search.Rd:106` — the `cred_retrieval_fallback_dimension` entry
-- [ ] `man/crd_store_connect.Rd:50-51`
-- [ ] `CLAUDE.md:202-206`
-- [ ] `tests/testthat/test-store-fallback.R:294, 504` — two `expect_no_match(msg,
-      "crd_store_connect")` assertions deliberately reverse; rewrite the comments to say why
-- [ ] `devtools::document()`, `NEWS.md`, version bump to 0.4.0 as the final commit
-- [ ] CLAUDE.md design-decision bullet
+*The line numbers below are as written at plan time and went stale the moment Phase 1 shifted
+the file. They are left as written; the sweep was done by grepping the sentence, which is the
+rule the phase exists to apply.*
+
+- [x] `R/store.R:169-170` (`@details`) and `:790-793` (dimension remedy comment)
+- [x] `R/store.R:905` / `man/crd_search.Rd:106` — the `cred_retrieval_fallback_dimension` entry
+- [x] `man/crd_store_connect.Rd:50-51`
+- [x] `CLAUDE.md:202-206`
+- [x] `tests/testthat/test-store-fallback.R` — **the plan was wrong here.** The two
+      `expect_no_match(msg, "crd_store_connect")` assertions must NOT reverse: they pair with
+      the "md5 CAN see a stale file" block, and reversing one collapses the pair into two tests
+      asserting the same thing. The prescribed one-liner also gathers exactly the evidence the
+      connect probe gathers, more cheaply, and covers the in-session swap no reconnect can see.
+      Comments rewritten to record the reasoning; assertions and message text untouched
+- [x] Two sites the plan MISSED, both found by the review, both reading as authoritative: the
+      `CLAUDE.md` bullet asserting that md5 is what catches a model change, and
+      `test-store-fallback.R`'s own file header stating the opposite of what the file proves
+- [x] `NEWS.md` 0.3.2 contradicted itself eighteen lines apart — it said md5 verification exists
+      to catch a width mismatch, and then that md5 is structurally unable to see one. Corrected
+      with a note saying so; the rest of 0.3.2 left as history
+- [x] `devtools::check()` measured against a worktree of `origin/main`: identical 3 warnings /
+      4 notes, so all pre-existing. Filed as
+      [#32](https://github.com/NewGraphEnvironment/cred/issues/32)
+- [x] `devtools::document()`, `NEWS.md`, version bump to 0.4.0 as the final commit
+- [x] CLAUDE.md design-decision bullet
 
 ## Validation
 
-- [ ] `devtools::test()` passes
-- [ ] `lintr::lint_package()` is 0 lints
-- [ ] `/code-check` clean
-- [ ] PWF checkboxes match landed work
+- [x] `devtools::test()` passes
+- [x] `lintr::lint_package()` is 0 lints
+- [x] `/code-check` clean
+- [x] PWF checkboxes match landed work
 - [ ] `/planning-archive` on completion
 
 ## Out of scope

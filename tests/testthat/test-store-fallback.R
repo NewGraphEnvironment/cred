@@ -4,8 +4,11 @@
 # start Ollama. That is right for one of the four ways retrieval fails, wrong
 # for the others, and actively misleading for an embedding-dimension mismatch —
 # which means the store was built against a different model than the one
-# answering queries, the exact condition crd_store_connect()'s md5 verification
-# exists to catch.
+# answering queries.
+#
+# That condition is the one crd_store_connect()'s md5 compare CANNOT see: such a
+# store has exactly the bytes the manifest recorded. #30 added the connect-time
+# probe that can. This header said the opposite until then.
 #
 # Each fixture here reaches its branch through the real ragnar_retrieve() call
 # (see helper-store.R), so these are not assertions about a mocked error object.
@@ -276,6 +279,17 @@ test_that("a dimension mismatch prescribes a check that can actually see it", {
   # change, because such a store's bytes are exactly the recorded ones. Sending
   # the user there would be a remedy that cannot detect the condition — which
   # is the defect #29 *is*, reintroduced inside its own fix.
+  #
+  # #30 gave crd_store_connect() a `check_model` probe that CAN see a width
+  # mismatch, and this assertion deliberately did not change. The plan for #30
+  # said it should, and that was wrong: it pairs with the next block, whose
+  # whole discriminating power is the contrast between "md5 can see a stale
+  # file" and "md5 cannot see a model change", and reversing this one collapses
+  # the pair into two tests asserting the same thing. The remedy this message
+  # does prescribe — one ncol(embed_ollama(...)) call — gathers exactly the
+  # evidence the connect probe gathers, for one HTTP request rather than a
+  # reconnect, and covers the in-session embedder swap that no reconnect can
+  # see.
   expect_no_match(msg, "crd_store_connect")
   expect_match(msg, "crd_store_build", fixed = TRUE)
   expect_match(msg, "embed_ollama", fixed = TRUE)
@@ -502,7 +516,11 @@ test_that("crd_search() reports a dimension mismatch as its own reason", {
   )
   expect_s3_class(cnd, "cred_retrieval_fallback_dimension")
   # Not crd_store_connect(): its md5 compare cannot see a model change, so
-  # sending the user there is a remedy that cannot detect the condition.
+  # sending the user there is a remedy that cannot detect the condition. Still
+  # true after #30 added the connect-time probe — reaching this warning means
+  # that probe was skipped or already passed, so a reconnect is either
+  # unavailable or looking at a mismatch that arose after it. See the fuller
+  # reasoning on the sibling assertion in the message-text block above.
   expect_no_match(conditionMessage(cnd), "crd_store_connect")
   expect_match(conditionMessage(cnd), "crd_store_build", fixed = TRUE)
   expect_no_match(conditionMessage(cnd), "ollama serve")

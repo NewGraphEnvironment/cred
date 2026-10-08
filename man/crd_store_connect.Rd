@@ -10,7 +10,8 @@ crd_store_connect(
   dir = "data/rag",
   profile = Sys.getenv("AWS_PROFILE"),
   read_only = TRUE,
-  verify = TRUE
+  verify = TRUE,
+  check_model = TRUE
 )
 }
 \arguments{
@@ -29,7 +30,16 @@ Default \code{"data/rag"}. Ignored when \code{store} is itself a path.}
 
 \item{verify}{\code{logical(1)} check the local MD5 against the manifest.
 Default \code{TRUE}. \code{FALSE} opens a local store without contacting \code{source} —
-the only supported way to work fully offline.}
+the only supported way to work without the bucket. It does \strong{not} by
+itself make the call fully offline: \code{check_model} still probes the
+embedding service, which for an Ollama-built store is localhost. Pass
+\code{check_model = FALSE} as well for a call that touches nothing.}
+
+\item{check_model}{\code{logical(1)} compare the store's embeddings against what
+its recorded embedder now returns, and its model label against the
+manifest. Default \code{TRUE}. A confirmed width mismatch is an \strong{error}; pass
+\code{FALSE} to open such a store anyway, which is a reasonable thing to want —
+BM25 retrieval needs no embedding and is unaffected by the mismatch.}
 }
 \value{
 A \code{ragnar} store object, as returned by
@@ -42,16 +52,41 @@ the point: a store that is present is not thereby trustworthy, and a silent
 local rebuild produces an artefact that looks perfectly healthy.
 }
 \details{
-\strong{What the MD5 compare can and cannot see.} It answers "is this the file the
-manifest describes" — a stale copy, a truncated download, a local rebuild
-nobody pushed. It is structurally unable to see a store whose \emph{embedding
-model} has moved underneath it, because that store's bytes are exactly the
-ones the manifest recorded. The manifest carries \code{embedding_model} and
-\code{embedding_size}, and \code{\link[=crd_store_push]{crd_store_push()}} compares them, but no connect-time
-comparison exists yet (NewGraphEnvironment/cred#30). Until it does, a
-model mismatch surfaces downstream as a
-\code{cred_retrieval_fallback_dimension} warning from \code{\link[=crd_search]{crd_search()}} — see
-"Diagnosing a fallback" there.
+\strong{Two independent checks, because one cannot do both jobs.}
+
+The \strong{MD5 compare} answers "is this the file the manifest describes" — a
+stale copy, a truncated download, a local rebuild nobody pushed. It is
+structurally unable to see a store whose \emph{embedding model} has moved
+underneath it, because that store's bytes are exactly the ones the manifest
+recorded.
+
+The \strong{embedding check} (\code{check_model}) is what sees that. It runs the
+store's own recorded embedder — ragnar unserialises it out of the store — and
+compares the width it returns against the width the store holds. A
+disagreement is an error: semantic retrieval against such a store would
+answer differently while looking healthy. It also compares the manifest's
+\code{embedding_model} label against the store's own record, which is a warning,
+the label being the weaker of the two.
+
+\strong{What neither sees} is a model whose weights changed while its dimension
+stayed the same. No check in this package can detect that.
+
+A mismatch that arises \emph{after} a successful connect — the model re-pulled
+mid-session, or \verb{@embed} replaced on the store object — is outside both, and
+still surfaces downstream as a \code{cred_retrieval_fallback_dimension} warning
+from \code{\link[=crd_search]{crd_search()}}; see "Diagnosing a fallback" there. So does any mismatch
+on a store opened with \code{check_model = FALSE}, or one whose probe could not
+run. The two layers are complementary, not redundant
+(NewGraphEnvironment/cred#30).
+
+\strong{The embedding check executes code recorded in the store.} \code{embed_func} is
+deserialised and called. On the \code{verify = TRUE} paths the manifest's MD5
+vouches for those bytes; under \code{verify = FALSE} nothing does. And ragnar
+pins only the \emph{model} into that function, not \code{base_url}, so for a store
+built against Ollama the probe never leaves the machine — while a store built
+with \code{\link[ragnar:embed_ollama]{ragnar::embed_openai()}} or an explicit remote \code{base_url} makes a
+billed third-party request on every connect. \code{check_model = FALSE} is the
+opt-out.
 
 \code{source} has \strong{no default value}. Configure it with
 \code{options(cred.store_source = )} or the \code{CRED_STORE_SOURCE} environment

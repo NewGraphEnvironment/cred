@@ -1,3 +1,55 @@
+# cred 0.4.0
+
+`crd_store_connect()` verified a store by comparing its md5 against the shared manifest, and
+that compare cannot see the failure it was being credited with. It answers *"is this the file
+the manifest describes"* — stale, truncated, locally rebuilt. A store whose embedding model
+moved underneath it has **exactly** the bytes the manifest recorded, so the compare is
+structurally unable to see it, and a search against such a store answers differently while
+looking healthy.
+
+* **A connect-time embedding check**, `check_model`, on by default. The load-bearing half is a
+  probe, and it runs the store's **own recorded embedder** — ragnar unserialises `embed_func`
+  out of the store — so this is not a model name rebuilt from a string, it is the function that
+  will actually embed queries. Its width against the store's own `embedding_size` is exactly
+  the condition that otherwise surfaced downstream as a `cred_retrieval_fallback_dimension`
+  warning from `crd_search()`
+* **Severity tracks the evidence.** A confirmed width difference is an error, with
+  `check_model = FALSE` as the escape and a message saying BM25 is unaffected — lexical
+  retrieval needs no embedding, so refusing to hand back such a store without naming that would
+  remove a working path. A manifest `embedding_model` label that disagrees with the store's own
+  record is a warning: that label comes from whoever pushed the store, and `crd_store_push()`
+  falls back to `CRED_EMBED_MODEL` when it cannot read the store. A probe that could not run is
+  not evidence about the store at all, and is reported once per session per reason and store. No
+  recorded embedder, or no readable size, is skipped in silence
+* **The two checks are layers, not one replacing the other**, and `?crd_store_connect` now says
+  which sees what. Width is the detectable part: a model whose weights changed while its
+  dimension stayed the same is invisible to every check in this package, and the docs say so
+  rather than implying completeness. A mismatch arising *after* a successful connect — the model
+  re-pulled mid-session, `@embed` replaced on the object — is outside both and still surfaces
+  through `crd_search()`
+* **The manifest's `embedding_size` is deliberately not compared.** `crd_store_push()` reads it
+  from the store itself, so on every `verify = TRUE` path a matching md5 already implies a
+  matching size. The issue proposed comparing both; only the model label adds anything
+* **The probe executes code recorded in the store**, which is new behaviour for a function that
+  previously only unserialised. ragnar pins the *model* into that function but not `base_url`,
+  so for an Ollama-built store the probe never leaves the machine — while a store built with
+  `embed_openai()` or an explicit remote URL makes a billed third-party request on every
+  connect. Documented, and `check_model = FALSE` opts out
+* **One remedy mapping, shared by every caller.** `.crd_ollama_check()` printed `ollama serve`
+  **and** `ollama pull` for every error, so a 500 from a running server was reported as
+  something starting it would fix — and `crd_search()` and `crd_store_build()` gave different
+  accounts of the same dead port. Both now compose the classifier #29 built. The build-time path
+  also keeps the condition rather than reducing it to `conditionMessage()` at the catch, which
+  had discarded the class the classifier dispatches on, and names the model the caller asked for
+  instead of falling through to a hardcoded default
+* **`crd_search(method = "vss")` classifies instead of raising bare.** A width-mismatched store
+  answered with `Binder Error: array_cosine_distance(...)` and no diagnosis. Erroring is still
+  correct — vss is semantic retrieval and nothing else, so there is nothing to fall back to —
+  but the error now carries the shared remedy, a `cred_retrieval_error_<reason>` subclass
+  matching the fallback warning's scheme, and the original condition as an rlang `parent`
+* `testthat` moves to `>= 3.2.0` for `local_mocked_bindings(.package = )`, which errors rather
+  than skipping on an older install
+
 # cred 0.3.2
 
 `crd_search(method = "hybrid")` caught every semantic-retrieval failure and prescribed one
@@ -6,10 +58,15 @@ was wrong for anything that was not a connection failure — and actively mislea
 one case that matters most.
 
 An embedding-width mismatch means the store was built against a different embedding model
-than the one answering queries. That is the "answers differently while looking healthy"
-condition `crd_store_connect()`'s md5 verification exists to catch. Reached through the
-fallback it produced a warning telling you to start a service that was already running, and
-then returned results, with nothing saying the store was suspect.
+than the one answering queries — the "answers differently while looking healthy" condition
+verification exists to catch, and the one `crd_store_connect()` could not then see (the
+compare was md5, and such a store has exactly the bytes the manifest recorded; the
+connect-time check arrived in 0.4.0). Reached through the fallback it produced a warning
+telling you to start a service that was already running, and then returned results, with
+nothing saying the store was suspect.
+
+*This paragraph originally said the md5 verification existed to catch that condition, which
+contradicted the bullet eighteen lines below it in the same release note. Corrected in 0.4.0.*
 
 * The failure is classified by condition **class** wherever one exists, which is stable in a
   way httr2's wording, curl's wording and the session locale are not. `httr2_failure` is a
