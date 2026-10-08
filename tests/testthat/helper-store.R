@@ -311,14 +311,27 @@ local_fallback_warnings_always <- function(env = parent.frame()) {
 # `rlang::reset_warning_verbosity()` takes a required id -- it calls
 # `check_string(id, allow_empty = FALSE)` -- so there is no "reset everything"
 # call and the ids have to be derived.
+# Every frequency id cred emits for one store, derived from the three id
+# functions rather than restated here.
+#
+# #30 added two more schemes -- the connect-time probe warning and the manifest
+# label warning -- and this helper covered only the search fallback, so a block
+# re-arming "the warnings for this store" re-armed a third of them. Restating a
+# reference instead of deriving it is the mechanism every defect in #30's review
+# turned out to be; this is that mechanism in the test helper.
+.crd_all_warning_ids <- function(store) {
+  c(vapply(.crd_fallback_reasons(),
+           function(r) .crd_retrieval_fallback_id(r, store), character(1)),
+    vapply(.crd_fallback_reasons(),
+           function(r) .crd_store_probe_id(r, store), character(1)),
+    .crd_store_label_id(store))
+}
+
 local_reset_fallback_warnings <- function(store, env = parent.frame()) {
-  for (r in .crd_fallback_reasons()) {
-    rlang::reset_warning_verbosity(.crd_retrieval_fallback_id(r, store))
-  }
+  ids <- .crd_all_warning_ids(store)
+  for (id in ids) rlang::reset_warning_verbosity(id)
   withr::defer({
-    for (r in .crd_fallback_reasons()) {
-      rlang::reset_warning_verbosity(.crd_retrieval_fallback_id(r, store))
-    }
+    for (id in ids) rlang::reset_warning_verbosity(id)
   }, envir = env)
 }
 

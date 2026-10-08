@@ -172,6 +172,43 @@ calls `DBI::dbDisconnect()` on its own, so a counter armed before the fixture wa
 however the cleanup behaved. M14 is only meaningful as the *pair* — the derived roster goes red
 on a 4th context, the roster round 1 hardcoded stays green.
 
+Seven more after round 3, which computed the candidate set rather than recalling it — 38 code
+decision points, 6 reachable with no mutation:
+
+| mutation | failures |
+|---|---|
+| N1 delete the `connect`-context fallthrough | 0 → **2** |
+| N2a drop `entry` forwarding on the verified sites | 0 → **2** |
+| N2b drop `check_model` forwarding on the verified sites | 0 → **1** |
+| N3 restore the vss self-contradiction | 0 → **1** |
+| N5 drop `.crd_have(entry$embedding_model)` | 0 → **1** |
+| N6 reset helper bypasses the derived id set | 0 → **1** |
+| N7 `.crd_all_warning_ids()` drops two of three schemes | 0 → **2** |
+
+N6 took two attempts for the reason the whole review keeps finding: the first assertion pinned
+`.crd_all_warning_ids()`, which the mutation did not touch — it rebuilt a narrower list inside
+the helper. Pinning the *wrapper's* route through the derived set is what closes it, the same
+shape as Phase 1's assertion that `.crd_retrieval_fallback_msg()` still calls
+`.crd_embed_remedy()`.
+
+## The mechanism, as round 3 named it
+
+Every defect across the three rounds is **a check whose reference was restated rather than
+derived, over one axis of a fact that has more than one axis** — and the restated axis happened
+to agree with the code when it was typed:
+
+| restated | actual axis |
+|---|---|
+| `reason` | `reason × context` |
+| the `context` roster as a literal | `match.arg()`'s list |
+| `crd_store_connect()`'s *return sites* | the *arguments* those sites forward |
+| one `.frequency_id` scheme | three |
+
+Plus the degenerate form needing no second axis: an assertion of **absence**, where rlang's
+once-per-session muffling supplies the absence for free. Second half of the mechanism: each
+round's fix was written from reading rather than from a mutation, which is why two of round 3's
+findings sat inside earlier rounds' fixes — and why mine did too.
+
 M2, M4 and M5 first reported **0** — three broken probes, not three test gaps. M2 and M5 used
 `perl -0`, where `^` anchors to the start of the *file*, and bash expanded the `$` in
 `meta$size`; redone in Python they fire. M4 was a real gap: the collision test rebuilt the

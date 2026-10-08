@@ -142,3 +142,30 @@
   `local_store_copy_bad_width()` calls `DBI::dbDisconnect()` itself, so the counter was already
   1 before the connect. Same mechanism the round was reporting, reproduced inside its own fix
 - 611 passes, 0 lints. All five mutation-checked
+
+### /code-check round 3 — the mechanism, computed
+
+Round 3 was asked for the mechanism rather than more instances, and it enumerated instead of
+recalling: **38 code decision points** (parsed from the changed functions), of which 24 were
+covered by a measured mutation, 3 behaviour-preserving, 5 unreachable and **6 reachable with no
+mutation**; and **47 absence/warning assertions** in the changed tests, 18 exposed to rlang's
+once-per-session state, all of which it checked individually and found isolated. Verdict:
+**not fully covered**, computed rather than asserted.
+
+Five findings, all fixed and all mutation-checked (N1-N7 above):
+
+- `.crd_embed_remedy()`'s `connect` fallthrough was untested, and the mutant has
+  `crd_store_connect()` telling the reader to run `crd_store_connect()` — round 1's finding one
+  branch over. The `build` twin was covered; the asymmetry is what gave it away
+- **Nothing in the suite exercised `verify = TRUE`** — all nine `crd_store_connect()` calls in
+  `tests/` passed `verify = FALSE`. So neither verified site's `entry` nor its `check_model` was
+  constrained, and **the label tier is reachable in production by no other route**, since
+  `verify = FALSE` passes `entry = NULL` by design. Covered now by mocking the one function on
+  that path that touches the network, with the md5 taken from the fixture at test time
+- `.crd_have(entry$embedding_model)` — the fourth conjunct of the label tier, uncovered and
+  production-reachable via an entry `.crd_manifest_merge()` passes through verbatim
+- Round 2's vss-contradiction fix was itself unpinned; restoring the wording was silent
+- `local_reset_fallback_warnings()` re-armed one of three id schemes while reading as "the
+  warnings for this store". The label id was inline, so the helper had to restate it — extracted
+  to `.crd_store_label_id()` and the reset set now derived
+- 628 passes, 0 lints

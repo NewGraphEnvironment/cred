@@ -199,6 +199,23 @@
   if (!.crd_have(loc)) "unknown-store" else loc
 }
 
+#' Frequency key for the manifest-label disagreement warning
+#'
+#' The third of three schemes, and a function for the same reason
+#' [.crd_store_probe_id()] is one: built inline, the only way for a test helper
+#' to re-arm it was to restate it, and a restated reference is what every defect
+#' in this change has been.
+#'
+#' Keyed on the store alone, with no reason axis: there is exactly one label
+#' condition per store, so there is nothing for a reason to distinguish.
+#'
+#' @param store the store being checked, or `NULL`.
+#' @return `character(1)` id for `rlang::warn(.frequency_id = )`.
+#' @noRd
+.crd_store_label_id <- function(store = NULL) {
+  paste0("cred_store_model_label_", .crd_store_loc(store))
+}
+
 #' Frequency key for the connect-time "could not check" warning
 #'
 #' A **separate** scheme from [.crd_retrieval_fallback_id()], and that is the
@@ -286,7 +303,7 @@
       ),
       class = c("cred_store_model_label_mismatch", "cred_store_embedding_check"),
       .frequency = "once",
-      .frequency_id = paste0("cred_store_model_label_", .crd_store_loc(store))
+      .frequency_id = .crd_store_label_id(store)
     )
   }
 

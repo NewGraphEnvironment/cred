@@ -477,10 +477,10 @@ test_that("a connect-time probe warning does not silence the later search warnin
   #
   # The frequency guard must be ON for this, so the ids are re-armed either side
   # rather than switched off.
-  ids <- c(.crd_store_probe_id("connection", store),
-           .crd_retrieval_fallback_id("connection", store))
-  for (id in ids) rlang::reset_warning_verbosity(id)
-  withr::defer(for (id in ids) rlang::reset_warning_verbosity(id))
+  # Via the helper, which derives every id from the three id functions. This
+  # block used to hand-roll two of the three, which is how the helper's own gap
+  # stayed invisible.
+  local_reset_fallback_warnings(store)
 
   expect_warning(.crd_check_store_embedding(store, name = "fixture"),
                  class = "cred_store_probe_failed_connection")
@@ -583,4 +583,155 @@ test_that("a store recording no model name does not warn about the manifest labe
     entry = list(embedding_model = "nomic-embed-text (ollama)", embedding_size = 16L),
     name = "fixture"
   )))
+})
+
+# --- Round 3: the decision points the enumeration found uncovered ----------
+
+test_that("the connect-time unknown remedy does not send the user back to connect", {
+  # The complement of the build-context test above, and the branch round 3's
+  # enumeration found uncovered: deleting the `connect` fallthrough was silent,
+  # and the mutant has crd_store_connect() telling the reader to run
+  # crd_store_connect() and calling the store a suspect for a probe failure the
+  # same message has just said is not evidence about the store.
+  #
+  # The derived product guard in test-store-fallback.R cannot see this: it uses
+  # each context's fallthrough only as a reference value, and never asserts
+  # anything about the reference itself.
+  msg <- .crd_embed_remedy("unknown", simpleError("odd"), context = "connect")
+
+  expect_no_match(msg, "crd_store_connect", fixed = TRUE)
+  expect_match(msg, "BM25 needs no embedding", fixed = TRUE)
+})
+
+test_that("a vss error for an unrecognised reason does not contradict itself", {
+  store <- local_ragnar_store()
+  broken <- store
+  broken@embed <- function(x) stop("Catalog Error: Index 'vss_idx' does not exist")
+
+  cnd <- tryCatch(crd_search(broken, .crd_test_query(), top_k = 3L, method = "vss"),
+                  error = function(e) e)
+  msg <- conditionMessage(cnd)
+
+  expect_s3_class(cnd, "cred_retrieval_error_unknown")
+  # The `unknown` remedy says the store itself may be at fault; the closing line
+  # used to say "Both other methods still work on this store" two lines later.
+  # Round 2 fixed the wording and nothing pinned it, so round 3 restored the
+  # contradiction and the suite stayed green.
+  expect_no_match(msg, "still work on this store", fixed = TRUE)
+  expect_match(msg, "needs no", fixed = TRUE)
+})
+
+test_that("a manifest entry carrying no model label does not warn", {
+  store <- local_ragnar_store_named()
+  local_fallback_warnings_always()
+
+  # `.crd_manifest_merge()` passes untouched entries through verbatim, including
+  # shapes this version does not recognise, so an entry with no
+  # `embedding_model` key is production-reachable. Without the
+  # `.crd_have(entry$embedding_model)` conjunct, `.crd_model_norm(NULL)` is
+  # character(0), identical() is FALSE, and every such connect warns with an
+  # empty "the manifest says:" line.
+  expect_silent(expect_null(.crd_check_store_embedding(
+    store,
+    entry = list(documents = 4L, chunks = 40L, md5 = "abc", embedding_size = 16L),
+    name = "named"
+  )))
+})
+
+# The verified path. Nothing in the suite drove `verify = TRUE`, so neither the
+# `entry` nor the `check_model` that the two verified return sites forward was
+# constrained — and the label tier is reachable in production by NO OTHER ROUTE,
+# since `verify = FALSE` passes `entry = NULL` by design.
+#
+# Reached entirely offline: `.crd_manifest_read()` is the only function on that
+# path that touches the network, and the md5 is taken from the fixture at test
+# time rather than hardcoded, so the "md5 matches" branch is entered for the
+# right reason.
+local_mocked_manifest_for <- function(path, model = "nomic-embed-text (ollama)",
+                                     size = 8L, env = parent.frame()) {
+  nm <- sub("[.]duckdb$", "", basename(path))
+  md5 <- tolower(unname(tools::md5sum(path)))
+  testthat::local_mocked_bindings(
+    .crd_manifest_read = function(source, profile = "") {
+      list(stores = stats::setNames(
+        list(list(documents = 12L, chunks = 99L, md5 = md5,
+                  embedding_size = size, embedding_model = model)),
+        nm
+      ))
+    },
+    .env = env
+  )
+  withr::local_options(cred.store_source = "s3://bucket/prefix/", .local_envir = env)
+  invisible(nm)
+}
+
+test_that("the verified path forwards the manifest entry, so the label tier can fire", {
+  skip_if_not_installed("ragnar")
+  skip_if_not_installed("duckdb")
+  src <- as.character(local_ragnar_store_named()@location)
+  copy <- tempfile(fileext = ".duckdb")
+  expect_true(file.copy(src, copy))
+  on.exit(unlink(copy), add = TRUE)
+
+  # Size 16 matches the store, so the width tier stays quiet and the label tier
+  # is the only thing that can speak. The store records "mxbai-embed-large".
+  local_mocked_manifest_for(copy, model = "nomic-embed-text (ollama)", size = 16L)
+  local_fallback_warnings_always()
+
+  cnd <- NULL
+  out <- withCallingHandlers(
+    suppressMessages(crd_store_connect(copy)),
+    cred_store_model_label_mismatch = function(w) {
+      cnd <<- w
+      invokeRestart("muffleWarning")
+    }
+  )
+  expect_s3_class(cnd, "cred_store_model_label_mismatch")
+  expect_match(conditionMessage(cnd), "mxbai-embed-large", fixed = TRUE)
+  try(DBI::dbDisconnect(out@con, shutdown = TRUE), silent = TRUE)
+})
+
+test_that("the verified path honours check_model = FALSE", {
+  skip_if_not_installed("ragnar")
+  skip_if_not_installed("duckdb")
+  copy <- local_store_copy_bad_width()
+  local_mocked_manifest_for(copy)
+
+  # The documented escape, on the path a bucket-configured user actually takes.
+  # Without `check_model` forwarded, this aborts cred_store_embedding_mismatch.
+  out <- suppressMessages(crd_store_connect(copy, check_model = FALSE))
+  expect_true(DBI::dbIsValid(out@con))
+  try(DBI::dbDisconnect(out@con, shutdown = TRUE), silent = TRUE)
+
+  # And with it on, the same path refuses — so the test above is not passing
+  # because the check never ran on this route.
+  expect_error(suppressMessages(crd_store_connect(copy)),
+               class = "cred_store_embedding_mismatch")
+})
+
+test_that("the warning-reset helper covers every frequency scheme cred emits", {
+  store <- local_ragnar_store()
+  ids <- .crd_all_warning_ids(store)
+
+  # Derived, not counted: the three id functions are the source of truth, and
+  # the helper used to re-arm one of them while reading as "the warnings for
+  # this store". Latent when round 3 found it — no test depended on the other
+  # two being re-armed — so the contract is pinned here rather than left to the
+  # next block that happens to need it.
+  schemes <- list(.crd_retrieval_fallback_id("connection", store),
+                  .crd_store_probe_id("connection", store),
+                  .crd_store_label_id(store))
+  for (id in schemes) expect_true(id %in% ids, info = id)
+
+  # And each scheme is distinct, so "covers all three" is not three names for
+  # one id.
+  expect_length(unique(unlist(schemes)), 3L)
+
+  # ...and that the reset helper routes through it. Pinning only
+  # .crd_all_warning_ids() leaves the helper free to rebuild its own narrower
+  # list, which is exactly the bypass this test exists to prevent — measured:
+  # with this assertion absent, reverting the helper to the single-scheme loop
+  # left the suite green.
+  expect_match(paste(deparse(local_reset_fallback_warnings), collapse = " "),
+               ".crd_all_warning_ids", fixed = TRUE)
 })
