@@ -122,3 +122,105 @@ local_ragnar_store <- function() {
 # because it is a floor: if the premise assertion in test-store-search.R ever
 # goes red, raising this is papering over an upstream change, not a fix.
 .crd_test_top_k <- function() 10L
+
+# --- Failure-shape fixtures for #29 ---------------------------------------
+#
+# `crd_search(method = "hybrid")` falls back to BM25 when semantic retrieval
+# fails, and the point of #29 is that the four ways it can fail need four
+# different things said about them. Each fixture below reaches one of those
+# ways through the REAL `ragnar_retrieve()` call — no mocked bindings, no
+# hand-built conditions — by replacing the store's `embed` function.
+#
+# Three facts make this work, all measured (see planning findings for #29):
+#
+# 1. `ragnar_store_connect()` returns an S7 object whose `embed` property is
+#    settable, and setting it on a copy does NOT reach the original. The copy
+#    shares the same duckdb connection object, so the fixture costs nothing and
+#    cannot corrupt the cached store other tests retrieve from.
+#
+# 2. The condition raised by `embed` propagates out of `ragnar_retrieve()` with
+#    its class intact — ragnar does not catch and re-wrap it. That is what lets
+#    the classifier dispatch on `httr2_failure` rather than on message text.
+#
+# 3. The `baseenv()` constraint documented at the top of this file does NOT
+#    apply here. It binds `embed` functions passed to `ragnar_store_create()`,
+#    which ragnar serialises into the store; an `embed` assigned onto an
+#    already-connected store lives only in this session.
+#
+# `reason` names the branch the fixture is meant to reach, and the premise test
+# in test-store-fallback.R asserts that it actually reaches it. If ragnar or
+# httr2 changes shape, that test fails naming the cause rather than letting a
+# behaviour test pass for the wrong reason.
+local_ragnar_store_failing <- function(reason = c("connection", "model",
+                                                  "dimension", "unknown")) {
+  reason <- match.arg(reason)
+  store <- local_ragnar_store()
+
+  broken <- switch(
+    reason,
+    # Loopback port 1: refused immediately by the kernel. This is not a network
+    # test — nothing leaves the machine and there is no timeout to wait out.
+    connection = ragnar::embed_ollama(model = "nomic-embed-text",
+                                      base_url = "http://127.0.0.1:1/"),
+    # The one shape that CANNOT be reached without a running Ollama: the server
+    # has to answer in order to answer 404. Its test skips accordingly.
+    model = ragnar::embed_ollama(model = "cred-no-such-model-29"),
+    # A different width than the store was built with, which is what a store
+    # built against one embedding model and queried through another amounts to.
+    # duckdb rejects it in the binder, as a plain error with no useful class.
+    dimension = .crd_test_embed_narrow,
+    # Stands in for everything else: a corrupt index, a duckdb catalog problem,
+    # a provider raising something unforeseen.
+    unknown = function(x) stop("Catalog Error: Index 'vss_idx' does not exist")
+  )
+
+  store@embed <- broken
+  store
+}
+
+# Half the width of `.crd_test_embed`, and otherwise identical. The store is
+# built at 16; querying it at 8 is the dimension mismatch.
+#
+# The mismatch has to be induced on an already-built store, not by an embedder
+# whose width varies with its input: `ragnar_store_create()` fixes the embedding
+# column at `ncol(embed("foo"))`, so a varying embedder fails at INSERT with a
+# cast error instead, which is a different condition in a different place.
+.crd_test_embed_narrow <- function(x) {
+  dim_n <- 8L
+  t(vapply(x, function(s) {
+    v <- numeric(dim_n)
+    for (cp in utf8ToInt(tolower(as.character(s)))) {
+      v[(cp %% dim_n) + 1L] <- v[(cp %% dim_n) + 1L] + 1
+    }
+    v <- v + 1e-6
+    v / sqrt(sum(v^2))
+  }, numeric(dim_n)))
+}
+
+# Is a local Ollama answering? Only the "model" fixture needs one.
+#
+# `skip_on_cran()` would be wrong here and `skip_if_offline()` insufficient:
+# the first does not skip under `devtools::test()` or on GitHub Actions, and the
+# second reports whether the network is up, not whether this service is.
+.crd_ollama_reachable <- function(base_url = "http://127.0.0.1:11434") {
+  isTRUE(tryCatch({
+    con <- url(file.path(base_url, "api", "tags"), open = "rb")
+    on.exit(close(con), add = TRUE)
+    length(readBin(con, "raw", 1L)) > 0L
+  }, error = function(e) FALSE, warning = function(w) FALSE))
+}
+
+# Re-arm a once-per-session warning so each test block starts from the same
+# state. `rlang::warn(.frequency = "once")` is silent on every call after the
+# first for a given id, which would make a later block's `expect_warning()`
+# fail for a reason that has nothing to do with the code under test.
+local_reset_fallback_warnings <- function(store, env = parent.frame()) {
+  for (r in c("connection", "model", "dimension", "unknown")) {
+    rlang::reset_warning_verbosity(.crd_retrieval_fallback_id(r, store))
+  }
+  withr::defer({
+    for (r in c("connection", "model", "dimension", "unknown")) {
+      rlang::reset_warning_verbosity(.crd_retrieval_fallback_id(r, store))
+    }
+  }, envir = env)
+}

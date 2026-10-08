@@ -48,18 +48,18 @@ error would break searches that work today.
 
 ## Phase 1: Tests first, red
 
-- [ ] Add failure-shape fixtures to `tests/testthat/helper-store.R`: a store copy whose
+- [x] Add failure-shape fixtures to `tests/testthat/helper-store.R`: a store copy whose
       `@embed` is swapped for a dead-port `embed_ollama()`, a different-width embedder, and
       a bare `stop()` — each producing a *real* condition through `ragnar_retrieve()`
-- [ ] `tests/testthat/test-store-search.R`: premise test that each fixture reaches its
+- [x] `tests/testthat/test-store-search.R`: premise test that each fixture reaches its
       intended branch (assert the condition class/message actually raised, so a future
       ragnar change fails here naming the cause)
-- [ ] Classification tests on the new internal, both directions: a connection error **must**
+- [x] Classification tests on the new internal, both directions: a connection error **must**
       get the Ollama message; a mismatch error **must not** mention Ollama and **must**
       name `crd_store_connect()`
-- [ ] Assert on the warning's **condition class**, not interpolated message text
-- [ ] `method` column is `"bm25"` and rows are still returned, on all four branches
-- [ ] Frequency tests: a second identical call is silent; a *different* reason still warns
+- [x] Assert on the warning's **condition class**, not interpolated message text
+- [x] `method` column is `"bm25"` and rows are still returned, on all four branches
+- [x] Frequency tests: a second identical call is silent; a *different* reason still warns
       (ids must not collapse); `rlang::reset_warning_verbosity()` between blocks
 
 ## Phase 2: Classify the failure

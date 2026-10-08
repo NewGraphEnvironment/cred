@@ -10,3 +10,9 @@
 - Created branch `29-crd-search-hybrid-fallback-blames-ollama` off main
 - Scaffolded PWF baseline from issue #29 with approved phases
 - Next: Phase 1 — failure-shape fixtures and red tests
+- Phase 1 — failure-shape fixtures and red tests committed. Measured before writing:
+  setting `@embed` on a copy of the cached fixture store does **not** reach the original
+  (S7 value semantics) even though both share one duckdb connection, so the fixtures are
+  free and cannot corrupt the store the #27 tests retrieve from. Red run:
+  `[ FAIL 18 | WARN 0 | SKIP 0 | PASS 14 ]` — the 14 passing are the premise tests, which
+  is the result wanted: every fixture reaches the branch it claims, and nothing else exists yet
