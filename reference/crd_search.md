@@ -136,9 +136,13 @@ reason rather than grep the message. All inherit
   Compare what the store records against what the service now returns,
   then re-pull or rebuild with
   [`crd_store_build()`](https://newgraphenvironment.github.io/cred/reference/crd_store_build.md).
-  Restarting Ollama cannot help, and neither can
-  [`crd_store_connect()`](https://newgraphenvironment.github.io/cred/reference/crd_store_connect.md),
-  whose MD5 compare cannot see a model change.
+  Restarting Ollama cannot help. Neither does reconnecting:
+  [`crd_store_connect()`](https://newgraphenvironment.github.io/cred/reference/crd_store_connect.md)'s
+  MD5 compare cannot see a model change, and while its `check_model`
+  probe can, reaching this warning means that probe either was not run
+  or already passed — so the mismatch arose after the connect, and the
+  one-line comparison the warning prescribes is both cheaper and the
+  only one that sees it.
 
 - `cred_retrieval_fallback_unknown`:
 

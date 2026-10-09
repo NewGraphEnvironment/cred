@@ -11,7 +11,7 @@ rather than chased back through a file path."><meta property="og:image" content=
 
     <a class="navbar-brand me-2" href="../index.html">cred</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.3.2</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.4.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -157,8 +157,12 @@ to on this machine is no longer the model the store was built with.
 <strong>Treat the store as unverified</strong>: a search that did succeed would answer
 differently while looking healthy. Compare what the store records against
 what the service now returns, then re-pull or rebuild with
-<code><a href="crd_store_build.html">crd_store_build()</a></code>. Restarting Ollama cannot help, and neither can
-<code><a href="crd_store_connect.html">crd_store_connect()</a></code>, whose MD5 compare cannot see a model change.</p></dd>
+<code><a href="crd_store_build.html">crd_store_build()</a></code>. Restarting Ollama cannot help. Neither does
+reconnecting: <code><a href="crd_store_connect.html">crd_store_connect()</a></code>'s MD5 compare cannot see a model
+change, and while its <code>check_model</code> probe can, reaching this warning
+means that probe either was not run or already passed — so the mismatch
+arose after the connect, and the one-line comparison the warning
+prescribes is both cheaper and the only one that sees it.</p></dd>
 
 <dt><code>cred_retrieval_fallback_unknown</code></dt>
 <dd><p>Unrecognised. The cause is

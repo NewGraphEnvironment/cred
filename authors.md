@@ -11,12 +11,12 @@ Source:
 [`DESCRIPTION`](https://github.com/NewGraphEnvironment/cred/blob/main/DESCRIPTION)
 
 Irvine A (2026). *cred: Citation Review and Evidence Documentation*. R
-package version 0.3.2, <https://newgraphenvironment.github.io/cred/>.
+package version 0.4.0, <https://newgraphenvironment.github.io/cred/>.
 
     @Manual{,
       title = {cred: Citation Review and Evidence Documentation},
       author = {Al Irvine},
       year = {2026},
-      note = {R package version 0.3.2},
+      note = {R package version 0.4.0},
       url = {https://newgraphenvironment.github.io/cred/},
     }

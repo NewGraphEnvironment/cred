@@ -14,7 +14,8 @@ crd_store_connect(
   dir = "data/rag",
   profile = Sys.getenv("AWS_PROFILE"),
   read_only = TRUE,
-  verify = TRUE
+  verify = TRUE,
+  check_model = TRUE
 )
 ```
 
@@ -47,7 +48,19 @@ crd_store_connect(
 
   `logical(1)` check the local MD5 against the manifest. Default `TRUE`.
   `FALSE` opens a local store without contacting `source` — the only
-  supported way to work fully offline.
+  supported way to work without the bucket. It does **not** by itself
+  make the call fully offline: `check_model` still probes the embedding
+  service, which for an Ollama-built store is localhost. Pass
+  `check_model = FALSE` as well for a call that touches nothing.
+
+- check_model:
+
+  `logical(1)` compare the store's embeddings against what its recorded
+  embedder now returns, and its model label against the manifest.
+  Default `TRUE`. A confirmed width mismatch is an **error**; pass
+  `FALSE` to open such a store anyway, which is a reasonable thing to
+  want — BM25 retrieval needs no embedding and is unaffected by the
+  mismatch.
 
 ## Value
 
@@ -56,18 +69,44 @@ A `ragnar` store object, as returned by
 
 ## Details
 
-**What the MD5 compare can and cannot see.** It answers "is this the
-file the manifest describes" — a stale copy, a truncated download, a
-local rebuild nobody pushed. It is structurally unable to see a store
-whose *embedding model* has moved underneath it, because that store's
-bytes are exactly the ones the manifest recorded. The manifest carries
-`embedding_model` and `embedding_size`, and
-[`crd_store_push()`](https://newgraphenvironment.github.io/cred/reference/crd_store_push.md)
-compares them, but no connect-time comparison exists yet
-(NewGraphEnvironment/cred#30). Until it does, a model mismatch surfaces
-downstream as a `cred_retrieval_fallback_dimension` warning from
-[`crd_search()`](https://newgraphenvironment.github.io/cred/reference/crd_search.md)
-— see "Diagnosing a fallback" there.
+**Two independent checks, because one cannot do both jobs.**
+
+The **MD5 compare** answers "is this the file the manifest describes" —
+a stale copy, a truncated download, a local rebuild nobody pushed. It is
+structurally unable to see a store whose *embedding model* has moved
+underneath it, because that store's bytes are exactly the ones the
+manifest recorded.
+
+The **embedding check** (`check_model`) is what sees that. It runs the
+store's own recorded embedder — ragnar unserialises it out of the store
+— and compares the width it returns against the width the store holds. A
+disagreement is an error: semantic retrieval against such a store would
+answer differently while looking healthy. It also compares the
+manifest's `embedding_model` label against the store's own record, which
+is a warning, the label being the weaker of the two.
+
+**What neither sees** is a model whose weights changed while its
+dimension stayed the same. No check in this package can detect that.
+
+A mismatch that arises *after* a successful connect — the model
+re-pulled mid-session, or `@embed` replaced on the store object — is
+outside both, and still surfaces downstream as a
+`cred_retrieval_fallback_dimension` warning from
+[`crd_search()`](https://newgraphenvironment.github.io/cred/reference/crd_search.md);
+see "Diagnosing a fallback" there. So does any mismatch on a store
+opened with `check_model = FALSE`, or one whose probe could not run. The
+two layers are complementary, not redundant
+(NewGraphEnvironment/cred#30).
+
+**The embedding check executes code recorded in the store.**
+`embed_func` is deserialised and called. On the `verify = TRUE` paths
+the manifest's MD5 vouches for those bytes; under `verify = FALSE`
+nothing does. And ragnar pins only the *model* into that function, not
+`base_url`, so for a store built against Ollama the probe never leaves
+the machine — while a store built with
+[`ragnar::embed_openai()`](https://ragnar.tidyverse.org/reference/embed_ollama.html)
+or an explicit remote `base_url` makes a billed third-party request on
+every connect. `check_model = FALSE` is the opt-out.
 
 `source` has **no default value**. Configure it with
 `options(cred.store_source = )` or the `CRED_STORE_SOURCE` environment
