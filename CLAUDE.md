@@ -24,7 +24,8 @@ R/
 ├── rmd.R        — crd_aud_write internals: parse @citekey + surrounding sentence
 ├── sentence.R   — sentence extraction helpers
 ├── store.R      — ragnar evidence store: crd_store_connect (md5-verified pull from a
-│                  configured source), crd_search (hybrid/BM25/VSS + citation-key
+│                  configured source, plus a connect-time embedding-width probe),
+│                  crd_search (hybrid/BM25/VSS + citation-key
 │                  resolution), crd_store_build (Zotero collection or keys → DuckDB),
 │                  crd_store_push (merge-on-write manifest + ETag compare-and-swap)
 ├── pdf.R        — PDF text extraction + paragraph splitting (pdftools)
@@ -142,10 +143,14 @@ Shipped: [#22](https://github.com/NewGraphEnvironment/cred/issues/22) ragnar ret
 - **Evidence retrieval is a second, corpus-wide tier** — token overlap answers "does *this*
   source support the claim"; `crd_search()` answers "which of these 25 PDFs does, and where".
   The ragnar stack lives in `Suggests`, guarded at call time, so audit-only users skip DuckDB.
-- **A store is only trustworthy if verified** — a store built against a different embedding model
-  answers differently while looking healthy, so `crd_store_connect()` checks md5 against the
-  shared manifest and `crd_store_build()` always pins the embedding model explicitly
-  (bare `embed_ollama()` silently defaults to `embeddinggemma`).
+- **A store is only trustworthy if verified, and that takes two checks, not one** — a store
+  built against a different embedding model answers differently while looking healthy, which is
+  *not* what an md5 compare sees (see the md5 bullet below). `crd_store_connect()` checks md5
+  against the shared manifest **and** probes the store's own recorded embedder for its width;
+  `crd_store_build()` always pins the embedding model explicitly (bare `embed_ollama()` silently
+  defaults to `embeddinggemma`). This bullet named only the md5 half, and offered it as the
+  answer to the condition it cannot detect, until
+  [#30](https://github.com/NewGraphEnvironment/cred/issues/30).
 - **No bucket address in the source** — `cred` is public; the store source comes from
   `getOption("cred.store_source")` / `CRED_STORE_SOURCE` with no default. Ask a maintainer for the
   value; it is deliberately not recorded anywhere in this repo.
@@ -202,17 +207,37 @@ Shipped: [#22](https://github.com/NewGraphEnvironment/cred/issues/22) ragnar ret
 - **`crd_store_connect()`'s md5 compare cannot see a model change, so never prescribe it for
   one.** It answers "is this the file the manifest describes" — stale, truncated, locally
   rebuilt. A store whose embedding model moved underneath it has *exactly* the bytes the
-  manifest recorded. `.crd_check_model()` does compare model and width, and it runs on **push**,
-  not on connect ([#30](https://github.com/NewGraphEnvironment/cred/issues/30)). The first draft
-  of #29's mismatch warning sent users there, which would have been a remedy that cannot detect
-  the condition — the defect #29 *is*, reintroduced inside its own fix. The repo's own
-  `?crd_store_connect` asserted the same thing and was corrected in the same pass: when a claim
-  like this turns out to be wrong, grep the sentence rather than fixing the one instance quoted.
+  manifest recorded. `.crd_check_model()` compares model and width on **push**;
+  `.crd_check_store_embedding()` is the connect-time check
+  ([#30](https://github.com/NewGraphEnvironment/cred/issues/30)), and it is a separate layer from
+  md5 rather than a replacement — so "md5 cannot see a model change" stays the operative fact
+  whenever the remedy under discussion is *re-verifying the file*. The first draft of #29's
+  mismatch warning sent users there, which would have been a remedy that cannot detect the
+  condition — the defect #29 *is*, reintroduced inside its own fix.
+
+  **Grep the sentence, not the instance.** #29 corrected `?crd_store_connect` and left four
+  other copies of the same claim standing; #30's review found two of them — a `CLAUDE.md` bullet
+  asserting the causal link md5 does not provide, and a test file's own header stating the
+  opposite of what the file proves. Both read as authoritative. And #30's plan was wrong in the
+  other direction too: it listed two `expect_no_match(msg, "crd_store_connect")` assertions as
+  "deliberately reverse", when reversing them would have collapsed a discriminating pair
+  (md5 *can* see a stale file; md5 *cannot* see a model change) into two tests asserting one
+  thing. A claim becoming half-true does not make every sentence citing it wrong.
 - **A connected store embeds queries with its own recorded embedder.** `ragnar_store_connect()`
   does `embed <- unserialize(metadata$embed_func[[1L]])`, so a width mismatch is *not* "you
   queried with a different model" — that is not reachable without overriding `@embed`. It is
   that the model that name resolves to on this machine is no longer the one the store was built
   with. State the mechanism you can establish, not the one the issue assumed.
+
+  **This is also what makes the connect-time probe possible**, and it is stronger than it looks:
+  `ragnar:::process_embed_func()` rewrites a `ragnar::embed_*` call so `model` becomes a
+  character literal, re-parents to `baseenv()` and *then* serialises — so the stored function is
+  self-contained and `ncol(store@embed("probe"))` works on a real store with nothing configured.
+  `base_url` is **not** rewritten unless it was passed explicitly, so the probe targets the
+  formal default: for an Ollama store it never leaves the machine, and for one built with
+  `embed_openai()` or an explicit remote URL every connect is a billed third-party request.
+  Hence `check_model` being a documented opt-out, and hence the probe being code from a
+  downloaded artefact that `verify = TRUE` vouches for and `verify = FALSE` does not.
 - **A failure shape is reachable offline by replacing a connected store's `embed`.** Setting
   that S7 property on a copy does not reach the original, even though both share one duckdb
   connection, so the fixtures in `tests/testthat/helper-store.R` reuse the cached store at no

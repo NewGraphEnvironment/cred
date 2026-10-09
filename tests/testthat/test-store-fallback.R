@@ -4,8 +4,11 @@
 # start Ollama. That is right for one of the four ways retrieval fails, wrong
 # for the others, and actively misleading for an embedding-dimension mismatch —
 # which means the store was built against a different model than the one
-# answering queries, the exact condition crd_store_connect()'s md5 verification
-# exists to catch.
+# answering queries.
+#
+# That condition is the one crd_store_connect()'s md5 compare CANNOT see: such a
+# store has exactly the bytes the manifest recorded. #30 added the connect-time
+# probe that can. This header said the opposite until then.
 #
 # Each fixture here reaches its branch through the real ragnar_retrieve() call
 # (see helper-store.R), so these are not assertions about a mocked error object.
@@ -276,6 +279,17 @@ test_that("a dimension mismatch prescribes a check that can actually see it", {
   # change, because such a store's bytes are exactly the recorded ones. Sending
   # the user there would be a remedy that cannot detect the condition — which
   # is the defect #29 *is*, reintroduced inside its own fix.
+  #
+  # #30 gave crd_store_connect() a `check_model` probe that CAN see a width
+  # mismatch, and this assertion deliberately did not change. The plan for #30
+  # said it should, and that was wrong: it pairs with the next block, whose
+  # whole discriminating power is the contrast between "md5 can see a stale
+  # file" and "md5 cannot see a model change", and reversing this one collapses
+  # the pair into two tests asserting the same thing. The remedy this message
+  # does prescribe — one ncol(embed_ollama(...)) call — gathers exactly the
+  # evidence the connect probe gathers, for one HTTP request rather than a
+  # reconnect, and covers the in-session embedder swap that no reconnect can
+  # see.
   expect_no_match(msg, "crd_store_connect")
   expect_match(msg, "crd_store_build", fixed = TRUE)
   expect_match(msg, "embed_ollama", fixed = TRUE)
@@ -502,7 +516,11 @@ test_that("crd_search() reports a dimension mismatch as its own reason", {
   )
   expect_s3_class(cnd, "cred_retrieval_fallback_dimension")
   # Not crd_store_connect(): its md5 compare cannot see a model change, so
-  # sending the user there is a remedy that cannot detect the condition.
+  # sending the user there is a remedy that cannot detect the condition. Still
+  # true after #30 added the connect-time probe — reaching this warning means
+  # that probe was skipped or already passed, so a reconnect is either
+  # unavailable or looking at a mismatch that arose after it. See the fuller
+  # reasoning on the sibling assertion in the message-text block above.
   expect_no_match(conditionMessage(cnd), "crd_store_connect")
   expect_match(conditionMessage(cnd), "crd_store_build", fixed = TRUE)
   expect_no_match(conditionMessage(cnd), "ollama serve")
@@ -631,11 +649,23 @@ test_that("the classifier, the message builder and the test helper agree on the 
     gsub('.*return\\("([a-z]+)"\\).*', "\\1", grep('return\\("', cls, value = TRUE))
   ))
 
-  msg <- deparse(.crd_retrieval_fallback_msg)
+  # Parse the function that HOLDS the branches, which is the remedy builder --
+  # #30 moved them out of `.crd_retrieval_fallback_msg()` so that
+  # `.crd_ollama_check()` and `crd_search(method = "vss")` could say the same
+  # thing about the same failure. Pointed at the wrapper instead, this grep
+  # matches nothing and `from_msg` is empty, which is what the premise
+  # assertion below exists to catch.
+  msg <- deparse(.crd_embed_remedy)
   from_msg <- sort(unique(
     gsub('.*identical\\(reason, "([a-z]+)"\\).*', "\\1",
          grep('identical\\(reason, "', msg, value = TRUE))
   ))
+
+  # ...and that the wrapper still routes through it. Retargeting the grep above
+  # would otherwise keep this test green while the fallback message grew its own
+  # private copy of the branches -- the exact drift the whole block is for.
+  expect_match(paste(deparse(.crd_retrieval_fallback_msg), collapse = " "),
+               ".crd_embed_remedy", fixed = TRUE)
 
   # The classifier's last reason is a bare literal rather than a return() call,
   # so derive it as such instead of assuming it — this assertion is what makes
@@ -654,6 +684,28 @@ test_that("the classifier, the message builder and the test helper agree on the 
   expect_identical(setdiff(from_classifier, c(from_msg, "unknown")), character(0))
   expect_identical(setdiff(from_msg, from_classifier), character(0))
   expect_identical(sort(.crd_fallback_reasons()), from_classifier)
+
+  # The enumeration is over `reason`, and since #30 the dispatch is over
+  # `reason x context` -- so this grep alone reported `dimension` as wired while
+  # it was wired for one of three contexts, and the other two fell through to
+  # the "cred does not recognise this failure" text for a reason the classifier
+  # had recognised. Enumerate the product.
+  # Derived from the function, not typed here. Round 1 widened this guard from
+  # `reason` to `reason x context` and then hardcoded the context roster, which
+  # is the same defect one level out: a fourth context added to `match.arg()`
+  # with a falling-through `dimension` dispatch left the widened guard green.
+  contexts <- eval(formals(.crd_embed_remedy)$context)
+  expect_gt(length(contexts), 1L)
+  for (ctx in contexts) {
+    fallthrough <- .crd_embed_remedy("unknown", simpleError("a cause"), context = ctx)
+    for (r in setdiff(.crd_fallback_reasons(), "unknown")) {
+      expect_false(
+        identical(.crd_embed_remedy(r, simpleError("a cause"), context = ctx),
+                  fallthrough),
+        info = paste(r, ctx)
+      )
+    }
+  }
 })
 
 test_that("every reason produces a message that is not the fallthrough", {

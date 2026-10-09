@@ -102,8 +102,12 @@ to on this machine is no longer the model the store was built with.
 \strong{Treat the store as unverified}: a search that did succeed would answer
 differently while looking healthy. Compare what the store records against
 what the service now returns, then re-pull or rebuild with
-\code{\link[=crd_store_build]{crd_store_build()}}. Restarting Ollama cannot help, and neither can
-\code{\link[=crd_store_connect]{crd_store_connect()}}, whose MD5 compare cannot see a model change.}
+\code{\link[=crd_store_build]{crd_store_build()}}. Restarting Ollama cannot help. Neither does
+reconnecting: \code{\link[=crd_store_connect]{crd_store_connect()}}'s MD5 compare cannot see a model
+change, and while its \code{check_model} probe can, reaching this warning
+means that probe either was not run or already passed — so the mismatch
+arose after the connect, and the one-line comparison the warning
+prescribes is both cheaper and the only one that sees it.}
 \item{\code{cred_retrieval_fallback_unknown}}{Unrecognised. The cause is
 reported verbatim and no remedy is prescribed.}
 }
