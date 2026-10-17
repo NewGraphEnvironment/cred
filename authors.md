@@ -14,15 +14,15 @@ Source:
 [`inst/CITATION`](https://github.com/NewGraphEnvironment/cred/blob/main/inst/CITATION)
 
 Irvine A (2026). *cred: Citation Review and Evidence Documentation*. New
-Graph Environment Ltd. R package version 0.4.0,
+Graph Environment Ltd. Version 0.4.0,
 <https://newgraphenvironment.github.io/cred/>.
 
-    @Manual{,
+    @Manual{cred,
       title = {cred: Citation Review and Evidence Documentation},
       author = {Allan Irvine},
       organization = {New Graph Environment Ltd.},
       year = {2026},
       version = {0.4.0},
-      note = {R package version 0.4.0},
+      note = {Version 0.4.0},
       url = {https://newgraphenvironment.github.io/cred/},
     }
