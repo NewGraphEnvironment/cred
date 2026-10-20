@@ -4,11 +4,12 @@
 # ------------------------------------------------
  
 cff-version: 1.2.0
-message: 'To cite package "cred" in publications use:'
+message: If you use cred, please cite it by its DOI, 10.5281/zenodo.23254040.
 type: software
 license: MIT
 title: 'cred: Citation Review and Evidence Documentation'
 version: 0.4.0
+doi: 10.5281/zenodo.23254040
 abstract: Tools for extracting, auditing, and verifying inline citations in bookdown
   R Markdown documents. Supports systematic detection of hallucinated statistics or
   misattributed findings introduced during LLM-assisted drafting.
@@ -31,6 +32,7 @@ preferred-citation:
   url: https://newgraphenvironment.github.io/cred/
   repository-code: https://github.com/NewGraphEnvironment/cred
   license: MIT
+  doi: 10.5281/zenodo.23254040
   type: software
   publisher:
     name: New Graph Environment Ltd.

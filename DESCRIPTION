@@ -32,6 +32,7 @@ Suggests:
 Remotes:
     paleolimbot/rbbt,
     tidyverse/ragnar
+Config/DOI: 10.5281/zenodo.23254040
 Config/testthat/edition: 3
 VignetteBuilder: knitr
 Imports:
