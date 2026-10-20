@@ -13,3 +13,4 @@
 ^\.claude$
 ^\.git$
 ^data$
+^CITATION\.cff$
