@@ -159,8 +159,8 @@ Shipped: [#22](https://github.com/NewGraphEnvironment/cred/issues/22) ragnar ret
   `origin, doc_id, chunk_id, start, end, context, embedding, text`, where `start`/`end` are
   character offsets into extracted markdown, not pages. So `crd_search()` must never promise a page
   number — `crd_pdf_ext_txt()` (`pdftools::pdf_text()`) is page-indexed and remains the only
-  page-aware path in the package. This settles an open question in
-  [soul#23](https://github.com/NewGraphEnvironment/soul/issues/23), which lists it as deciding
+  page-aware path in the package. This settles an open question in the planned
+  citation-verification convention, which lists it as deciding
   whether the ragnar path can fill that column at all.
 - **`ragnar_retrieve()` merges adjacent chunks, so a retrieval cell is a per-chunk vector.**
   `deoverlap = TRUE` is the default; `ragnar:::chunks_deoverlap()` summarises with
