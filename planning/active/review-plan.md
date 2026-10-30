@@ -5,7 +5,7 @@ Each finding was probed before it was folded in; the verdict follows each one.
 
 1. **Blocker:** setting `cred.zotero_library` in an R profile breaks the toy-fixture tests and vignette, because the toy DB has no such group. **Verdict: holds.** The tests and the vignette pin `library = NULL` / `local_options`.
 2. **Blocker:** `crd_aud_verify_abstract()` wraps the abstract lookup in `suppressWarnings()`, so an ambiguity warning would be swallowed and counted as "no abstract". A cross-library key also returns 2 rows, and `nrow(x) == 0L || is.na(x$abstract)` errors on R >= 4.3. **Verdict: reproduced** on R 4.5.2: `'length = 2' in coercion to 'logical(1)'`. Fix: suppress only the no-abstract class.
-3. **Gap:** the same collection name appears several times within one library. **Verdict: measured.** Library 9 has `archived` ×10 and `ITT` ×8; library 1 has `ITT` ×7. Fix: error on any multiple match, listing each match's parent path, and accept a `parent/child` path to choose one.
+3. **Gap:** the same collection name appears several times within one library. **Verdict: measured.** Library 9 has `archived` ×10 and another name ×8; library 1 has that name ×7. Fix: error on any multiple match, listing each match's parent path, and accept a `parent/child` path to choose one.
 4. **Gap:** subcollections. `bull_trout` and `grayling` are children of `species`. **Verdict: holds.** Decision: non-recursive, as before, and documented.
 5. **Gap:** ties on `dateAdded`. **Verdict: holds.** Final sort key is attachment itemID ASC.
 6. **Gap:** linked files (linkMode 2: 177 PDFs, Windows paths and `attachments:` paths). Take the first candidate whose file exists, as Zotero's attachment state does, and name the rest in the message.

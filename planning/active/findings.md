@@ -127,7 +127,7 @@ the URL-match order (the bottoms report is also the oldest) and the itemID tie-b
 - `library = 9` (an internal libraryID): refused, and the error lists the groups with their groupIDs.
 - `bull_trout`, which had grown to 20 members during the day: 10 PDFs; 10 members left out
   (3 trashed, 1 standalone attachment, 6 no live PDF). `grayling`: 23 PDFs from 22 keys; 10 left out.
-- `ITT` with no library: an error listing 15 matching collections by path across two libraries.
+- A project collection name with no library: an error listing 15 matching collections by path across two libraries.
 
 ## Vignette parity
 
