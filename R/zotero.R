@@ -28,17 +28,20 @@
 #'
 #' @param con A connection from [.crd_zot_connect()].
 #' @return A `data.frame` with `library_id` (Zotero's internal, machine-local
-#'   id), `group_id` (`NA` for My Library), `name` and `label`.
+#'   id), `type` (`"user"`, `"group"`, or `"feed"` for an RSS feed, which has
+#'   no `groups` row either), `group_id` (`NA` unless a group), `name` and
+#'   `label`.
 #' @noRd
 .crd_zot_libraries <- function(con) {
   libs <- RSQLite::dbGetQuery(con, "
-    SELECT l.libraryID AS library_id, g.groupID AS group_id, g.name AS name
+    SELECT l.libraryID AS library_id, l.type AS type, g.groupID AS group_id, g.name AS name
     FROM libraries l
     LEFT JOIN groups g ON g.libraryID = l.libraryID
-    ORDER BY g.groupID IS NOT NULL, g.name, g.groupID
+    ORDER BY l.type <> 'user', g.name, g.groupID, l.libraryID
   ")
-  libs$label <- ifelse(is.na(libs$group_id), "My Library",
-                       paste0(libs$name, " (", libs$group_id, ")"))
+  libs$label <- ifelse(libs$type == "user", "My Library",
+                       ifelse(is.na(libs$group_id), paste0(libs$type, " ", libs$library_id),
+                              paste0(libs$name, " (", libs$group_id, ")")))
   libs
 }
 
@@ -67,7 +70,12 @@
       !(is.character(library) || is.numeric(library))) {
     bad("must be a single name or number")
   }
-  if (identical(library, "user")) return(libs$library_id[is.na(libs$group_id)])
+  if (identical(library, "user")) {
+    # By type, not by "has no group": a feed has no group either.
+    id <- libs$library_id[libs$type == "user"]
+    if (length(id) != 1L) bad(paste0("\"user\" matches ", length(id), " libraries"))
+    return(id)
+  }
 
   if (is.numeric(library) || grepl("^[0-9]+$", library)) {
     id <- libs$library_id[libs$group_id %in% as.numeric(library)]
@@ -102,8 +110,8 @@
 #' @noRd
 .crd_zot_resolve_keys <- function(con, keys, lib_id) {
   hits <- RSQLite::dbGetQuery(con, sprintf("
-    SELECT idv.value AS citation_key, i.itemID AS item_id, i.key AS item_key,
-           i.libraryID AS library_id
+    SELECT CAST(idv.value AS TEXT) AS citation_key, i.itemID AS item_id,
+           i.key AS item_key, i.libraryID AS library_id
     FROM items i
     JOIN itemData       id  ON id.itemID  = i.itemID
     JOIN itemDataValues idv ON idv.valueID = id.valueID
@@ -113,6 +121,9 @@
     AND   i.itemID NOT IN (SELECT itemID FROM deletedItems)
     ORDER BY idv.value, i.itemID
   ", paste(rep("?", length(keys)), collapse = ", ")), params = as.list(keys))
+  # itemDataValues.value has no declared type, so an empty result comes back
+  # logical rather than character.
+  hits$citation_key <- as.character(hits$citation_key)
 
   libs <- .crd_zot_libraries(con)
   label <- function(ids) {
@@ -163,7 +174,9 @@
 #' whose URL is the item's own URL, then the oldest — and, since `dateAdded`
 #' ties are common on bulk imports, the lowest itemID last so the pick is
 #' deterministic. Trashed attachments and linked URLs, which are not files, are
-#' excluded as Zotero excludes them.
+#' excluded as Zotero excludes them. Zotero compares against the item's URL as
+#' `getField("url")` returns it, `""` when unset, so the `COALESCE` is part of
+#' the rule: with no item URL, an attachment that has a URL still sorts first.
 #'
 #' @param con A connection from [.crd_zot_connect()].
 #' @param item_ids `integer` parent item ids.
@@ -196,7 +209,7 @@
     AND   ia.contentType IN (%s)
     ORDER BY ia.parentItemID,
              ia.contentType = 'application/pdf' DESC,
-             aurl.value = purl.value DESC,
+             aurl.value = COALESCE(purl.value, '') DESC,
              att.dateAdded ASC,
              att.itemID ASC
   ", url, url, paste(rep("?", length(item_ids)), collapse = ", "),
@@ -320,6 +333,7 @@ crd_zot_src_lookup <- function(citation_keys, zotero_dir = "~/Zotero",
             call. = FALSE)
   }
 
+  if (nrow(best) == 0L) return(empty)
   best <- best[order(best$citation_key), , drop = FALSE]
   tibble::tibble(
     citation_key = best$citation_key,
@@ -372,7 +386,7 @@ crd_zot_abstract_lookup <- function(citation_keys, zotero_dir = "~/Zotero",
       WHERE f.fieldName = 'abstractNote'
       AND   id.itemID IN (%s)
     ", paste(rep("?", nrow(items)), collapse = ", ")), params = as.list(items$item_id))
-    abstract <- raw$abstract[match(items$item_id, raw$item_id)]
+    abstract <- as.character(raw$abstract[match(items$item_id, raw$item_id)])
     result$abstract <- abstract[match(result$citation_key, items$citation_key)]
   }
 

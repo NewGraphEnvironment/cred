@@ -18,7 +18,8 @@ zot_schema <- c(
            key TEXT NOT NULL)",
   fields = "CREATE TABLE fields (fieldID INTEGER PRIMARY KEY, fieldName TEXT NOT NULL)",
   itemData = "CREATE TABLE itemData (itemID INTEGER, fieldID INTEGER, valueID INTEGER)",
-  itemDataValues = "CREATE TABLE itemDataValues (valueID INTEGER PRIMARY KEY, value TEXT NOT NULL)",
+  # Untyped, as in Zotero: an empty result then comes back logical, not character.
+  itemDataValues = "CREATE TABLE itemDataValues (valueID INTEGER PRIMARY KEY, value UNIQUE)",
   itemAttachments = "CREATE TABLE itemAttachments (itemID INTEGER PRIMARY KEY, parentItemID INT,
                      linkMode INT, contentType TEXT, path TEXT)",
   itemNotes = "CREATE TABLE itemNotes (itemID INTEGER PRIMARY KEY, parentItemID INT, note TEXT)",
@@ -58,15 +59,20 @@ zot_fixture <- function(env = parent.frame()) {
 
   fields <- c("citationKey", "title", "abstractNote", "url")
   for (i in seq_along(fields)) run("INSERT INTO fields VALUES (?, ?)", i, fields[i])
-  run("INSERT INTO libraries VALUES (1, 'user'), (5, 'group'), (7, 'group')")
+  # Library 9 is an RSS feed: no groups row, and not My Library.
+  run("INSERT INTO libraries VALUES (1, 'user'), (5, 'group'), (7, 'group'), (9, 'feed')")
   run("INSERT INTO groups VALUES (4733734, 5, 'Central'), (5, 7, 'Satellite')")
 
-  value_id <- 0L
+  # Zotero stores each distinct value once and shares its valueID.
   set_field <- function(item_id, field, value) {
     if (is.null(value)) return(invisible())
-    value_id <<- value_id + 1L
-    run("INSERT INTO itemDataValues VALUES (?, ?)", value_id, value)
-    run("INSERT INTO itemData VALUES (?, ?, ?)", item_id, match(field, fields), value_id)
+    vid <- DBI::dbGetQuery(con, "SELECT valueID FROM itemDataValues WHERE value = ?",
+                           params = list(value))$valueID
+    if (length(vid) == 0L) {
+      run("INSERT INTO itemDataValues (value) VALUES (?)", value)
+      vid <- DBI::dbGetQuery(con, "SELECT last_insert_rowid() AS id")$id
+    }
+    run("INSERT INTO itemData VALUES (?, ?, ?)", item_id, match(field, fields), vid)
   }
   item <- function(id, lib, key = NULL, title = NULL, url = NULL, abstract = NULL,
                    added = "2020-01-01 00:00:00") {
@@ -152,6 +158,13 @@ zot_fixture <- function(env = parent.frame()) {
   attach(222, 220, 5, "tie_second.pdf", added = "2021-06-01 12:00:00")
   attach(221, 220, 5, "tie_first.pdf", added = "2021-06-01 12:00:00")
 
+  # The item has no URL. Zotero compares against "" then, so the attachment
+  # that has a URL sorts ahead of an older one that has none.
+  item(230, 5, "nourl2019Parent")
+  attach(231, 230, 5, "nourl_older.pdf", added = "2019-01-01 00:00:00")
+  attach(232, 230, 5, "nourl_withurl.pdf", added = "2019-06-01 00:00:00",
+         url = "https://example.org/any.pdf")
+
   # "species" exists in two libraries; "old" is trashed.
   run("INSERT INTO collections VALUES (1, 'species', NULL, 5, 'COLL0001'),
                                      (2, 'species', NULL, 1, 'COLL0002'),
@@ -162,6 +175,10 @@ zot_fixture <- function(env = parent.frame()) {
   run("INSERT INTO collectionItems (collectionID, itemID) VALUES (2, 100)")
   run("INSERT INTO collectionItems (collectionID, itemID) VALUES (3, 120)")
   run("INSERT INTO deletedCollections (collectionID) VALUES (3)")
+  # "project" holds nothing itself; its subcollection "sub" holds martins.
+  run("INSERT INTO collections VALUES (4, 'project', NULL, 5, 'COLL0004'),
+                                     (5, 'sub', 4, 5, 'COLL0005')")
+  run("INSERT INTO collectionItems (collectionID, itemID) VALUES (5, 120)")
 
   dir
 }

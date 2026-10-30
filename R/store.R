@@ -1521,7 +1521,13 @@ crd_search <- function(store, query, top_k = 5L,
     ORDER BY i.itemID
   ", params = list(hits$id))
 
-  members$reason <- NA_character_
+  if (nrow(members) == 0L) {
+    stop("Zotero collection '", hits$path, "' has no items of its own. Subcollections are ",
+         "not included; name one, as a parent/child path.", call. = FALSE)
+  }
+  members$citation_key <- as.character(members$citation_key)
+  members$title <- as.character(members$title)
+  members$reason <- rep(NA_character_, nrow(members))
   members$reason[members$trashed == 1L] <- "trashed"
   members$reason[is.na(members$reason) & members$note == 1L] <- "note"
   members$reason[is.na(members$reason) & members$attachment == 1L] <- "standalone attachment"

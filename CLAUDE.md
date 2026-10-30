@@ -20,7 +20,9 @@ R/
 │                  crd_aud_score, crd_aud_summary, crd_aud_scr_risk, crd_aud_fmt_xlsx
 ├── zotero.R     — SQLite helpers: crd_zot_src_lookup, crd_zot_abstract_lookup, and the
 │                  shared resolver (.crd_zot_library, .crd_zot_resolve_keys,
-│                  .crd_zot_attachments) every Zotero path goes through
+│                  .crd_zot_attachments) behind the lookups and crd_store_build();
+│                  .crd_zot_key_from_path (crd_search) maps an attachment key back
+│                  and does not use it
 ├── review.R     — Shiny review app: crd_aud_review (launch_browser param, not launch.browser)
 │                  text filters for paraphrase/quote search, collapsible candidate passages panel
 ├── rmd.R        — crd_aud_write internals: parse @citekey + surrounding sentence

@@ -73,6 +73,38 @@ test_that("an attachment whose URL is the item's own beats an older one", {
   expect_identical(src_file(res, "url2020Match"), "url_main.pdf")
 })
 
+test_that("with no item URL, an attachment that has a URL beats an older one, as in Zotero", {
+  dir <- zot_fixture()
+  res <- suppressMessages(
+    crd_zot_src_lookup("nourl2019Parent", zotero_dir = dir, library = "Central")
+  )
+  expect_identical(src_file(res, "nourl2019Parent"), "nourl_withurl.pdf")
+})
+
+test_that("\"user\" is My Library alone, not every library without a group", {
+  dir <- zot_fixture()
+  # Library 9 is a feed: no groups row. Taking every group-less library as
+  # "user" recycled the comparison and resolved R-base without a warning.
+  expect_warning(
+    res <- crd_zot_src_lookup(c("hagen2019Trend", "R-base"), zotero_dir = dir, library = "user"),
+    "R-base.*2 items"
+  )
+  expect_identical(res$citation_key, "hagen2019Trend")
+  res <- .crd_zot_collection_pdfs("species", zotero_dir = dir, library = "user")
+  expect_identical(basename(res$sources$src_path), "hagen_personal.pdf")
+})
+
+test_that("empty results keep their column types", {
+  dir <- zot_fixture()
+  res <- suppressWarnings(crd_zot_src_lookup("nosuch2000Key", zotero_dir = dir, library = "Central"))
+  expect_identical(vapply(res, class, ""), c(citation_key = "character", src_path = "character",
+                                             src_type = "character"))
+  res <- suppressWarnings(crd_zot_abstract_lookup(c("martins2022Spatial", "nosuch2000Key"),
+                                                  zotero_dir = dir, library = "Central"))
+  expect_type(res$abstract, "character")
+  expect_type(res$citation_key, "character")
+})
+
 test_that("attachments added in the same second are picked by lowest itemID", {
   dir <- zot_fixture()
   res <- suppressMessages(
@@ -205,6 +237,16 @@ test_that("a collection reports every member it leaves out, and why", {
   expect_identical(reason[["ATT00195"]], "standalone attachment")
   expect_identical(reason[["NOTE0197"]], "note")
   expect_identical(nrow(out), 6L)
+})
+
+test_that("a collection with no items of its own says subcollections are not included", {
+  dir <- zot_fixture()
+  expect_error(
+    .crd_zot_collection_pdfs("project", zotero_dir = dir, library = "Central"),
+    "no items of its own.*Subcollections"
+  )
+  res <- .crd_zot_collection_pdfs("project/sub", zotero_dir = dir, library = "Central")
+  expect_identical(basename(res$sources$src_path), "martins_live.pdf")
 })
 
 test_that("a trashed collection is not found", {
