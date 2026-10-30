@@ -54,6 +54,14 @@ then `raw[!duplicated(raw$citation_key), ]`. Three consequences, each measured o
   - two live parents sharing one key
 - [x] `tests/testthat/test-zotero.R`: the issue's three defects, ambiguity warnings, library resolution (name, groupID, `"user"`, unknown name errors with the available list), and abstract lookup returning one row per key. Run against `main`'s code and confirm each goes red for the right reason.
 
+## Folded in from the plan review (review-plan.md)
+
+- [ ] Toy-fixture tests and the vignette pin `library = NULL`, so a profile option cannot break them; add a test with the option set.
+- [ ] `crd_aud_verify_abstract()` suppresses only the no-abstract warning class; ambiguity warnings reach the user. Add a red test for the two-row `||` error.
+- [ ] Collection resolution errors on any multiple match (within or across libraries), lists each match's parent path, and accepts `parent/child` to pick one; non-recursive, documented.
+- [ ] Pick order ends on attachment itemID; the first candidate whose file exists wins and the rest are named; md5 dedupe within one parent, never on NA; `tools` in Imports.
+- [ ] `library`: a digit string is a groupID; an internal-libraryID-only number errors saying so; a duplicate group name errors; empty keys guarded; a key absent from the asked library names where it does live.
+
 ## Phase 2: One shared attachment query
 - [ ] `R/zotero.R`: `.crd_zot_library(con, library)` → libraryID(s). NULL means all libraries; `"user"` → `libraries.type = 'user'`; numeric → `groups.groupID`; character → `groups.name`; anything else errors and lists the available groups.
 - [ ] `R/zotero.R`: `.crd_zot_live_attachments(con, keys = , collection_ids = , lib_ids)` returns every live candidate row with:

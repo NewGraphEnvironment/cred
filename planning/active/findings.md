@@ -49,8 +49,8 @@ Found while preparing a bull trout and Arctic grayling store from two group coll
 | live keys on 2+ parents within one library | 52, all library 1 (`R-*` package refs) |
 | collection names in 2+ libraries | 10 or more |
 | live items with >1 PDF | lib 1: 11 (max 5), lib 2: 1, lib 6: 0, lib 9: 25 (max 10) |
-| `bull_trout` members / no live PDF | 18 / 11 (3 trashed, 1 standalone attachment, 3 no key) |
-| `grayling` members / no live PDF | 30 / 7 (5 trashed, 4 standalone attachments, 4 no key) |
+| `bull_trout` members / left out | 18 / 12: 3 trashed, 1 standalone, 8 keyed with no live PDF (reviewer recount; first count did not add up) |
+| `grayling` members / left out | 30 / 13: 5 trashed, 3 standalone, 5 keyed with no live PDF (reviewer recount) |
 
 Issue's three keys, rows ordered as the current SQL orders them (itemID DESC):
 
