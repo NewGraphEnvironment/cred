@@ -92,8 +92,8 @@ then `raw[!duplicated(raw$citation_key), ]`. Three consequences, each measured o
 - [x] `crd_aud_verify_all()` and `crd_aud_verify_abstract()` gain `library` and pass it through. `devtools::document()`.
 
 ## Phase 6: Docs
-- [ ] `CLAUDE.md`: the Zotero Integration section (library scoping, trash, pick rule, store ingests all live PDFs) and the architecture lines.
-- [ ] Vignette: one sentence on `cred.zotero_library` where the lookup is introduced. Confirm it still builds against the regenerated fixture.
+- [x] `CLAUDE.md`: the Zotero Integration section (library scoping, trash, pick rule, store ingests all live PDFs) and the architecture lines.
+- [x] Vignette: one sentence on `cred.zotero_library` where the lookup is introduced. Confirm it still builds against the regenerated fixture.
 
 ## Phase 7: Follow-up issues (internal repo)
 - [ ] Edit the internal library-consolidation issue's body with: 331 cross-library keys, 52 two-parent keys in the personal library, duplicate collection names, and the `cred.zotero_library` option that works around them until consolidation.

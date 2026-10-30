@@ -119,6 +119,21 @@ Each guard was removed or inverted in a copy of `R/`, and `test-zotero.R` was ru
 Two cases were added before this run because the first fixture did not pin them:
 the URL-match order (the bottoms report is also the oldest) and the itemID tie-break.
 
+## Live check (2026-10-30, ~/Zotero read-only)
+
+- `library = "NewGraphEnvironment"`: the group copy of hagen, martins' live PDF, the bottoms
+  report; a message names Appendix 1 as left out.
+- `library = NULL`: hagen is left unresolved, with a warning naming My Library and the group.
+- `library = 9` (an internal libraryID): refused, and the error lists the groups with their groupIDs.
+- `bull_trout`, which had grown to 20 members during the day: 10 PDFs; 10 members left out
+  (3 trashed, 1 standalone attachment, 6 no live PDF). `grayling`: 23 PDFs from 22 keys; 10 left out.
+- `ITT` with no library: an error listing 15 matching collections by path across two libraries.
+
+## Vignette parity
+
+The vignette built on `main` (temp worktree) and on this branch reports the same verification
+statuses: 10 auto, 4 abstract_match, 5 no_match.
+
 ## Errors Encountered
 
 | Error | Resolution |

@@ -18,7 +18,9 @@ R/
 ├── audit.R      — CSV lifecycle: crd_aud_write, crd_aud_verify_all, crd_aud_verify_abstract,
 │                  crd_aud_upd (fuzzy join), crd_aud_eval_inline (inline R → paraphrase_eval),
 │                  crd_aud_score, crd_aud_summary, crd_aud_scr_risk, crd_aud_fmt_xlsx
-├── zotero.R     — SQLite helpers: crd_zot_src_lookup, crd_zot_abstract_lookup
+├── zotero.R     — SQLite helpers: crd_zot_src_lookup, crd_zot_abstract_lookup, and the
+│                  shared resolver (.crd_zot_library, .crd_zot_resolve_keys,
+│                  .crd_zot_attachments) every Zotero path goes through
 ├── review.R     — Shiny review app: crd_aud_review (launch_browser param, not launch.browser)
 │                  text filters for paraphrase/quote search, collapsible candidate passages panel
 ├── rmd.R        — crd_aud_write internals: parse @citekey + surrounding sentence
@@ -40,6 +42,8 @@ tests/testthat/
 ├── test-score.R     — crd_aud_score, .score_row, scoring internals
 ├── test-store.R     — store source resolution, manifest parsing, arg validation
 ├── test-store-push.R — manifest merge, S3 probes, push guards (all offline)
+├── test-zotero.R    — library scoping, trash, attachment pick, collection resolution
+│                      (multi-library fixture built by helper-zotero.R)
 └── test-sentence.R
 
 inst/extdata/              — toy data for vignette
@@ -88,6 +92,23 @@ This is the core data model. Every function respects it.
 - BBT citation keys stored as `citationKey` field in `zotero.sqlite` (not old `better-bibtex.sqlite`)
 - `crd_zot_src_lookup()` — resolves citation keys to attached PDF/docx paths
 - `crd_zot_abstract_lookup()` — retrieves `abstractNote` field for keys without attachments
+- **A citation key names an item only within one library.** Keys repeat across libraries (331 of
+  them in one real database) and occasionally within one. Every lookup takes `library` (`"user"`,
+  a group name, or a groupID; default `getOption("cred.zotero_library")`), and a key matching
+  more than one live item is left unresolved with a warning, never picked. Zotero's internal
+  `libraryID` is refused because it differs between machines.
+- **Trash is never a source**: `deletedItems` (parent and attachment) and `deletedCollections`
+  are excluded everywhere, and linked URLs (`linkMode = 3`) are not files.
+- **The audit takes one file per key; a store takes them all.** `crd_zot_src_lookup()` takes
+  Zotero's own best attachment (`getBestAttachments`: PDF, URL matching the item, oldest), with
+  itemID as the tie-break, and the first such file on disk, and names the rest. `crd_store_build()` ingests
+  every live PDF, so appendices and report parts are searchable. Each still maps back to its
+  key through the attachment directory. Byte-identical copies are deduped **within one item
+  only**: the same file under two keys is two citations.
+- A collection is matched by name or `parent/child` path, direct members only. More than one
+  match is an error listing each path, because names repeat within a library as well.
+- The toy database and `helper-zotero.R` carry the same schema subset; `test-zotero.R` fails if
+  the toy one is missing a table or column the queries read.
 
 ## Build and Test
 
