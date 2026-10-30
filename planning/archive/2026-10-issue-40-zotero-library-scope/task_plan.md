@@ -106,8 +106,8 @@ then `raw[!duplicated(raw$citation_key), ]`. Three consequences, each measured o
 ## Validation
 - [x] Tests pass (`devtools::test()`), 0 lints, `devtools::check()` with no new WARNING/NOTE
 - [x] `/code-check branch` clean (3 rounds, ended by enumeration; findings.md)
-- [ ] PWF checkboxes match landed work
-- [ ] `/planning-archive` on completion
+- [x] PWF checkboxes match landed work
+- [x] `/planning-archive` on completion
 
 **Verification:**
 - The Phase 1 tests are red on `main` and green after.
