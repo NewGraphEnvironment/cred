@@ -150,15 +150,18 @@
   if (length(ambiguous) > 0L) {
     lines <- vapply(ambiguous, function(k) {
       ids <- hits$library_id[hits$citation_key == k]
+      # The remedy differs: naming a library separates libraries, but only
+      # fixing the key in Zotero separates two items inside one.
       where <- if (length(unique(ids)) > 1L) {
-        paste0("in more than one library (", label(ids), ")")
+        paste0("in more than one library (", label(ids), "); pass `library`, ",
+               "or set options(cred.zotero_library = )")
       } else {
-        paste0("on ", length(ids), " items in ", label(ids))
+        paste0("on ", length(ids), " items in ", label(ids), "; give one of them a ",
+               "different citation key in Zotero")
       }
       paste0("  ", k, ": ", where)
     }, character(1L))
-    rlang::warn(paste0("Left unresolved, because each matches more than one Zotero item.\n",
-                       "  Pass `library`, or set options(cred.zotero_library = ):\n",
+    rlang::warn(paste0("Left unresolved, because each matches more than one Zotero item:\n",
                        paste(lines, collapse = "\n")),
                 class = "cred_zot_ambiguous")
   }
@@ -360,6 +363,9 @@ crd_zot_src_lookup <- function(citation_keys, zotero_dir = "~/Zotero",
 #' @return A [tibble][tibble::tibble] with columns:
 #'   - `citation_key` (`character`) — the input key.
 #'   - `abstract` (`character`) — abstract text, `NA` if not in database.
+#'
+#'   Attribute `unresolved`: the keys left `NA` because they matched more than
+#'   one item or only another library, as distinct from keys with no abstract.
 #' @export
 #' @examples
 #' toy <- system.file("extdata", package = "cred")
@@ -398,6 +404,7 @@ crd_zot_abstract_lookup <- function(citation_keys, zotero_dir = "~/Zotero",
                 class = "cred_zot_no_abstract")
   }
 
+  attr(result, "unresolved") <- resolved$unresolved
   result
 }
 

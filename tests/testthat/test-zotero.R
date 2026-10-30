@@ -20,7 +20,7 @@ test_that("with no library, a key in two libraries is left unresolved and named"
   withr::local_options(cred.zotero_library = NULL)
   expect_warning(
     res <- crd_zot_src_lookup(c("hagen2019Trend", "martins2022Spatial"), zotero_dir = dir),
-    "hagen2019Trend.*more than one library.*Central.*My Library|hagen2019Trend.*more than one library.*My Library.*Central"
+    "hagen2019Trend: in more than one library \\(.*\\); pass `library`"
   )
   expect_false("hagen2019Trend" %in% res$citation_key)
   expect_true("martins2022Spatial" %in% res$citation_key)
@@ -129,7 +129,7 @@ test_that("two live parents sharing a key in one library are left unresolved", {
   dir <- zot_fixture()
   expect_warning(
     res <- crd_zot_src_lookup("R-base", zotero_dir = dir, library = "user"),
-    "R-base.*2 items"
+    "R-base: on 2 items in My Library; give one of them a different citation key in Zotero"
   )
   expect_identical(nrow(res), 0L)
 })
@@ -336,7 +336,8 @@ test_that("verify_abstract lets an ambiguity warning through and does not error"
     page_or_section = NA_character_, verified = NA_character_, notes = NA_character_
   ), audit_file, na = "")
   expect_warning(
-    suppressMessages(crd_aud_verify_abstract(audit_file, zotero_dir = dir)),
+    expect_message(crd_aud_verify_abstract(audit_file, zotero_dir = dir),
+                   "0 keys with no abstract in Zotero, 1 keys unresolved"),
     class = "cred_zot_ambiguous"
   )
 })

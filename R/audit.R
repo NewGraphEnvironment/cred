@@ -898,8 +898,11 @@ crd_aud_verify_abstract <- function(audit_file,
 
   n_matched    <- 0L
   n_no_abstract <- 0L
+  # Unresolved is not "no abstract": the item may well have one, and the
+  # warning above says why it was not read.
+  unresolved   <- intersect(target_keys, attr(abstracts, "unresolved"))
 
-  for (key in target_keys) {
+  for (key in setdiff(target_keys, unresolved)) {
     abs_row <- abstracts[abstracts$citation_key == key, , drop = FALSE]
     if (nrow(abs_row) == 0L || is.na(abs_row$abstract)) {
       n_no_abstract <- n_no_abstract + 1L
@@ -926,7 +929,11 @@ crd_aud_verify_abstract <- function(audit_file,
   readr::write_csv(audit, audit_file, na = "")
   message(
     "Abstract matching: ", n_matched, " matched, ",
-    n_no_abstract, " keys with no abstract in Zotero."
+    n_no_abstract, " keys with no abstract in Zotero",
+    if (length(unresolved) > 0L) {
+      paste0(", ", length(unresolved), " keys unresolved (see warning)")
+    },
+    "."
   )
 
   invisible(audit)

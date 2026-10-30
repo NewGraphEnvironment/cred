@@ -60,12 +60,14 @@ parts of a multi-part report, are searchable too, and each still answers to
 its item's citation key. Byte-identical copies on one item are ingested
 once. Trashed items, trashed attachments and trashed collections are never
 used. Before ingesting, the build lists every item it leaves out and why
-(trashed, a note, a standalone attachment, no citation key, no live PDF),
-and the items it takes several PDFs from.
+(trashed, a note, a standalone attachment, no citation key, a citation key
+shared by several items, no live PDF; for \code{citation_keys}, also not found
+or unresolved), and the items it takes several PDFs from.
 
 \strong{Which library.} Citation keys and collection names are unique within a
 Zotero library at best, so both resolve in \code{library}. A key found in more
-than one library is left out with a warning. A collection name that matches
+than one library, on two live items in one, or only in a library other than
+\code{library}, is left out with a warning. A collection name that matches
 more than one collection is an error listing each, with its \code{parent/child}
 path. A collection's subcollections are not included.
 }

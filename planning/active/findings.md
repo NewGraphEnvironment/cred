@@ -134,6 +134,39 @@ the URL-match order (the bottoms report is also the oldest) and the itemID tie-b
 The vignette built on `main` (temp worktree) and on this branch reports the same verification
 statuses: 10 auto, 4 abstract_match, 5 no_match.
 
+## Code-check (branch mode): how the loop ended
+
+| Round | Findings | Fixed | Accepted | Inside previous fix? |
+|---|---|---|---|---|
+| 1 | 5 (3 bug, 2 fragile) | 5 | 0 | — |
+| 2 | 3 (1 bug, 2 fragile) | 3 | 0 | y: R1's URL fix left three prose statements of the rule stale |
+| 3 | 3 fragile | 3 | 0 | y: R2's new left-out reason was missing from crd_store_build's roxygen |
+
+Round 3 named the mechanism: a rule is defined once and restated somewhere else, and the
+restatement is checked only against the cases its author had in front of them. Sometimes the
+restatement is a Zotero rule rewritten through a proxy the fixture happened to make true. Sometimes
+it is the resolver's policy copied into a consumer that did not follow when the policy grew.
+The loop ended on an enumeration of every set that mechanism reaches, not on a quiet round:
+
+- **Callers of the resolver:** 5 call sites, plus the 2 downstream consumers. All hold:
+  - `crd_zot_src_lookup` (zotero.R), which excludes unresolved keys from "not found";
+  - `crd_zot_abstract_lookup` (zotero.R), which excludes them from "no abstract" and exposes them as an attribute;
+  - the collection path (store.R), which gives them the reason "citation key shared by several items";
+  - `.crd_zot_key_pdfs` (store.R), which gives them the reason "unresolved (see warning)";
+  - `crd_aud_verify_abstract` (audit.R), which counts them apart;
+  - `crd_aud_verify_all` and `crd_store_build`, which only consume these results and print every reason.
+- **Left-out reasons:** 8 strings, each assigned once in store.R. All 8 are named in `crd_store_build`'s roxygen.
+- **Warning classes:** 3. `cred_zot_ambiguous` is tested by class, with a remedy specific to each case. `cred_zot_elsewhere` is tested by text. `cred_zot_no_abstract` is the only class `verify_abstract` suppresses.
+- Round 3's own sets all hold:
+  - statements of the pick rule (5);
+  - library identification and labelling;
+  - empty-result types of the exported functions;
+  - tests and examples that depend on `cred.zotero_library` (7 option-pinned calls);
+  - Zotero rules reimplemented here.
+
+Each fix's test was confirmed red against the code before that fix. Three reviewer rounds were
+spawned, plus one plan review: four agents in total, within the bound of five.
+
 ## Errors Encountered
 
 | Error | Resolution |

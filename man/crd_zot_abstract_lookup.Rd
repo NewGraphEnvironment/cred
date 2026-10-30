@@ -29,6 +29,9 @@ A \link[tibble:tibble]{tibble} with columns:
 \item \code{citation_key} (\code{character}) — the input key.
 \item \code{abstract} (\code{character}) — abstract text, \code{NA} if not in database.
 }
+
+Attribute \code{unresolved}: the keys left \code{NA} because they matched more than
+one item or only another library, as distinct from keys with no abstract.
 }
 \description{
 Queries the local Zotero SQLite database for the \code{abstractNote} field of
