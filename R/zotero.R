@@ -170,8 +170,9 @@
 #' Every live attachment of some items, in Zotero's own order of preference
 #'
 #' The order is Zotero's "best attachment" rule
-#' (`Zotero.Item.prototype.getBestAttachments`): PDF first, then an attachment
-#' whose URL is the item's own URL, then the oldest — and, since `dateAdded`
+#' (`Zotero.Item.prototype.getBestAttachments`): PDF first, then by URL (an
+#' attachment whose URL is the item's own, then one with any other URL, then
+#' one with none), then the oldest — and, since `dateAdded`
 #' ties are common on bulk imports, the lowest itemID last so the pick is
 #' deterministic. Trashed attachments and linked URLs, which are not files, are
 #' excluded as Zotero excludes them. Zotero compares against the item's URL as
@@ -254,9 +255,10 @@
 #' Trashed items and trashed attachments are never used.
 #'
 #' When an item has several attachments, the one taken is the one Zotero itself
-#' opens: a PDF before a Word document, then the attachment whose URL is the
-#' item's own, then the oldest. If that file is not on disk the next one is
-#' taken. A message names the file taken and the ones left out.
+#' opens: a PDF before a Word document, then by URL (the attachment whose URL
+#' is the item's own, then one with any URL, then one with none), then the
+#' oldest. If that file is not on disk the next one is taken. A message names
+#' the file taken and the ones left out.
 #'
 #' The database is opened read-only and `immutable`, so a running Zotero is
 #' never locked.
@@ -318,7 +320,7 @@ crd_zot_src_lookup <- function(citation_keys, zotero_dir = "~/Zotero",
              "; left out ", paste(groups[[k]], collapse = ", "))
     }, character(1L))
     message("Several attachments on one item; took Zotero's own choice ",
-            "(PDF, URL matching the item, oldest) of the files on disk:\n",
+            "(PDF; URL the item's own, then any URL, then none; oldest) of the files on disk:\n",
             paste(lines, collapse = "\n"))
   }
 

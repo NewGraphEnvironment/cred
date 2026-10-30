@@ -75,8 +75,10 @@ test_that("an attachment whose URL is the item's own beats an older one", {
 
 test_that("with no item URL, an attachment that has a URL beats an older one, as in Zotero", {
   dir <- zot_fixture()
-  res <- suppressMessages(
-    crd_zot_src_lookup("nourl2019Parent", zotero_dir = dir, library = "Central")
+  # The reason clause is asserted too, not only the interpolated file names.
+  expect_message(
+    res <- crd_zot_src_lookup("nourl2019Parent", zotero_dir = dir, library = "Central"),
+    "then any URL, then none.*nourl2019Parent: took nourl_withurl\\.pdf; left out nourl_older\\.pdf"
   )
   expect_identical(src_file(res, "nourl2019Parent"), "nourl_withurl.pdf")
 })
@@ -249,6 +251,21 @@ test_that("a collection with no items of its own says subcollections are not inc
   expect_identical(basename(res$sources$src_path), "martins_live.pdf")
 })
 
+test_that("a collection leaves out a member whose key another live item shares", {
+  dir <- zot_fixture()
+  con <- DBI::dbConnect(RSQLite::SQLite(), file.path(dir, "zotero.sqlite"))
+  DBI::dbExecute(con, "INSERT INTO collections VALUES (6, 'rpkgs', NULL, 1, 'COLL0006')")
+  DBI::dbExecute(con, "INSERT INTO collectionItems (collectionID, itemID) VALUES (6, 170), (6, 100)")
+  DBI::dbDisconnect(con)
+  expect_warning(
+    res <- .crd_zot_collection_pdfs("rpkgs", zotero_dir = dir, library = "user"),
+    "R-base.*2 items",
+    class = "cred_zot_ambiguous"
+  )
+  expect_identical(basename(res$sources$src_path), "hagen_personal.pdf")
+  expect_identical(res$left_out$reason, "citation key shared by several items")
+})
+
 test_that("a trashed collection is not found", {
   dir <- zot_fixture()
   expect_error(
@@ -281,6 +298,7 @@ test_that("keys for a store report the ones that did not resolve", {
 
 test_that("an empty set of keys resolves to nothing, without an SQL error", {
   dir <- zot_fixture()
+  withr::local_options(cred.zotero_library = NULL)
   res <- .crd_zot_key_pdfs(character(), zotero_dir = dir, library = "Central")
   expect_identical(nrow(res$sources), 0L)
   expect_identical(nrow(res$left_out), 0L)

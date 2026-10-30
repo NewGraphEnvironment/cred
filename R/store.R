@@ -1533,6 +1533,16 @@ crd_search <- function(store, query, top_k = 5L,
   members$reason[is.na(members$reason) & members$attachment == 1L] <- "standalone attachment"
   members$reason[is.na(members$reason) & is.na(members$citation_key)] <- "no citation key"
 
+  # Membership names the item, but at search time a chunk answers to its
+  # citation key, so a key two live items share in this library would label
+  # both works as one. The same refusal as every key lookup.
+  keyed <- is.na(members$reason)
+  if (any(keyed)) {
+    shared <- .crd_zot_resolve_keys(con, unique(members$citation_key[keyed]),
+                                    hits$library_id)$unresolved
+    members$reason[keyed & members$citation_key %in% shared] <- "citation key shared by several items"
+  }
+
   parents <- members[is.na(members$reason), , drop = FALSE]
   .crd_zot_pdf_sources(con, parents, members, zotero_dir)
 }

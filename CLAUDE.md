@@ -95,14 +95,17 @@ This is the core data model. Every function respects it.
 - `crd_zot_src_lookup()` — resolves citation keys to attached PDF/docx paths
 - `crd_zot_abstract_lookup()` — retrieves `abstractNote` field for keys without attachments
 - **A citation key names an item only within one library.** Keys repeat across libraries (331 of
-  them in one real database) and occasionally within one. Every lookup takes `library` (`"user"`,
+  them in one real database) and occasionally within one. The two lookups, `crd_store_build()`
+  and the audit functions take `library` (`"user"`,
   a group name, or a groupID; default `getOption("cred.zotero_library")`), and a key matching
-  more than one live item is left unresolved with a warning, never picked. Zotero's internal
+  more than one live item is left unresolved with a warning, never picked, and the collection
+  path applies the same refusal to its members. Zotero's internal
   `libraryID` is refused because it differs between machines.
 - **Trash is never a source**: `deletedItems` (parent and attachment) and `deletedCollections`
   are excluded everywhere, and linked URLs (`linkMode = 3`) are not files.
 - **The audit takes one file per key; a store takes them all.** `crd_zot_src_lookup()` takes
-  Zotero's own best attachment (`getBestAttachments`: PDF, URL matching the item, oldest), with
+  Zotero's own best attachment (`getBestAttachments`: PDF; then the item's own URL, any URL, no
+  URL; then oldest), with
   itemID as the tie-break, and the first such file on disk, and names the rest. `crd_store_build()` ingests
   every live PDF, so appendices and report parts are searchable. Each still maps back to its
   key through the attachment directory. Byte-identical copies are deduped **within one item

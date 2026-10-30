@@ -51,9 +51,10 @@ items within one library is treated the same way.
 Trashed items and trashed attachments are never used.
 
 When an item has several attachments, the one taken is the one Zotero itself
-opens: a PDF before a Word document, then the attachment whose URL is the
-item's own, then the oldest. If that file is not on disk the next one is
-taken. A message names the file taken and the ones left out.
+opens: a PDF before a Word document, then by URL (the attachment whose URL
+is the item's own, then one with any URL, then one with none), then the
+oldest. If that file is not on disk the next one is taken. A message names
+the file taken and the ones left out.
 
 The database is opened read-only and \code{immutable}, so a running Zotero is
 never locked.
