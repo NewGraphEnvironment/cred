@@ -41,8 +41,8 @@ then `raw[!duplicated(raw$citation_key), ]`. Three consequences, each measured o
 5. Follow-ups (user): clean up the Zotero mess through issues rather than code workarounds. Library consolidation already has an internal issue, so edit its body with these measurements rather than file a duplicate. File a new internal issue for multi-PDF items (merge appendices into the report, drop identical copies, decide on multi-part reports). This repo is public, so its text names neither by number.
 
 ## Phase 1: Fixture and failing tests
-- [ ] `data-raw/make_toy_zotero.R`: add the real Zotero tables the new queries read: `libraries`, `groups`, `deletedItems`, `deletedCollections`, `collections`, `collectionItems`, `items.dateAdded`, `itemAttachments.linkMode`, and a `url` field. Keep the three existing items in library 1 with unchanged keys and paths, so the vignette and `test-matching.R` are unaffected. Regenerate `inst/extdata/zotero.sqlite`.
-- [ ] `tests/testthat/helper-zotero.R`: builder for a temp DB in that schema, with cases for:
+- [x] `data-raw/make_toy_zotero.R`: add the real Zotero tables the new queries read: `libraries`, `groups`, `deletedItems`, `deletedCollections`, `collections`, `collectionItems`, `items.dateAdded`, `itemAttachments.linkMode`, and a `url` field. Keep the three existing items in library 1 with unchanged keys and paths, so the vignette and `test-matching.R` are unaffected. Regenerate `inst/extdata/zotero.sqlite`.
+- [x] `tests/testthat/helper-zotero.R`: builder for a temp DB in that schema, with cases for:
   - one key in personal and group libraries
   - a trashed attachment that is newest
   - a trashed parent
@@ -52,7 +52,7 @@ then `raw[!duplicated(raw$citation_key), ]`. Three consequences, each measured o
   - a trashed collection
   - members with no key, no PDF, or a standalone attachment
   - two live parents sharing one key
-- [ ] `tests/testthat/test-zotero.R`: the issue's three defects, ambiguity warnings, library resolution (name, groupID, `"user"`, unknown name errors with the available list), and abstract lookup returning one row per key. Run against `main`'s code and confirm each goes red for the right reason.
+- [x] `tests/testthat/test-zotero.R`: the issue's three defects, ambiguity warnings, library resolution (name, groupID, `"user"`, unknown name errors with the available list), and abstract lookup returning one row per key. Run against `main`'s code and confirm each goes red for the right reason.
 
 ## Phase 2: One shared attachment query
 - [ ] `R/zotero.R`: `.crd_zot_library(con, library)` → libraryID(s). NULL means all libraries; `"user"` → `libraries.type = 'user'`; numeric → `groups.groupID`; character → `groups.name`; anything else errors and lists the available groups.

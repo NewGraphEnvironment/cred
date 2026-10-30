@@ -86,6 +86,14 @@ citationKey, so every PDF of one item comes back as the same citation key. The i
 - An internal issue on consolidating the libraries into one. Its body gains the measurements above.
 - Internal work on keying the store corpus by parent item key and library. This change does not conflict with it, because it keeps the attachment-key origins.
 
+## Phase 1: the fixture reaches each defect on main
+
+On `main`, `crd_zot_src_lookup()` run against `zot_fixture()` with no `library` takes:
+`martins_trashed.pdf`, `bottoms_appendix1.pdf`, `gone.pdf` (trashed parent), `web.pdf`
+(linked URL) and `rbase_b.pdf` (one of two parents sharing a key). Each is the defect its
+test asserts against. The new tests error on `main` mostly as `unused argument (library =)`,
+because the API is new. The fixture is what shows that they reach the failure.
+
 ## Errors Encountered
 
 | Error | Resolution |

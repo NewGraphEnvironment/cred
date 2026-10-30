@@ -5,4 +5,6 @@
 - Plan-mode exploration — phases approved by user
 - Created branch `40-crd-zot-src-lookup-a-key-resolves-across` off origin/main
 - Scaffolded PWF baseline from issue #40 with approved phases
-- Next: start Phase 1
+- Plan review spawned 22:42 UTC (background)
+- Phase 1: fixture schema in `helper-zotero.R`, toy DB regenerated in the same schema, `test-zotero.R` red on main
+- Next: Phase 2
