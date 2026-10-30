@@ -96,8 +96,8 @@ then `raw[!duplicated(raw$citation_key), ]`. Three consequences, each measured o
 - [x] Vignette: one sentence on `cred.zotero_library` where the lookup is introduced. Confirm it still builds against the regenerated fixture.
 
 ## Phase 7: Follow-up issues (internal repo)
-- [ ] Edit the internal library-consolidation issue's body with: 331 cross-library keys, 52 two-parent keys in the personal library, duplicate collection names, and the `cred.zotero_library` option that works around them until consolidation.
-- [ ] File an internal issue for the 37 multi-PDF items, with the per-library table and shapes, proposing merge / drop-duplicate / keep-parts verdicts per item.
+- [x] Edit the internal library-consolidation issue's body with: 331 cross-library keys, 52 two-parent keys in the personal library, duplicate collection names, and the `cred.zotero_library` option that works around them until consolidation.
+- [x] File an internal issue for the 37 multi-PDF items, with the per-library table and shapes, proposing merge / drop-duplicate / keep-parts verdicts per item.
 
 ## Owed at the end (reported, done after merge)
 - [ ] Set `options(cred.zotero_library = "NewGraphEnvironment")` in each build machine's R profile. This changes the machines, so it is the user's step.

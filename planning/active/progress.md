@@ -10,4 +10,7 @@
 - Plan review delivered; written to review-plan.md, each finding probed, folded into task_plan.md
 - Phases 2-5: shared resolver in R/zotero.R, `library` on both lookups, `crd_store_build()`, `crd_aud_verify_all()`, `crd_aud_verify_abstract()`; collection resolver with left-out reasons and per-item md5 dedupe
 - 706 tests pass, 0 lints, 15/15 mutations caught
-- Next: Phase 6 docs, live check against the real database, Phase 7 issues
+- Phase 6: CLAUDE.md Zotero section; vignette statuses identical to main's build (10/4/5)
+- Live check against ~/Zotero recorded in findings.md
+- Phase 7: internal consolidation issue's body extended with the measurements; internal issue filed for the 36 multi-PDF items (none byte-identical by md5)
+- Next: devtools::check(), /code-check branch
