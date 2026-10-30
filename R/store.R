@@ -1441,58 +1441,162 @@ crd_search <- function(store, query, top_k = 5L,
   )
 }
 
-#' Resolve a Zotero collection to PDF attachment paths
+#' Resolve a Zotero collection to the PDFs of its members
 #'
-#' @param collection `character(1)` collection name as shown in Zotero.
+#' A collection is named by its name, or by a `parent/child` path when the name
+#' alone is not unique — collection names repeat within a library as well as
+#' across libraries, and taking the first match would build a store from the
+#' wrong one. Only direct members are taken, not subcollections, as in Zotero's
+#' default view.
+#'
+#' Every live PDF of a member is returned, so an appendix or the other parts of
+#' a multi-part report are searchable too; byte-identical copies on one item are
+#' kept once. Members that contribute nothing are returned in `left_out` with
+#' the reason, rather than dropped silently.
+#'
+#' @param collection `character(1)` collection name or `parent/child` path.
 #' @param zotero_dir `character(1)` Zotero data directory.
-#' @return A [tibble][tibble::tibble] with `citation_key`, `src_path`.
+#' @param library As in [crd_zot_src_lookup()].
+#' @return A `list`: `sources` (`citation_key`, `src_path`, one row per PDF)
+#'   and `left_out` (`citation_key`, `item`, `title`, `reason`).
 #' @noRd
-.crd_zot_collection_pdfs <- function(collection, zotero_dir = "~/Zotero") {
-  .crd_need("RSQLite")
-  zotero_dir <- path.expand(zotero_dir)
-  db_path <- file.path(zotero_dir, "zotero.sqlite")
-  if (!file.exists(db_path)) stop("zotero.sqlite not found in: ", zotero_dir, call. = FALSE)
-
-  con <- RSQLite::dbConnect(RSQLite::SQLite(),
-                            paste0("file:", db_path, "?mode=ro&immutable=1"))
+.crd_zot_collection_pdfs <- function(collection, zotero_dir = "~/Zotero",
+                                     library = getOption("cred.zotero_library")) {
+  con <- .crd_zot_connect(zotero_dir)
   on.exit(RSQLite::dbDisconnect(con), add = TRUE)
+  lib_id <- .crd_zot_library(con, library)
+  libs <- .crd_zot_libraries(con)
 
-  raw <- RSQLite::dbGetQuery(con, "
-    SELECT idv.value AS citation_key,
-           att.key   AS attachment_key,
-           ia.path   AS attachment_path
-    FROM collections c
-    JOIN collectionItems ci ON ci.collectionID  = c.collectionID
-    JOIN items           i  ON i.itemID         = ci.itemID
-    JOIN itemData        id ON id.itemID        = i.itemID
-    JOIN itemDataValues idv ON id.valueID       = idv.valueID
-    JOIN fields          f  ON id.fieldID       = f.fieldID
-    JOIN itemAttachments ia ON ia.parentItemID  = i.itemID
-    JOIN items          att ON att.itemID       = ia.itemID
-    WHERE f.fieldName = 'citationKey'
-    AND   c.collectionName = ?
-    AND   ia.contentType   = 'application/pdf'
-    ORDER BY idv.value
-  ", params = list(collection))
-
-  if (nrow(raw) == 0L) {
-    stop("No PDF attachments found in Zotero collection '", collection, "'.\n",
-         "  Check the collection name, or pass citation_keys instead.", call. = FALSE)
-  }
-
-  raw <- raw[!duplicated(raw$citation_key), ]
-  storage_dir <- file.path(zotero_dir, "storage")
-  raw$src_path <- vapply(seq_len(nrow(raw)), function(i) {
-    p <- raw$attachment_path[i]
-    if (is.na(p)) return(NA_character_)
-    if (startsWith(p, "storage:")) {
-      file.path(storage_dir, raw$attachment_key[i], sub("^storage:", "", p))
-    } else {
-      path.expand(p)
+  colls <- RSQLite::dbGetQuery(con, "
+    SELECT collectionID AS id, collectionName AS name, parentCollectionID AS parent,
+           libraryID AS library_id
+    FROM collections
+    WHERE collectionID NOT IN (SELECT collectionID FROM deletedCollections)
+  ")
+  colls$path <- vapply(seq_len(nrow(colls)), function(i) {
+    path <- colls$name[i]
+    parent <- colls$parent[i]
+    while (!is.na(parent) && parent %in% colls$id) {
+      path <- paste0(colls$name[colls$id == parent], "/", path)
+      parent <- colls$parent[colls$id == parent]
     }
+    path
   }, character(1L))
 
-  tibble::tibble(citation_key = raw$citation_key, src_path = raw$src_path)
+  hit <- colls$path == collection | endsWith(colls$path, paste0("/", collection))
+  if (!is.null(lib_id)) hit <- hit & colls$library_id == lib_id
+  hits <- colls[hit, , drop = FALSE]
+  where <- function(ids) libs$label[match(ids, libs$library_id)]
+
+  if (nrow(hits) == 0L) {
+    stop("No Zotero collection '", collection, "'",
+         if (!is.null(lib_id)) paste0(" in ", where(lib_id)), ".\n",
+         "  Check the name, or pass citation_keys instead.", call. = FALSE)
+  }
+  if (nrow(hits) > 1L) {
+    spread <- if (length(unique(hits$library_id)) > 1L) "in more than one library" else
+      paste("in", where(hits$library_id[1L]))
+    stop("Zotero collection '", collection, "' matches ", nrow(hits), " collections, ",
+         spread, ":\n", paste0("  ", hits$path, " (", where(hits$library_id), ")",
+                               collapse = "\n"),
+         "\n  Pass `library`, or a parent/child path that names one.", call. = FALSE)
+  }
+
+  members <- RSQLite::dbGetQuery(con, "
+    SELECT i.itemID AS item_id, i.key AS item,
+           (SELECT v.value FROM itemData d
+              JOIN itemDataValues v ON v.valueID = d.valueID
+              JOIN fields f ON f.fieldID = d.fieldID
+             WHERE d.itemID = i.itemID AND f.fieldName = 'citationKey') AS citation_key,
+           (SELECT v.value FROM itemData d
+              JOIN itemDataValues v ON v.valueID = d.valueID
+              JOIN fields f ON f.fieldID = d.fieldID
+             WHERE d.itemID = i.itemID AND f.fieldName = 'title') AS title,
+           i.itemID IN (SELECT itemID FROM deletedItems)    AS trashed,
+           i.itemID IN (SELECT itemID FROM itemNotes)       AS note,
+           i.itemID IN (SELECT itemID FROM itemAttachments) AS attachment
+    FROM collectionItems ci
+    JOIN items i ON i.itemID = ci.itemID
+    WHERE ci.collectionID = ?
+    ORDER BY i.itemID
+  ", params = list(hits$id))
+
+  members$reason <- NA_character_
+  members$reason[members$trashed == 1L] <- "trashed"
+  members$reason[is.na(members$reason) & members$note == 1L] <- "note"
+  members$reason[is.na(members$reason) & members$attachment == 1L] <- "standalone attachment"
+  members$reason[is.na(members$reason) & is.na(members$citation_key)] <- "no citation key"
+
+  parents <- members[is.na(members$reason), , drop = FALSE]
+  .crd_zot_pdf_sources(con, parents, members, zotero_dir)
+}
+
+#' Resolve citation keys to every live PDF of each, for a store build
+#'
+#' Unlike [crd_zot_src_lookup()], which takes one file per key for the audit,
+#' a store takes them all; see [.crd_zot_collection_pdfs()].
+#'
+#' @param citation_keys `character` citation keys.
+#' @inheritParams .crd_zot_collection_pdfs
+#' @return As [.crd_zot_collection_pdfs()].
+#' @noRd
+.crd_zot_key_pdfs <- function(citation_keys, zotero_dir = "~/Zotero",
+                              library = getOption("cred.zotero_library")) {
+  con <- .crd_zot_connect(zotero_dir)
+  on.exit(RSQLite::dbDisconnect(con), add = TRUE)
+  lib_id <- .crd_zot_library(con, library)
+
+  keys <- unique(citation_keys[!is.na(citation_keys)])
+  resolved <- if (length(keys) > 0L) {
+    .crd_zot_resolve_keys(con, keys, lib_id)
+  } else {
+    list(items = data.frame(citation_key = character(), item_id = integer(),
+                            item_key = character()),
+         unresolved = character())
+  }
+  # Every column built at full length: data.frame() cannot recycle a scalar
+  # against a zero-length column, and any of these sets can be empty.
+  row <- function(citation_key, reason, item_id = rep(NA_integer_, length(citation_key)),
+                  item = rep(NA_character_, length(citation_key))) {
+    data.frame(item_id = item_id, item = item, citation_key = citation_key,
+               title = rep(NA_character_, length(citation_key)),
+               reason = rep(reason, length(citation_key)))
+  }
+  parents <- row(resolved$items$citation_key, NA_character_,
+                 item_id = resolved$items$item_id, item = resolved$items$item_key)
+  absent <- setdiff(keys, c(parents$citation_key, resolved$unresolved))
+  members <- rbind(parents, row(absent, "not found in Zotero"),
+                   row(resolved$unresolved, "unresolved (see warning)"))
+  .crd_zot_pdf_sources(con, parents, members, zotero_dir)
+}
+
+#' The live PDFs of some parent items, and what was left out
+#'
+#' @param parents `data.frame` with `item_id`, `citation_key`.
+#' @param members `data.frame` with `citation_key`, `item`, `title`, `reason`
+#'   (`NA` for a parent still in play).
+#' @return As [.crd_zot_collection_pdfs()].
+#' @noRd
+.crd_zot_pdf_sources <- function(con, parents, members, zotero_dir) {
+  att <- .crd_zot_attachments(con, parents$item_id, .crd_zot_pdf, zotero_dir)
+  att$citation_key <- parents$citation_key[match(att$item_id, parents$item_id)]
+
+  # Identical bytes twice on one item would be chunked and embedded twice, and
+  # answer every query twice. Only within one item: the same file under two
+  # keys is two citations, and dropping one would leave that key with nothing.
+  md5 <- rep(NA_character_, nrow(att))
+  md5[att$exists] <- unname(tools::md5sum(att$src_path[att$exists]))
+  same <- ifelse(is.na(md5), NA_character_, paste(att$item_id, md5))
+  att <- att[is.na(same) | !duplicated(same), , drop = FALSE]
+
+  no_pdf <- is.na(members$reason) & !members$item_id %in% att$item_id
+  members$reason[no_pdf] <- "no live PDF"
+
+  left_out <- members[!is.na(members$reason), c("citation_key", "item", "title", "reason")]
+  list(
+    sources = tibble::tibble(citation_key = att$citation_key, src_path = att$src_path),
+    left_out = tibble::as_tibble(left_out)
+  )
 }
 
 #' Check that Ollama can embed with the requested model
@@ -1551,20 +1655,38 @@ crd_search <- function(store, query, top_k = 5L,
 #' Building is expensive and machine-local. Sharing a built store is done out
 #' of band; see [crd_store_connect()] for the retrieval side.
 #'
+#' **What is ingested.** Every live PDF of each item: an appendix, or the other
+#' parts of a multi-part report, are searchable too, and each still answers to
+#' its item's citation key. Byte-identical copies on one item are ingested
+#' once. Trashed items, trashed attachments and trashed collections are never
+#' used. Before ingesting, the build lists every item it leaves out and why
+#' (trashed, a note, a standalone attachment, no citation key, no live PDF),
+#' and the items it takes several PDFs from.
+#'
+#' **Which library.** Citation keys and collection names are unique within a
+#' Zotero library at best, so both resolve in `library`. A key found in more
+#' than one library is left out with a warning. A collection name that matches
+#' more than one collection is an error listing each, with its `parent/child`
+#' path. A collection's subcollections are not included.
+#'
 #' @param store_path `character(1)` path for the `.duckdb` store to create.
-#' @param collection `character(1)` Zotero collection name. Supply exactly one
-#'   of `collection` or `citation_keys`.
+#' @param collection `character(1)` Zotero collection name, or a
+#'   `parent/child` path when the name alone matches more than one. Supply
+#'   exactly one of `collection` or `citation_keys`.
 #' @param citation_keys `character` vector of Better BibTeX citation keys.
 #' @param model `character(1)` Ollama embedding model.
 #'   Default `"nomic-embed-text"` — the model the shared stores are built with.
 #' @param zotero_dir `character(1)` Zotero data directory. Default `"~/Zotero"`.
 #' @param overwrite `logical(1)` replace an existing store. Default `FALSE`.
+#' @inheritParams crd_zot_src_lookup
 #' @return Invisibly, a [tibble][tibble::tibble] with one row per ingested
-#'   source (`citation_key`, `src_path`). Prints document and chunk counts.
+#'   file (`citation_key`, `src_path`), so a key with several PDFs has several
+#'   rows. Prints document and chunk counts.
 #' @export
 #' @examples
 #' \dontrun{
-#' crd_store_build("data/rag/vca_refs.duckdb", collection = "vca")
+#' crd_store_build("data/rag/vca_refs.duckdb", collection = "vca",
+#'                 library = "NewGraphEnvironment")
 #'
 #' crd_store_build(
 #'   "data/rag/adhoc.duckdb",
@@ -1576,7 +1698,8 @@ crd_store_build <- function(store_path,
                             citation_keys = NULL,
                             model = "nomic-embed-text",
                             zotero_dir = "~/Zotero",
-                            overwrite = FALSE) {
+                            overwrite = FALSE,
+                            library = getOption("cred.zotero_library")) {
   chk::chk_string(store_path)
   chk::chk_string(model)
   chk::chk_flag(overwrite)
@@ -1592,17 +1715,30 @@ crd_store_build <- function(store_path,
          call. = FALSE)
   }
 
-  src <- if (!is.null(collection)) {
+  resolved <- if (!is.null(collection)) {
     chk::chk_string(collection)
-    .crd_zot_collection_pdfs(collection, zotero_dir = zotero_dir)
+    .crd_zot_collection_pdfs(collection, zotero_dir = zotero_dir, library = library)
   } else {
     chk::chk_character(citation_keys)
-    found <- crd_zot_src_lookup(citation_keys, zotero_dir = zotero_dir)
-    found <- found[found$src_type == "pdf", c("citation_key", "src_path")]
-    if (nrow(found) == 0L) stop("No PDF attachments resolved for the supplied keys.",
-                                call. = FALSE)
-    found
+    .crd_zot_key_pdfs(citation_keys, zotero_dir = zotero_dir, library = library)
   }
+  src <- resolved$sources
+
+  # Say what the store will not hold, and which items it holds several files
+  # for, before an ingest that can take hours.
+  out <- resolved$left_out
+  if (nrow(out) > 0L) {
+    who <- ifelse(is.na(out$citation_key), paste0(out$item, " ", out$title), out$citation_key)
+    message("Leaving out ", nrow(out), " item(s):\n",
+            paste0("  ", who, ": ", out$reason, collapse = "\n"))
+  }
+  n_files <- table(src$citation_key)
+  if (any(n_files > 1L)) {
+    several <- n_files[n_files > 1L]
+    message("Ingesting several PDFs for ", length(several), " item(s): ",
+            paste0(names(several), " (", several, ")", collapse = ", "))
+  }
+  if (nrow(src) == 0L) stop("No PDF attachments resolved to ingest.", call. = FALSE)
 
   exists_flag <- file.exists(src$src_path)
   if (any(!exists_flag)) {

@@ -65,6 +65,32 @@ test_that("with no URL match, the oldest PDF is taken", {
   expect_identical(src_file(res, "dup2018Copies"), "dup_a.pdf")
 })
 
+test_that("an attachment whose URL is the item's own beats an older one", {
+  dir <- zot_fixture()
+  res <- suppressMessages(
+    crd_zot_src_lookup("url2020Match", zotero_dir = dir, library = "Central")
+  )
+  expect_identical(src_file(res, "url2020Match"), "url_main.pdf")
+})
+
+test_that("attachments added in the same second are picked by lowest itemID", {
+  dir <- zot_fixture()
+  res <- suppressMessages(
+    crd_zot_src_lookup("tie2021Same", zotero_dir = dir, library = "Central")
+  )
+  expect_identical(src_file(res, "tie2021Same"), "tie_first.pdf")
+})
+
+test_that("when the best file is not on disk, the next is taken and the other named", {
+  dir <- zot_fixture()
+  unlink(zot_att_path(dir, 131, "bottoms_report.pdf"))
+  expect_message(
+    res <- crd_zot_src_lookup("bottoms2023Critical", zotero_dir = dir, library = "Central"),
+    "took bottoms_appendix1\\.pdf; left out bottoms_report\\.pdf \\(not on disk\\)"
+  )
+  expect_identical(src_file(res, "bottoms2023Critical"), "bottoms_appendix1.pdf")
+})
+
 test_that("two live parents sharing a key in one library are left unresolved", {
   dir <- zot_fixture()
   expect_warning(
@@ -194,9 +220,75 @@ test_that("citation keys for a store take every live PDF, once per file content"
   res <- .crd_zot_key_pdfs(c("bottoms2023Critical", "dup2018Copies", "martins2022Spatial"),
                            zotero_dir = dir, library = "Central")
   expect_setequal(
-    basename(res$src_path),
+    basename(res$sources$src_path),
     c("bottoms_report.pdf", "bottoms_appendix1.pdf", "dup_a.pdf", "martins_live.pdf")
   )
+})
+
+test_that("keys for a store report the ones that did not resolve", {
+  dir <- zot_fixture()
+  res <- suppressWarnings(
+    .crd_zot_key_pdfs(c("martins2022Spatial", "nosuch2000Key", "hagen2019Trend"),
+                      zotero_dir = dir, library = NULL)
+  )
+  reason <- stats::setNames(res$left_out$reason, res$left_out$citation_key)
+  expect_identical(reason[["nosuch2000Key"]], "not found in Zotero")
+  expect_identical(reason[["hagen2019Trend"]], "unresolved (see warning)")
+  expect_identical(basename(res$sources$src_path), "martins_live.pdf")
+})
+
+test_that("an empty set of keys resolves to nothing, without an SQL error", {
+  dir <- zot_fixture()
+  res <- .crd_zot_key_pdfs(character(), zotero_dir = dir, library = "Central")
+  expect_identical(nrow(res$sources), 0L)
+  expect_identical(nrow(res$left_out), 0L)
+  expect_identical(nrow(crd_zot_src_lookup(character(), zotero_dir = dir)), 0L)
+})
+
+test_that("a parent/child path picks one of several same-named collections", {
+  dir <- zot_fixture()
+  # Both "species" collections are top-level, so a path cannot separate them;
+  # the library can.
+  res <- .crd_zot_collection_pdfs("species", zotero_dir = dir, library = "user")
+  expect_identical(basename(res$sources$src_path), "hagen_personal.pdf")
+})
+
+test_that("identical bytes under two different items are both kept", {
+  dir <- zot_fixture()
+  # Give martins the same bytes as hagen. They are two citations, so dropping
+  # one as a duplicate would leave its key with no document at all.
+  writeLines("hagen_central.pdf", zot_att_path(dir, 121, "martins_live.pdf"))
+  res <- .crd_zot_collection_pdfs("species", zotero_dir = dir, library = "Central")
+  expect_true(all(c("hagen_central.pdf", "martins_live.pdf") %in% basename(res$sources$src_path)))
+})
+
+# ---------------------------------------------------------------------------
+# The audit callers
+# ---------------------------------------------------------------------------
+
+test_that("verify_abstract lets an ambiguity warning through and does not error", {
+  dir <- zot_fixture()
+  withr::local_options(cred.zotero_library = NULL)
+  audit_file <- withr::local_tempfile(fileext = ".csv")
+  readr::write_csv(tibble::tibble(
+    section = "s", citation_key = "hagen2019Trend", paraphrase = "copy abstract",
+    paraphrase_eval = "copy abstract", quote = NA_character_,
+    page_or_section = NA_character_, verified = NA_character_, notes = NA_character_
+  ), audit_file, na = "")
+  expect_warning(
+    suppressMessages(crd_aud_verify_abstract(audit_file, zotero_dir = dir)),
+    class = "cred_zot_ambiguous"
+  )
+})
+
+test_that("a profile option naming a group does not break an explicit library", {
+  toy <- system.file("extdata", package = "cred")
+  skip_if(toy == "", "toy extdata not found")
+  withr::local_options(cred.zotero_library = "NewGraphEnvironment")
+  res <- crd_zot_src_lookup("smith2020SalmonHabitat", zotero_dir = toy, library = "user")
+  expect_identical(res$citation_key, "smith2020SalmonHabitat")
+  expect_error(crd_zot_src_lookup("smith2020SalmonHabitat", zotero_dir = toy),
+               "NewGraphEnvironment")
 })
 
 # ---------------------------------------------------------------------------

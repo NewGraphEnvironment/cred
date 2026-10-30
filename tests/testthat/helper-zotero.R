@@ -141,6 +141,17 @@ zot_fixture <- function(env = parent.frame()) {
   item(200, 5, "web2021Link")
   attach(201, 200, 5, "web.pdf", link_mode = 3L)
 
+  # The attachment whose URL is the item's own wins over an older one.
+  item(210, 5, "url2020Match", url = "https://example.org/main.pdf")
+  attach(211, 210, 5, "url_older.pdf", added = "2020-01-01 00:00:00")
+  attach(212, 210, 5, "url_main.pdf", added = "2021-01-01 00:00:00",
+         url = "https://example.org/main.pdf")
+
+  # Two attachments added in the same second: the lower itemID wins.
+  item(220, 5, "tie2021Same")
+  attach(222, 220, 5, "tie_second.pdf", added = "2021-06-01 12:00:00")
+  attach(221, 220, 5, "tie_first.pdf", added = "2021-06-01 12:00:00")
+
   # "species" exists in two libraries; "old" is trashed.
   run("INSERT INTO collections VALUES (1, 'species', NULL, 5, 'COLL0001'),
                                      (2, 'species', NULL, 1, 'COLL0002'),

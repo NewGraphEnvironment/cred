@@ -44,4 +44,5 @@ Imports:
     readr,
     rlang,
     RSQLite,
-    stringr
+    stringr,
+    tools

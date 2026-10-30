@@ -45,7 +45,7 @@ build_toy_audit <- function(rmd_lines_ch1, rmd_lines_ch2) {
   sources <- suppressWarnings(
     crd_zot_src_lookup(
       c("smith2020SalmonHabitat", "jones2019BeaverEcology", "doe2021NoFile"),
-      zotero_dir = toy_dir
+      zotero_dir = toy_dir, library = "user"
     )
   )
 

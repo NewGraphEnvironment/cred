@@ -94,6 +94,31 @@ On `main`, `crd_zot_src_lookup()` run against `zot_fixture()` with no `library` 
 test asserts against. The new tests error on `main` mostly as `unused argument (library =)`,
 because the API is new. The fixture is what shows that they reach the failure.
 
+## Mutation table (2026-10-30, scratch copy, test-zotero.R)
+
+Each guard was removed or inverted in a copy of `R/`, and `test-zotero.R` was run against the copy.
+
+| mutation | result |
+|---|---|
+| attachment trash filter removed | caught (3) |
+| parent trash filter removed | caught (1) |
+| linked-URL exclusion removed | caught (3) |
+| URL-match ordering removed | caught (1) |
+| itemID tie-break reversed | caught (1) |
+| dateAdded order reversed | caught (3) |
+| numeric `library` read as libraryID | caught (1) |
+| ambiguity check disabled | caught (5) |
+| md5 dedupe across items, not within | caught (1) |
+| md5 dedupe disabled | caught (2) |
+| multiple-collection-match error disabled | caught (1) |
+| trashed-collection filter removed | caught (1) |
+| trashed member reason removed | caught (2) |
+| `suppressWarnings()` back to all classes in verify_abstract | caught (1) |
+| on-disk check skipped in the pick | caught (1) |
+
+Two cases were added before this run because the first fixture did not pin them:
+the URL-match order (the bottoms report is also the oldest) and the itemID tie-break.
+
 ## Errors Encountered
 
 | Error | Resolution |

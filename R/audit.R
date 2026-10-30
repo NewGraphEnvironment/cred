@@ -275,6 +275,9 @@ crd_aud_scr_risk <- function(audit, statistic_extra = NULL) {
 #'   [crd_zot_src_lookup()].
 #' @param zotero_dir `character(1)` Zotero data directory, passed to
 #'   [crd_zot_src_lookup()] when `sources` is `NULL`. Default `"~/Zotero"`.
+#' @param library The Zotero library citation keys resolve in, passed to
+#'   [crd_zot_src_lookup()] when `sources` is `NULL`; see there. Default
+#'   `getOption("cred.zotero_library")`.
 #' @param min_score `numeric(1)` passed to [crd_aud_fill_src()].
 #'   Default `0.2`.
 #' @param overwrite_verified `logical(1)` passed to [crd_aud_fill_src()].
@@ -290,7 +293,8 @@ crd_aud_verify_all <- function(
     sources            = NULL,
     zotero_dir         = "~/Zotero",
     min_score          = 0.2,
-    overwrite_verified = FALSE) {
+    overwrite_verified = FALSE,
+    library            = getOption("cred.zotero_library")) {
 
   chk::chk_file(audit_file)
   chk::chk_string(zotero_dir)
@@ -302,7 +306,7 @@ crd_aud_verify_all <- function(
 
   if (is.null(sources)) {
     message("Looking up ", length(all_keys), " citation keys in Zotero ...")
-    sources <- crd_zot_src_lookup(all_keys, zotero_dir = zotero_dir)
+    sources <- crd_zot_src_lookup(all_keys, zotero_dir = zotero_dir, library = library)
   } else {
     chk::chk_data(sources)
     chk::check_names(sources, c("citation_key", "src_path", "src_type"))
@@ -851,6 +855,10 @@ crd_aud_score <- function(audit_file,
 #' @param overwrite_verified `logical(1)` if `TRUE`, reprocess existing
 #'   `"abstract_match"` rows. Never overwrites human-reviewed rows
 #'   (`yes`, `no`, `corrected`, `context`). Default `FALSE`.
+#' @param library The Zotero library citation keys resolve in, passed to
+#'   [crd_zot_abstract_lookup()]; see [crd_zot_src_lookup()]. A key found in
+#'   more than one library is warned about and left `NA`. Default
+#'   `getOption("cred.zotero_library")`.
 #' @return The updated audit data frame, invisibly. Writes to `audit_file`.
 #' @export
 #' @examples
@@ -860,7 +868,8 @@ crd_aud_score <- function(audit_file,
 crd_aud_verify_abstract <- function(audit_file,
                                     zotero_dir        = "~/Zotero",
                                     min_score         = 0.2,
-                                    overwrite_verified = FALSE) {
+                                    overwrite_verified = FALSE,
+                                    library           = getOption("cred.zotero_library")) {
   chk::chk_file(audit_file)
   chk::chk_string(zotero_dir)
   chk::chk_number(min_score)
@@ -880,8 +889,11 @@ crd_aud_verify_abstract <- function(audit_file,
   }
 
   target_keys <- unique(audit$citation_key[target_rows])
+  # Only "no abstract" is expected noise here; a key that matched more than
+  # one item, or another library, is something the caller has to hear about.
   abstracts   <- suppressWarnings(
-    crd_zot_abstract_lookup(target_keys, zotero_dir = zotero_dir)
+    crd_zot_abstract_lookup(target_keys, zotero_dir = zotero_dir, library = library),
+    classes = "cred_zot_no_abstract"
   )
 
   n_matched    <- 0L
