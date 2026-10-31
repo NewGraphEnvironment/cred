@@ -52,10 +52,10 @@ Decided by me (reject the plan to change any of these):
   current.
 
 ## Phase 1: Origin identity and the source record
-- [ ] Tests first: `.crd_origin_id()` maps a storage path and a foreign-prefix storage path to the same id, and returns a linked path whole; record write and read round-trip; reading a store with no record returns `NULL`
-- [ ] `.crd_origin_id(paths)`, `.crd_sources_read(con)`, `.crd_sources_write(con, origins, md5)` in `R/store.R`
-- [ ] `crd_store_build()` writes the record after ingest, for ingested files only. A failed write warns and keeps the store, because `complete` is already `TRUE` by then
-- [ ] Check that `ragnar_store_connect()` and `crd_search()` still work on a store carrying the extra table, and that `.crd_store_describe()` counts are unchanged
+- [x] Tests first: `.crd_origin_id()` maps a storage path and a foreign-prefix storage path to the same id, and returns a linked path whole; record write and read round-trip; reading a store with no record returns `NULL`
+- [x] `.crd_origin_id(paths)`, `.crd_sources_read(con)`, `.crd_sources_write(con, origins, md5)` in `R/store.R`
+- [x] `crd_store_build()` writes the record after ingest, for ingested files only. A failed write warns and keeps the store, because `complete` is already `TRUE` by then
+- [x] Check that `ragnar_store_connect()` and `crd_search()` still work on a store carrying the extra table, and that `.crd_store_describe()` counts are unchanged
 
 ## Phase 2: Share build's resolve and report
 - [ ] Move the resolve, left-out, several-PDFs and missing-file reporting (`R/store.R:2016-2047`) into `.crd_store_sources()`

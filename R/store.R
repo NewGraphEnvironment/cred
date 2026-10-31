@@ -1923,6 +1923,69 @@ crd_search <- function(store, query, top_k = 5L,
   )
 }
 
+#' Name a document by where it sits in Zotero, not on this machine
+#'
+#' A store records each `origin` as the absolute path the file had where the
+#' store was built, so the same Zotero file has a different origin on every
+#' machine whose data directory is elsewhere. A file Zotero holds is named by
+#' its `storage/<attachment key>/<file name>` tail instead, which is the same
+#' everywhere. A linked file has no such tail, and keeps its whole path.
+#'
+#' Read from the path text alone, with the attachment-key rule of
+#' [.crd_zot_key_from_path()], because an origin written on another machine
+#' carries a data directory this one does not know.
+#'
+#' @param paths `character` document paths or store origins.
+#' @return `character`, parallel to `paths`.
+#' @noRd
+.crd_origin_id <- function(paths) {
+  key <- basename(dirname(paths))
+  stored <- grepl("^[A-Z0-9]{8}$", key) & basename(dirname(dirname(paths))) == "storage"
+  out <- paths
+  out[stored] <- paste("storage", key[stored], basename(paths[stored]), sep = "/")
+  out
+}
+
+#' Read and write the md5 a store records for each of its sources
+#'
+#' ragnar keeps a document's text, not the file it came from, so a PDF whose
+#' bytes changed under the same path cannot be told from an unchanged one by
+#' anything in ragnar's tables. [crd_store_build()] and [crd_store_update()]
+#' therefore keep their own table in the store, `cred_sources`, holding the
+#' md5 of each ingested file by [.crd_origin_id()].
+#'
+#' `NULL` and an empty record are different answers: `NULL` is a store built
+#' before records existed, whose documents' files are unknown.
+#'
+#' @param con A writable DBI connection to the store.
+#' @param origin_id,md5 `character`, parallel. A write replaces the whole
+#'   record.
+#' @return `.crd_sources_read()`: a `data.frame` (`origin_id`, `md5`), or
+#'   `NULL` when the store has no record.
+#' @noRd
+.crd_sources_read <- function(con) {
+  if (!DBI::dbExistsTable(con, "cred_sources")) return(NULL)
+  DBI::dbGetQuery(con, "SELECT origin_id, md5 FROM cred_sources")
+}
+
+#' @rdname .crd_sources_read
+#' @noRd
+.crd_sources_write <- function(con, origin_id, md5) {
+  if (length(origin_id) != length(md5)) {
+    stop("The source record needs one md5 per origin.", call. = FALSE)
+  }
+  if (anyDuplicated(origin_id)) {
+    stop("The source record holds each origin once; repeated: ",
+         paste(unique(origin_id[duplicated(origin_id)]), collapse = ", "), call. = FALSE)
+  }
+  rec <- data.frame(origin_id = as.character(origin_id), md5 = as.character(md5))
+  DBI::dbWithTransaction(con, {
+    DBI::dbExecute(con, "CREATE OR REPLACE TABLE cred_sources (origin_id VARCHAR PRIMARY KEY, md5 VARCHAR NOT NULL)")
+    if (nrow(rec) > 0L) DBI::dbAppendTable(con, "cred_sources", rec)
+  })
+  invisible(rec)
+}
+
 #' Build a ragnar evidence store from Zotero PDFs
 #'
 #' Ingests the PDFs attached to a Zotero collection — or to an explicit set of
@@ -2067,6 +2130,9 @@ crd_store_build <- function(store_path,
     if (!complete) unlink(store_path)
   }, add = TRUE)
 
+  # Before the ingest, so a file that changes while it is read is recorded by
+  # its old bytes, and the next update reads it again rather than never.
+  md5 <- tools::md5sum(unique(src$src_path))
   message("Ingesting ", nrow(src), " PDF(s) into ", store_path)
   ing <- .crd_store_ingest(store, src$src_path, progress = FALSE)
   # One file can sit under two keys (the same PDF cited twice), and is
@@ -2087,6 +2153,17 @@ crd_store_build <- function(store_path,
   # Anything after this point only produces a progress message, and must never
   # be able to delete an embedding run that can take hours.
   complete <- TRUE
+
+  # Without a record a later update cannot see a changed file, but the store
+  # itself is sound, so a failed write costs the record, never the store.
+  tryCatch(
+    .crd_sources_write(store@con, .crd_origin_id(ing$ingested), unname(md5[ing$ingested])),
+    error = function(e) {
+      warning("Could not record the ingested files' md5 in the store: ", conditionMessage(e),
+              "\n  crd_store_update() will treat this store as one built before records.",
+              call. = FALSE)
+    }
+  )
 
   notes <- ing$notes
   pdftools_read <- notes[notes$kind == "read_pdftools", , drop = FALSE]
