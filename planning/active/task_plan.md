@@ -83,7 +83,7 @@ Decided by me (reject the plan to change any of these):
 ## Phase 5: Docs and conventions
 - [x] `CLAUDE.md`: the architecture line for `store.R`, the update's two design decisions (copy-then-rename; origin id and md5 record), and the measured fact that ragnar's skip saves nothing under cred's `prepare`
 - [x] `?crd_store_build` points to `crd_store_update()`; check the vignette and README for build-only claims that are no longer true
-- [ ] Run the store tests against the development ragnar in a scratch library with `R_LIBS` set (CLAUDE.md, mirai workers)
+- [x] Run the store tests against the development ragnar in a scratch library with `R_LIBS` set (CLAUDE.md, mirai workers)
 
 ## Owed at the end (reported, done after merge)
 
@@ -91,7 +91,7 @@ Decided by me (reject the plan to change any of these):
 
 ## Validation
 
-- [ ] Tests pass (`devtools::test()`), `lintr::lint_package()` reports 0 lints, `devtools::check()` is clean
+- [x] Tests pass (`devtools::test()`), `lintr::lint_package()` reports 0 lints, `devtools::check()` is clean
 - [ ] `/code-check` clean (once over the branch with `/code-check branch`)
 - [ ] PWF checkboxes match landed work
 - [ ] `/planning-archive` on completion

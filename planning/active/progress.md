@@ -37,3 +37,9 @@
 - Mutation table run (15 mutations, 22:50-22:58Z): 14 red at once; M4 (no index rebuild after a removal-only
   update) survived the BM25 hit checks and was pinned by a new test comparing BM25 scores with a fresh build.
   Table in findings.md. CLAUDE.md gains the update's design; `?crd_store_build` links `crd_store_update()`.
+- Development ragnar 0.3.1.9000 (scratch library, `R_LIBS`): test-store-update/build/store/search 77/80/49/94
+  passed, 0 failed. Installed ragnar 0.3.1: `devtools::test()` 877 passed, 0 failed, 2 skipped; lint 0.
+  `devtools::check()`: 0 errors, 2 warnings, 3 notes, all present on main (undeclared tibble/openxlsx,
+  `.lintr`, `README.html`, `.data`), tracked in #32 and #38. Note M14 (transactional delete) passes under
+  the dev ragnar, which dropped the FK: only a 0.3.1 run can catch it.
+- Next: `/code-check branch`.
