@@ -171,6 +171,10 @@ contents <- function(path) {
     ids = sort(.crd_origin_id(origins)),
     rec = if (!is.null(rec)) sort(paste(rec$origin_id, rec$md5)),
     chunks = DBI::dbGetQuery(con, "SELECT COUNT(*) AS n FROM chunks")$n,
+    # The `chunks` view hides an embedding whose document is gone.
+    embeddings = DBI::dbGetQuery(con, "SELECT COUNT(*) AS n FROM embeddings")$n,
+    orphans = DBI::dbGetQuery(con, "SELECT COUNT(*) AS n FROM embeddings
+                                    WHERE doc_id NOT IN (SELECT doc_id FROM documents)")$n,
     texts = sort(DBI::dbGetQuery(con, "SELECT text FROM documents")$text)
   )
 }
@@ -340,4 +344,53 @@ test_that("crd_store_update() refuses a missing store and one with a write-ahead
   file.create(path, paste0(path, ".wal"))
   expect_error(crd_store_update(path, citation_keys = "keyA"), "write-ahead log")
   expect_error(crd_store_update(path), "exactly one of")
+})
+
+test_that("a changed file that can no longer be read leaves the store as a build would, and is tried again", {
+  world <- local_update_world()
+  path <- build(world, c("keyA", "keyB"))
+  writeLines(character(), world$paths["keyB"])
+
+  expect_warning(res <- update(path, c("keyA", "keyB")), "Skipped 1 PDF")
+  expect_match(res$msgs, "added: 0 | replaced: 0 | removed: 1 | kept: 1", fixed = TRUE)
+  fresh <- suppressWarnings(build(world, c("keyA", "keyB"), name = "fresh.duckdb"))
+  expect_identical(contents(path), contents(fresh))
+  # No md5 is recorded for it, so the next update reads it again.
+  n <- length(world$ingested)
+  before <- tools::md5sum(path)
+  expect_warning(res <- update(path, c("keyA", "keyB")), "Skipped 1 PDF")
+  expect_identical(world$ingested[[n + 1L]], unname(world$paths["keyB"]))
+  # And finding it still unreadable changes nothing, so the store is not rewritten.
+  expect_match(res$msgs, "Store is current", fixed = TRUE)
+  expect_identical(tools::md5sum(path), before)
+})
+
+test_that("an update refuses to leave the store with no documents", {
+  world <- local_update_world()
+  path <- build(world, "keyA")
+  before <- tools::md5sum(path)
+  writeLines(character(), world$paths["keyB"])
+  expect_error(suppressWarnings(suppressMessages(crd_store_update(path, citation_keys = "keyB"))),
+               "would leave the store with no documents")
+  expect_identical(tools::md5sum(path), before)
+})
+
+test_that("an updated store that cannot be moved into place leaves the store and no copy", {
+  world <- local_update_world()
+  path <- build(world, c("keyA", "keyB"))
+  before <- tools::md5sum(path)
+  local_mocked_bindings(file.rename = function(...) FALSE, .package = "base")
+  expect_error(suppressMessages(crd_store_update(path, citation_keys = "keyA")),
+               "the store is unchanged")
+  expect_identical(tools::md5sum(path), before)
+  expect_identical(list.files(world$root), c("store.duckdb", "zotero"))
+})
+
+test_that("a missing file no longer resolved is removed, though a resolved one is kept", {
+  world <- local_update_world()
+  path <- build(world, c("keyA", "keyB"))
+  unlink(world$paths["keyB"])
+  res <- update(path, "keyA")
+  expect_match(res$msgs, "removed: 1", fixed = TRUE)
+  expect_identical(contents(path)$ids, .crd_origin_id(unname(world$paths["keyA"])))
 })

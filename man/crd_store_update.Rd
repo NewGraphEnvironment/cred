@@ -49,13 +49,15 @@ would hold, at the cost of the changes alone.
 its PDF had on the machine that built it. A file Zotero holds is matched by
 its \verb{storage/<attachment key>/<file name>} instead, so a store built on a
 machine whose Zotero data directory is elsewhere updates cleanly. A linked
-file is matched by its whole path.
+file is matched by its whole path, so it is read again on a machine where
+it lies elsewhere, and so is an attachment whose file Zotero renamed.
 
 \strong{How a changed file is seen.} \code{\link[=crd_store_build]{crd_store_build()}} and this function
-record each ingested file's md5 in the store. A store built before cred
-0.7.0 has no record: its first update records the files it keeps as they
-are now, and says so, because a change made to one of them before that
-update cannot be seen.
+record each ingested file's md5 in the store. A stored file with no record,
+as in every store built before stores carried one, is recorded as it is now, and
+the update says so, because a change made to it before then cannot be
+seen. A changed file that can no longer be read loses its document, as a
+build would leave it out, and is tried again by the next update.
 
 \strong{What is kept that a build would leave out.} A PDF that resolves in
 Zotero but is not on this machine keeps its stored document, and is named.
@@ -70,8 +72,15 @@ store holds, stops the update.
 
 \strong{What a failure costs.} The update works on a copy beside the store and
 replaces the store with it only when it has finished. An update that stops
-part way, for whatever reason, leaves the store exactly as it was. When
-nothing has changed the store is not written at all.
+part way, for whatever reason, leaves the store exactly as it was, and so
+does one that would leave it with no documents. When nothing has changed,
+or nothing that changed could be read, the store is not written at all.
+Close any connection to the store before updating it.
+
+\strong{After an update.} The store's md5 no longer matches the manifest, so
+\code{\link[=crd_store_connect]{crd_store_connect()}} would replace it with the copy the manifest
+describes. Push it with \code{\link[=crd_store_push]{crd_store_push()}}, or open it with
+\code{crd_store_connect(verify = FALSE)} until then.
 }
 \examples{
 \dontrun{

@@ -27,3 +27,10 @@
   - Removed documents are dropped before the ingest so ragnar's index build covers them; a replaced
     document ingested under a new origin (store built on another machine) has its old doc dropped after,
     followed by an index rebuild.
+- Plan review (Plan agent) delivered 22:44Z; recorded in `review-plan.md`, verdicts in findings.md. Blocker 2
+  (an unreadable same-origin replacement counted as replaced, new md5 recorded) reproduced by a test before the
+  fix (`replaced: 1` where a build leaves it out). Reworked `crd_store_update()`: checks and the embedder probe
+  run read-only on the original before the copy; replaced docs are deleted before the ingest, so ragnar is never
+  handed an origin it holds; a result with nothing ingested or dropped and an unchanged record discards the
+  copy; a zero-document result is refused; CHECKPOINT and a `<work>.wal` check before the rename; leftover
+  `.updating-*` copies warn; the final message says to push or open with `verify = FALSE`.
