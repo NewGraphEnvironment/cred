@@ -30,8 +30,9 @@ R/
 ├── store.R      — ragnar evidence store: crd_store_connect (md5-verified pull from a
 │                  configured source, plus a connect-time embedding-width probe),
 │                  crd_search (hybrid/BM25/VSS + citation-key
-│                  resolution), crd_store_build (Zotero collection or keys → DuckDB),
-│                  crd_store_push (merge-on-write manifest + ETag compare-and-swap)
+│                  resolution), crd_store_build (Zotero collection or keys → DuckDB,
+│                  through cred's own worker `prepare`: pdftools fallback, split on a
+│                  refused chunk), crd_store_push (merge-on-write manifest + ETag compare-and-swap)
 ├── pdf.R        — PDF text extraction + paragraph splitting (pdftools)
 └── docx.R       — Word doc extraction (officer) + .paraphrase_tokens(), .token_score()
                    (internal matching functions reused by abstract matching)
@@ -44,6 +45,8 @@ tests/testthat/
 ├── test-score.R     — crd_aud_score, .score_row, scoring internals
 ├── test-store.R     — store source resolution, manifest parsing, arg validation
 ├── test-store-push.R — manifest merge, S3 probes, push guards (all offline)
+├── test-store-build.R — worker prepare (fallback, split, drop, skip) and the build's report;
+│                      end-to-end through ragnar's mirai workers on an offline store
 ├── test-zotero.R    — library scoping, trash, attachment pick, collection resolution
 │                      (multi-library fixture built by helper-zotero.R)
 └── test-sentence.R
@@ -287,6 +290,29 @@ Shipped: [#22](https://github.com/NewGraphEnvironment/cred/issues/22) ragnar ret
   identically — which is why the `s3api` probes exist.
 - **Provenance describes where a store was built**, read from the store's own directory rather
   than the process's working directory.
+- **One PDF never costs the build; the embedding service failing still does.** ragnar's worker
+  swallows an embed error, and the main process then re-embeds with no handler. So a single
+  chunk the model refuses ended the whole ingest. `crd_store_build()` therefore gives ragnar
+  its own `prepare` (`.crd_ingest_prepare()`), which reads, chunks and embeds in the worker. It
+  falls back to `pdftools` when markitdown cannot read a PDF (a NUL in its text). It splits a
+  chunk by character range **only when the model answers 400 naming the context length**, keeps
+  each range once (ragnar keys `chunks` on `(doc_id, start, end)`, and halves of neighbouring
+  chunks collide), and drops a part at 64 characters. Any other embed failure leaves the chunks
+  unembedded, so ragnar's main-process embed aborts the build and the store is deleted, as
+  before. Characters do not predict a refusal: a 1,887-character run of `•` is refused, while a
+  2,073-character paragraph is not. So there is no length cap.
+  [#35](https://github.com/NewGraphEnvironment/cred/issues/35),
+  `research/ollama-embedding-context.md`.
+
+  **`prepare` must not reach cred.** ragnar serialises it to mirai workers, and a closure
+  chained to the cred namespace makes a worker load the *installed* cred. Its environment is
+  parented on `baseenv()`, and its `embed` is the store's own `@embed`, which ragnar has already
+  re-parented to `baseenv()`. The structure test (`topenv()` is `baseenv()`) is the guard. The
+  end-to-end test cannot be: under `R CMD check` the workers load the code under test anyway.
+  A skipped document comes back from ragnar as `warning(cond)` **with its error class kept**.
+  So it reaches `error =` calling handlers, never `warning =` ones, and it is muffled by its
+  own class, `cred_ingest_skip`. The `documents` table, not the warnings, decides what was
+  ingested.
 
 <!-- BEGIN SOUL CONVENTIONS — DO NOT EDIT BELOW THIS LINE -->
 

@@ -106,14 +106,14 @@ Approved by the user at the plan gate, 2026-10-31 (recommendations accepted as w
       query
 
 ## Phase 4: Docs and record
-- [ ] `CLAUDE.md`: a Key Design Decisions bullet (token count, not characters; the main-process
+- [x] `CLAUDE.md`: a Key Design Decisions bullet (token count, not characters; the main-process
       abort; why `prepare` is `baseenv()`), and add `test-store-build.R` to the architecture
       list
-- [ ] `research/ollama-embedding-context.md` gets the measured truncation behaviour and the `•`
+- [x] `research/ollama-embedding-context.md` gets the measured truncation behaviour and the `•`
       case, plus a README row
 - [ ] Edit the #35 body: the cause is token count, so "cap each chunk" is replaced by the
       measured mechanism. Link the research file.
-- [ ] Upstream drafts in `findings.md`
+- [x] Upstream drafts in `findings.md`
 
 ## Owed at the end (reported, done after merge)
 - [ ] Post the two upstream drafts — only on the user's word for each

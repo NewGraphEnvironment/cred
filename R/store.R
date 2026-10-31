@@ -2020,10 +2020,12 @@ crd_store_build <- function(store_path,
     overwrite = overwrite
   )
 
-  # Ingest is the long call that fails — an unreadable PDF, Ollama dying part
-  # way through, an interrupt. A half-ingested store left on disk is worse than
-  # none: the retry is refused as "already exists", and the short store answers
-  # queries from a fraction of the corpus without saying so.
+  # Ingest is the long call that fails — Ollama dying part way through, an
+  # interrupt. (An unreadable PDF or a refused chunk no longer does: those cost
+  # one document or one chunk, and are named; see .crd_ingest_prepare().) A
+  # half-ingested store left on disk is worse than none: the retry is refused
+  # as "already exists", and the short store answers queries from a fraction of
+  # the corpus without saying so.
   complete <- FALSE
   on.exit({
     try(DBI::dbDisconnect(store@con, shutdown = TRUE), silent = TRUE)

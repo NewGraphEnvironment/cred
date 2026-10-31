@@ -127,6 +127,40 @@ The four-paper collection from the issue, built with the branch at `6c4e5a5`:
 (`bengio_grandvalet2004NoUnbiased`, `chen_yang2021OneStandard`), alternating main and branch:
 main 10.6 s and 10.4 s, branch 10.5 s and 10.6 s, 177 chunks each. No measurable cost.
 
+## Upstream drafts (NOT posted; each needs the user's word)
+
+### Comment on ollama/ollama#14186
+
+> On 0.24.0 truncation works for ordinary text but still fails for some inputs.
+> With `nomic-embed-text` (context 2048) and the default `truncate`:
+>
+> ```sh
+> curl -s localhost:11434/api/embed -d "{\"model\":\"nomic-embed-text\",\"input\":\"$(python3 -c 'print("•"*1800)')\"}"
+> # {"error":"the input length exceeds the context length"}
+> ```
+>
+> 20,000 characters of prose, or 3,000 × `中`, are truncated to 2,048 tokens and embed. 1,000 ×
+> `•` is 2,002 tokens and embeds. 1,800 × `•` (about 3,600 tokens) returns the 400. We met it on a
+> textbook figure that markitdown renders as a run of `•`.
+
+### Issue for tidyverse/ragnar
+
+> **`ragnar_store_ingest()`: one chunk the embedding provider refuses aborts the whole ingest**
+>
+> In `do_ingest_remote_work()` a worker's embed error is swallowed, and the chunks come back
+> unembedded. `ragnar_store_update_v2()` then embeds them in the main process with no handler,
+> so a single refused chunk ends the ingest and discards every document not yet written. Seen
+> with Ollama `nomic-embed-text`, which answers 400 "the input length exceeds the context length"
+> for a ~1,900-character run of `•` glyphs (ollama/ollama#14186).
+>
+> Separately, `read_as_markdown()` fails with `Embedded NUL in string` when markitdown's text
+> contains a NUL, through both the reticulate and the CLI routes (`stri_read_lines`). Stripping
+> `\x00` in `_ragnartools/markitdown.py` before the string crosses into R would fix it.
+> Example: arXiv 2104.00673v4.
+>
+> ragnar 0.3.0. We work around both in a custom `prepare`: it embeds in the worker, splits a
+> refused chunk, and falls back to pdftools text.
+
 ## Errors Encountered
 
 | Error | Resolution |
