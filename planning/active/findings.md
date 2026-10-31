@@ -161,6 +161,21 @@ main 10.6 s and 10.4 s, branch 10.5 s and 10.6 s, 177 chunks each. No measurable
 > ragnar 0.3.0. We work around both in a custom `prepare`: it embeds in the worker, splits a
 > refused chunk, and falls back to pdftools text.
 
+## R CMD check (2026-10-31, at 37c20da)
+
+`devtools::check(vignettes = FALSE, args = "--no-manual")`: 0 errors, 3 warnings, 3 notes, and
+the tests passed (`testthat.R` 13 s), including the mirai worker tests against the installed
+package. Every warning and note is also on main: non-ASCII in R/audit.R and R/store.R (main
+has the same two files), undeclared `tibble`/`openxlsx`, `.lintr`, top-level `data-raw`/`dev`,
+and `.data` bindings.
+
+## Code-check rounds
+
+| Round | Findings | Fixed | Accepted | Inside previous fix? |
+|---|---|---|---|---|
+| 1 | 2 (shared notes log splices past 4 KB; two prose claims about ragnar) | 2 | 0 | n/a |
+| 2 | 0 (Clean); one unreported invalid-UTF-8 case probed: `MarkdownDocument()` refuses invalid UTF-8 inside the reader's tryCatch, so it is unreachable | 0 | 0 | n |
+
 ## Errors Encountered
 
 | Error | Resolution |
