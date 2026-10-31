@@ -45,7 +45,10 @@ crd_store_build(
 
 - overwrite:
 
-  `logical(1)` replace an existing store. Default `FALSE`.
+  `logical(1)` replace an existing store. Default `FALSE`. To add,
+  replace or drop a few documents,
+  [`crd_store_update()`](https://newgraphenvironment.github.io/cred/reference/crd_store_update.md)
+  changes only those.
 
 - library:
 
@@ -109,6 +112,11 @@ to come, silently, rather than one that is named.
 ragnar's own progress output is off, because it does not handle every
 file name safely. The build says what it will ingest before it starts,
 and what it ingested, read differently, split or skipped when it ends.
+
+## See also
+
+[`crd_store_update()`](https://newgraphenvironment.github.io/cred/reference/crd_store_update.md)
+to bring a built store up to date.
 
 ## Examples
 
