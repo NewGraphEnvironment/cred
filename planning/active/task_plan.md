@@ -50,15 +50,15 @@ Approved by the user at the plan gate, 2026-10-31 (recommendations accepted as w
    output, and a single main-process embed error aborts `ragnar_store_ingest()`.
 
 ## Phase 1: Failing tests (`tests/testthat/test-store-build.R`)
-- [ ] `prepare` falls back to `pdftools` when the reader errors (inject a reader that raises
+- [x] `prepare` falls back to `pdftools` when the reader errors (inject a reader that raises
       `Embedded NUL in string` on the toy `inst/extdata/storage/TOYPDF1/salmon_habitat.pdf`),
       and records the fallback
-- [ ] `prepare` splits a chunk whose embed raises a constructed `httr2_http_400`, and every
+- [x] `prepare` splits a chunk whose embed raises a constructed `httr2_http_400`, and every
       resulting row satisfies `text == substr(document, start, end)`, with full coverage of the
       original range
-- [ ] `prepare` drops and records a chunk that still 400s at the floor
-- [ ] `prepare` returns the chunks unembedded on a non-400 failure (`httr2_failure`)
-- [ ] End to end through the real `ragnar_store_ingest()` on an offline store (the
+- [x] `prepare` drops and records a chunk that still 400s at the floor
+- [x] `prepare` returns the chunks unembedded on a non-400 failure (`httr2_failure`)
+- [x] End to end through the real `ragnar_store_ingest()` on an offline store (the
       `.crd_test_embed` pattern, mirai workers): one doc that both readers reject plus good
       docs. The ingest finishes, the store holds the good docs, and the result names the
       skipped doc and its reason. Run it with the worker `prepare` serialised, which proves the
