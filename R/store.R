@@ -1028,7 +1028,8 @@ crd_store_connect <- function(store,
 #'   that cannot apply: the `unknown` remedy sends a searcher to
 #'   [crd_store_connect()] to rule the file out, which is nonsense said to
 #'   [crd_store_build()] -- the store does not exist yet -- and circular said
-#'   from inside connect itself.
+#'   from inside connect itself. `"update"` is [crd_store_update()], for which
+#'   a store exists but BM25 retrieval is no consolation: nothing can be added.
 #'
 #'   `store`-absence would be the obvious discriminator and is the wrong one:
 #'   `store` is optional for every caller and the existing tests pass none while
@@ -1037,7 +1038,7 @@ crd_store_connect <- function(store,
 #' @return `character(1)` the remedy, with no trailing newline.
 #' @noRd
 .crd_embed_remedy <- function(reason, cond, store = NULL, model = NULL,
-                              context = c("search", "build", "connect")) {
+                              context = c("search", "build", "connect", "update")) {
   context <- match.arg(context)
   if (identical(reason, "connection")) {
     return(paste0(
@@ -1156,6 +1157,13 @@ crd_store_connect <- function(store,
       "  cred does not recognise this failure, so no remedy is prescribed. Semantic\n",
       "  retrieval will not work until it does; BM25 needs no embedding and is\n",
       "  unaffected."
+    ))
+  }
+  if (identical(context, "update")) {
+    return(paste0(
+      "  cred does not recognise this failure, so no remedy is prescribed. Nothing can\n",
+      "  be added to the store without embeddings, and nothing here says why its\n",
+      "  embedder could not produce one."
     ))
   }
   paste0(
@@ -2369,10 +2377,29 @@ crd_store_update <- function(store_path,
       stop("The store's embedder could not embed, so nothing can be added:\n  ",
            .crd_indent_cause(conditionMessage(probe)), "\n",
            .crd_embed_remedy(.crd_retrieval_failure(probe), probe, store = store,
-                             context = "connect"),
+                             context = "update"),
            call. = FALSE)
     }
-    .crd_check_store_embedding(store, name = basename(store_path))
+    # The check connect runs, with advice for an update: connect's offers an
+    # argument this function does not have, and speaks of a manifest it never read.
+    tryCatch(
+      .crd_check_store_embedding(store, name = basename(store_path)),
+      cred_store_embedding_mismatch = function(e) {
+        rlang::abort(
+          paste0(
+            "Embedding width mismatch for '", basename(store_path), "', so nothing can be added.\n",
+            "  this store holds:                  ", e$store_size, "-wide embeddings\n",
+            "  its recorded embedder now returns: ", e$embed_width, "-wide\n",
+            "  The model that name resolves to on this machine is no longer the one the\n",
+            "  store was built with, and adding to it would mix the two.\n",
+            "    ollama pull ", .crd_fallback_model(store = store), "\n",
+            "  or rebuild with crd_store_build()."
+          ),
+          class = class(e)[seq_len(match("rlang_error", class(e)) - 1L)],
+          store_size = e$store_size, embed_width = e$embed_width, store_model = e$store_model
+        )
+      }
+    )
   }
   DBI::dbDisconnect(store@con, shutdown = TRUE)
   store <- NULL

@@ -434,3 +434,34 @@ test_that("a stored file this machine cannot read is kept like a missing one, re
   expect_match(res$msgs, "Recording the md5 of 2 stored file(s)", fixed = TRUE)
   expect_length(contents(path)$rec, 2L)
 })
+
+test_that("an embedder that changed width stops the update with advice that applies to it", {
+  world <- local_update_world()
+  path <- build(world, c("keyA", "keyB"))
+  connect <- ragnar::ragnar_store_connect
+  local_mocked_bindings(
+    ragnar_store_connect = function(...) {
+      store <- connect(...)
+      store@embed <- .crd_test_embed_narrow
+      store
+    },
+    .package = "ragnar"
+  )
+  before <- tools::md5sum(path)
+  cnd <- expect_error(suppressMessages(crd_store_update(path, citation_keys = c("keyA", "keyB", "keyC"))),
+                      class = "cred_store_embedding_mismatch")
+  msg <- conditionMessage(cnd)
+  expect_match(msg, "nothing can be added", fixed = TRUE)
+  # Connect's advice: neither argument nor manifest belongs to an update.
+  expect_no_match(msg, "check_model")
+  expect_no_match(msg, "manifest")
+  expect_identical(tools::md5sum(path), before)
+})
+
+test_that("the remedy for an unrecognised embedder failure fits an update", {
+  cond <- simpleError("something odd")
+  txt <- .crd_embed_remedy("unknown", cond, context = "update")
+  expect_match(txt, "Nothing can\\s+be added")
+  expect_no_match(txt, "BM25")
+  expect_no_match(txt, "crd_store_connect")
+})
