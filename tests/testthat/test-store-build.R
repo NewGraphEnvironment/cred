@@ -51,23 +51,10 @@
   }), baseenv())
 }
 
-# Reads a text file as a MarkdownDocument without markitdown, so the tests need
-# no Python. Base R and ragnar only, for the same reason as the embed above.
-.crd_test_read_text <- eval(quote(function(path) {
-  ragnar::MarkdownDocument(paste(readLines(path, warn = FALSE), collapse = "\n"),
-                           origin = path)
-}), baseenv())
-
 .crd_test_doc <- function(text, dir = withr::local_tempdir(.local_envir = parent.frame())) {
   path <- tempfile(tmpdir = dir, fileext = ".md")
   writeLines(text, path)
   path
-}
-
-.crd_test_prose <- function(n = 300L, seed = 1L) {
-  vocab <- c("culvert", "barrier", "fish", "passage", "stream", "salmon", "habitat",
-             "riparian", "bankfull", "width", "beaver", "wetland", "coho", "channel")
-  withr::with_seed(seed, paste(sample(vocab, n, replace = TRUE), collapse = " "))
 }
 
 # The notes directory `prepare` writes each document's notes file into.

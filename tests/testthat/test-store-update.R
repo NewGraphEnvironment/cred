@@ -93,3 +93,251 @@ test_that("a store carrying the source record still connects, searches, indexes 
   expect_gt(nrow(hits), 0L)
   expect_identical(.crd_sources_read(store@con)$origin_id, "storage/TOYKEY01/doc.pdf")
 })
+
+# --- crd_store_update(), end to end ---------------------------------------
+#
+# Zotero and Ollama are replaced; the ingest is real: ragnar's mirai workers
+# run cred's `prepare` with a text reader and the offline embed, so what an
+# update writes is what a build writes. Files sit under `<zotero>/storage/<KEY>/`
+# so their origin ids are the ones a real library gives.
+
+local_update_world <- function(env = parent.frame()) {
+  skip_if_not_installed("ragnar", "0.3.0")
+  skip_if_not_installed("duckdb")
+  skip_if_not_installed("mirai")
+  world <- new.env()
+  world$root <- withr::local_tempdir(.local_envir = env)
+  world$keys <- c(keyA = "AAAA1111", keyB = "BBBB2222", keyC = "CCCC3333")
+  world$paths <- file.path(world$root, "zotero", "storage", world$keys,
+                           paste0(names(world$keys), ".md"))
+  names(world$paths) <- names(world$keys)
+  for (i in seq_along(world$paths)) {
+    dir.create(dirname(world$paths[i]), recursive = TRUE)
+    # A word only this document holds, so BM25 can say whether it is in the store.
+    writeLines(paste(.crd_test_prose(800L, i), paste0("zzzonly", names(world$keys)[i])),
+               world$paths[i])
+  }
+  world$ingested <- list()
+
+  real_ingest <- .crd_store_ingest
+  local_mocked_bindings(
+    .crd_zot_key_pdfs = function(citation_keys, ...) {
+      list(sources = tibble::tibble(citation_key = citation_keys,
+                                    src_path = unname(world$paths[citation_keys])),
+           left_out = tibble::tibble(citation_key = character(), item = character(),
+                                     title = character(), reason = character()))
+    },
+    .crd_ollama_check = function(...) invisible(NULL),
+    .crd_store_ingest = function(store, paths, read = NULL, progress = FALSE) {
+      world$ingested[[length(world$ingested) + 1L]] <- paths
+      real_ingest(store, paths, read = .crd_test_read_text, progress = progress)
+    },
+    .env = env
+  )
+  create <- ragnar::ragnar_store_create
+  local_mocked_bindings(
+    ragnar_store_create = function(location, embed, overwrite) {
+      create(location, embed = .crd_test_embed, overwrite = overwrite, version = 2)
+    },
+    .package = "ragnar", .env = env
+  )
+  world
+}
+
+build <- function(world, keys, name = "store.duckdb") {
+  path <- file.path(world$root, name)
+  suppressMessages(crd_store_build(path, citation_keys = keys, overwrite = TRUE))
+  path
+}
+
+update <- function(path, keys) {
+  msgs <- character()
+  out <- withCallingHandlers(
+    crd_store_update(path, citation_keys = keys),
+    message = function(m) {
+      msgs <<- c(msgs, conditionMessage(m))
+      invokeRestart("muffleMessage")
+    }
+  )
+  list(out = out, msgs = paste(msgs, collapse = ""))
+}
+
+contents <- function(path) {
+  con <- DBI::dbConnect(duckdb::duckdb(), path, read_only = TRUE)
+  on.exit(DBI::dbDisconnect(con, shutdown = TRUE))
+  origins <- DBI::dbGetQuery(con, "SELECT origin FROM documents")$origin
+  rec <- .crd_sources_read(con)
+  list(
+    ids = sort(.crd_origin_id(origins)),
+    rec = if (!is.null(rec)) sort(paste(rec$origin_id, rec$md5)),
+    chunks = DBI::dbGetQuery(con, "SELECT COUNT(*) AS n FROM chunks")$n,
+    texts = sort(DBI::dbGetQuery(con, "SELECT text FROM documents")$text)
+  )
+}
+
+bm25_hits <- function(path, word) {
+  store <- ragnar::ragnar_store_connect(path, read_only = TRUE)
+  on.exit(DBI::dbDisconnect(store@con, shutdown = TRUE))
+  nrow(ragnar::ragnar_retrieve_bm25(store, word, top_k = 50L))
+}
+
+test_that("an update holds what a fresh build from the same arguments holds", {
+  world <- local_update_world()
+  path <- build(world, c("keyA", "keyB"))
+  res <- update(path, c("keyB", "keyC"))
+  fresh <- build(world, c("keyB", "keyC"), name = "fresh.duckdb")
+
+  expect_identical(contents(path), contents(fresh))
+  expect_identical(res$out$citation_key, c("keyB", "keyC"))
+  expect_match(res$msgs, "added: 1 | replaced: 0 | removed: 1 | kept: 1", fixed = TRUE)
+  # Only the new paper was read and embedded.
+  expect_identical(world$ingested[[length(world$ingested) - 1L]], unname(world$paths["keyC"]))
+  # The index answers for the added paper and no longer for the removed one.
+  expect_gt(bm25_hits(path, "zzzonlykeyC"), 0L)
+  expect_identical(bm25_hits(path, "zzzonlykeyA"), 0L)
+  expect_false(any(grepl("[.]updating-", list.files(world$root))))
+})
+
+test_that("an update ingests a changed file again, and an unchanged one never", {
+  world <- local_update_world()
+  path <- build(world, c("keyA", "keyB"))
+  cat("zzzrevised\n", file = world$paths["keyB"], append = TRUE)
+  n <- length(world$ingested)
+
+  res <- update(path, c("keyA", "keyB"))
+  expect_identical(world$ingested[[n + 1L]], unname(world$paths["keyB"]))
+  expect_match(res$msgs, "added: 0 | replaced: 1 | removed: 0 | kept: 1", fixed = TRUE)
+  got <- contents(path)
+  expect_length(got$ids, 2L)
+  expect_true(any(grepl("zzzrevised", got$texts)))
+  expect_identical(got$rec, sort(paste(.crd_origin_id(world$paths[c("keyA", "keyB")]),
+                                       unname(tools::md5sum(world$paths[c("keyA", "keyB")])))))
+})
+
+test_that("an update with nothing to do leaves the store file untouched", {
+  world <- local_update_world()
+  path <- build(world, c("keyA", "keyB"))
+  before <- tools::md5sum(path)
+  mtime <- file.mtime(path)
+  n <- length(world$ingested)
+
+  res <- update(path, c("keyA", "keyB"))
+  expect_match(res$msgs, "Store is current", fixed = TRUE)
+  expect_identical(length(world$ingested), n)
+  expect_identical(tools::md5sum(path), before)
+  expect_identical(file.mtime(path), mtime)
+  expect_identical(res$out$citation_key, c("keyA", "keyB"))
+})
+
+test_that("a store built where Zotero lives elsewhere updates without re-ingesting", {
+  world <- local_update_world()
+  path <- build(world, c("keyA", "keyB"))
+  moved <- file.path(world$root, "elsewhere", "Zotero")
+  dir.create(moved, recursive = TRUE)
+  file.copy(file.path(world$root, "zotero", "storage"), moved, recursive = TRUE)
+  world$paths[] <- file.path(moved, "storage", world$keys, paste0(names(world$keys), ".md"))
+  n <- length(world$ingested)
+
+  res <- update(path, c("keyA", "keyB"))
+  expect_match(res$msgs, "Store is current", fixed = TRUE)
+  expect_identical(length(world$ingested), n)
+
+  # And a paper added there joins the documents from here, with nothing removed.
+  res <- update(path, c("keyA", "keyB", "keyC"))
+  expect_match(res$msgs, "added: 1 | replaced: 0 | removed: 0 | kept: 2", fixed = TRUE)
+  expect_length(contents(path)$ids, 3L)
+})
+
+test_that("a changed file in a store built elsewhere replaces its old document", {
+  world <- local_update_world()
+  path <- build(world, c("keyA", "keyB"))
+  moved <- file.path(world$root, "elsewhere", "Zotero")
+  dir.create(moved, recursive = TRUE)
+  file.copy(file.path(world$root, "zotero", "storage"), moved, recursive = TRUE)
+  world$paths[] <- file.path(moved, "storage", world$keys, paste0(names(world$keys), ".md"))
+  cat("zzzrevised\n", file = world$paths["keyB"], append = TRUE)
+
+  res <- update(path, c("keyA", "keyB"))
+  expect_match(res$msgs, "replaced: 1", fixed = TRUE)
+  got <- contents(path)
+  # One document for keyB, not the old one beside the new.
+  expect_identical(got$ids, sort(.crd_origin_id(unname(world$paths[c("keyA", "keyB")]))))
+  expect_length(got$texts, 2L)
+  expect_true(any(grepl("zzzrevised", got$texts)))
+})
+
+test_that("an update that fails part way leaves the store exactly as it was", {
+  world <- local_update_world()
+  path <- build(world, c("keyA", "keyB"))
+  before <- tools::md5sum(path)
+  local_mocked_bindings(.crd_store_ingest = function(...) stop("embedding service died"))
+
+  # keyA's removal is made on the copy before the ingest fails.
+  expect_error(suppressMessages(crd_store_update(path, citation_keys = c("keyB", "keyC"))),
+               "embedding service died")
+  expect_identical(tools::md5sum(path), before)
+  expect_identical(list.files(world$root), c("store.duckdb", "zotero"))
+})
+
+test_that("a store built before records gets one, and says what it cannot vouch for", {
+  world <- local_update_world()
+  path <- build(world, c("keyA", "keyB"))
+  con <- DBI::dbConnect(duckdb::duckdb(), path)
+  DBI::dbExecute(con, "DROP TABLE cred_sources")
+  DBI::dbDisconnect(con, shutdown = TRUE)
+  n <- length(world$ingested)
+
+  res <- update(path, c("keyA", "keyB"))
+  expect_match(res$msgs, "Recording the md5 of 2 stored file(s)", fixed = TRUE)
+  expect_identical(length(world$ingested), n)
+  expect_length(contents(path)$rec, 2L)
+  expect_match(update(path, c("keyA", "keyB"))$msgs, "Store is current", fixed = TRUE)
+})
+
+test_that("a stored document whose file is not on this machine is kept, and named", {
+  world <- local_update_world()
+  path <- build(world, c("keyA", "keyB"))
+  unlink(world$paths["keyB"])
+
+  res <- update(path, c("keyA", "keyB"))
+  expect_match(res$msgs, "Keeping 1 stored document(s) whose file is not on this machine:\n  keyB (keyB.md)",
+               fixed = TRUE)
+  expect_match(res$msgs, "Store is current", fixed = TRUE)
+  expect_length(contents(path)$ids, 2L)
+})
+
+test_that("a removal needs no embedder, and an addition stops when it cannot embed", {
+  world <- local_update_world()
+  path <- build(world, c("keyA", "keyB"))
+  connect <- ragnar::ragnar_store_connect
+  local_mocked_bindings(
+    ragnar_store_connect = function(...) {
+      store <- connect(...)
+      store@embed <- function(x) stop("Failed to perform HTTP request.")
+      store
+    },
+    .package = "ragnar"
+  )
+  before <- tools::md5sum(path)
+  expect_error(suppressMessages(crd_store_update(path, citation_keys = c("keyA", "keyB", "keyC"))),
+               "could not embed, so nothing can be added")
+  expect_identical(tools::md5sum(path), before)
+
+  res <- update(path, "keyA")
+  expect_match(res$msgs, "removed: 1", fixed = TRUE)
+  expect_identical(contents(path)$ids, .crd_origin_id(unname(world$paths["keyA"])))
+  # Nothing was ingested, so the index is rebuilt by the update itself.
+  expect_identical(bm25_hits(path, "zzzonlykeyB"), 0L)
+  expect_gt(bm25_hits(path, "zzzonlykeyA"), 0L)
+})
+
+test_that("crd_store_update() refuses a missing store and one with a write-ahead log", {
+  skip_if_not_installed("ragnar")
+  skip_if_not_installed("duckdb")
+  dir <- withr::local_tempdir()
+  path <- file.path(dir, "store.duckdb")
+  expect_error(crd_store_update(path, citation_keys = "keyA"), "crd_store_build\\(\\) creates one")
+  file.create(path, paste0(path, ".wal"))
+  expect_error(crd_store_update(path, citation_keys = "keyA"), "write-ahead log")
+  expect_error(crd_store_update(path), "exactly one of")
+})

@@ -340,3 +340,20 @@ local_reset_fallback_warnings <- function(store, env = parent.frame()) {
 .crd_fallback_reasons <- function() {
   c("connection", "model", "service", "dimension", "unknown")
 }
+
+# --- Shared by the ingest tests (test-store-build.R, test-store-update.R) ---
+
+# Reads a text file as a MarkdownDocument without markitdown, so the tests need
+# no Python. Base R and ragnar only: it is serialised to ragnar's mirai workers
+# inside `prepare`, which must not reach cred.
+.crd_test_read_text <- eval(quote(function(path) {
+  ragnar::MarkdownDocument(paste(readLines(path, warn = FALSE), collapse = "\n"),
+                           origin = path)
+}), baseenv())
+
+# Prose long enough to chunk several times, from a fixed seed.
+.crd_test_prose <- function(n = 300L, seed = 1L) {
+  vocab <- c("culvert", "barrier", "fish", "passage", "stream", "salmon", "habitat",
+             "riparian", "bankfull", "width", "beaver", "wetland", "coho", "channel")
+  withr::with_seed(seed, paste(sample(vocab, n, replace = TRUE), collapse = " "))
+}

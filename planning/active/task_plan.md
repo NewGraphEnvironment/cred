@@ -63,21 +63,21 @@ Decided by me (reject the plan to change any of these):
 - [x] `crd_store_build()` behaves as before: the existing `test-store-build.R` report tests pass unchanged
 
 ## Phase 3: `crd_store_update()`
-- [ ] Tests first (the Phase 4 tests that can be written against the signature)
-- [ ] Diff: resolved sources against the store's `documents.origin` by origin id, giving added (new id), replaced (md5 differs from the record), removed (stored id no longer resolved, apart from the missing-file case above) and kept
-- [ ] Guards: refuse when `<store>.wal` exists (a copy would miss it); refuse a missing store; run the width probe and `.crd_ollama_check()` on the store's recorded model
-- [ ] Work on a sibling copy (`<store>.updating-<pid>`). Delete the removed and replaced documents from `embeddings` and `documents` by `doc_id`. Ingest the added and replaced paths through `.crd_store_ingest()` (which rebuilds the index). If the ingest had nothing to do, rebuild the index with `ragnar_store_build_index()`. Update the record, disconnect with `shutdown = TRUE`, then `file.rename()` over the original and check that it returned TRUE. On any failure, `on.exit` removes the copy
-- [ ] Report added / replaced / removed / kept counts, plus the shared ingest report. Return invisibly the build-shaped tibble (`citation_key`, `src_path`) of the store's sources
-- [ ] Roxygen with a `\dontrun{}` example (it needs Zotero and Ollama, like build's), `devtools::document()`, add to `_pkgdown.yml` and run `pkgdown::check_pkgdown()`
+- [x] Tests first (the Phase 4 tests that can be written against the signature)
+- [x] Diff: resolved sources against the store's `documents.origin` by origin id, giving added (new id), replaced (md5 differs from the record), removed (stored id no longer resolved, apart from the missing-file case above) and kept
+- [x] Guards: refuse when `<store>.wal` exists (a copy would miss it); refuse a missing store; run the width probe and `.crd_ollama_check()` on the store's recorded model
+- [x] Work on a sibling copy (`<store>.updating-<pid>`). Delete the removed and replaced documents from `embeddings` and `documents` by `doc_id`. Ingest the added and replaced paths through `.crd_store_ingest()` (which rebuilds the index). If the ingest had nothing to do, rebuild the index with `ragnar_store_build_index()`. Update the record, disconnect with `shutdown = TRUE`, then `file.rename()` over the original and check that it returned TRUE. On any failure, `on.exit` removes the copy
+- [x] Report added / replaced / removed / kept counts, plus the shared ingest report. Return invisibly the build-shaped tibble (`citation_key`, `src_path`) of the store's sources
+- [x] Roxygen with a `\dontrun{}` example (it needs Zotero and Ollama, like build's), `devtools::document()`, add to `_pkgdown.yml` and run `pkgdown::check_pkgdown()`
 
 ## Phase 4: Tests that prove it
-- [ ] Parity, end to end through the real ingest (mirai workers, offline embed, text reader, as in `test-store-build.R:348`): build from {A, B}, update to {B, C}, build fresh from {B, C}, and compare origin ids and the md5 records
-- [ ] A changed file (same path, new bytes) is replaced; an unchanged one is not handed to ingest
-- [ ] Portability: a store whose origins carry another machine's prefix re-ingests and removes nothing
-- [ ] A failure during ingest leaves the original store byte-identical (md5 before and after) and no `.updating` file behind
-- [ ] Legacy store (no `cred_sources`): kept documents are recorded and the message is emitted
-- [ ] Nothing to do: the file is untouched (mtime and md5 unchanged)
-- [ ] Missing local file for a stored document: kept, and named
+- [x] Parity, end to end through the real ingest (mirai workers, offline embed, text reader, as in `test-store-build.R:348`): build from {A, B}, update to {B, C}, build fresh from {B, C}, and compare origin ids and the md5 records
+- [x] A changed file (same path, new bytes) is replaced; an unchanged one is not handed to ingest
+- [x] Portability: a store whose origins carry another machine's prefix re-ingests and removes nothing
+- [x] A failure during ingest leaves the original store byte-identical (md5 before and after) and no `.updating` file behind
+- [x] Legacy store (no `cred_sources`): kept documents are recorded and the message is emitted
+- [x] Nothing to do: the file is untouched (mtime and md5 unchanged)
+- [x] Missing local file for a stored document: kept, and named
 - [ ] Restore each guard's defect and watch its test go red (mutation table in `findings.md`)
 
 ## Phase 5: Docs and conventions

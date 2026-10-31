@@ -2242,6 +2242,217 @@ crd_store_build <- function(store_path,
   invisible(src[src$src_path %in% ing$ingested, , drop = FALSE])
 }
 
+#' Bring an existing evidence store up to date with Zotero
+#'
+#' Resolves sources exactly as [crd_store_build()] does, then changes only
+#' what differs: PDFs new to the store are ingested, PDFs whose bytes changed
+#' are ingested again, and documents whose source no longer resolves (an item
+#' trashed, an attachment replaced, a member taken out of the collection) are
+#' removed. Everything else is kept as it is, without being read or embedded
+#' again. The result holds the documents a fresh build from the same arguments
+#' would hold, at the cost of the changes alone.
+#'
+#' **How a document is matched.** A store records each document by the path
+#' its PDF had on the machine that built it. A file Zotero holds is matched by
+#' its `storage/<attachment key>/<file name>` instead, so a store built on a
+#' machine whose Zotero data directory is elsewhere updates cleanly. A linked
+#' file is matched by its whole path.
+#'
+#' **How a changed file is seen.** [crd_store_build()] and this function
+#' record each ingested file's md5 in the store. A store built before cred
+#' 0.7.0 has no record: its first update records the files it keeps as they
+#' are now, and says so, because a change made to one of them before that
+#' update cannot be seen.
+#'
+#' **What is kept that a build would leave out.** A PDF that resolves in
+#' Zotero but is not on this machine keeps its stored document, and is named.
+#' A partly synced Zotero `storage/` directory would otherwise strip the store
+#' of every file it has not downloaded.
+#'
+#' **What it embeds with.** The store's own recorded embedder, which is the
+#' one [crd_store_build()] pinned, so there is no `model` argument. Before
+#' anything is ingested that embedder is probed: an embedding service that
+#' does not answer, or a model that now returns a different width than the
+#' store holds, stops the update.
+#'
+#' **What a failure costs.** The update works on a copy beside the store and
+#' replaces the store with it only when it has finished. An update that stops
+#' part way, for whatever reason, leaves the store exactly as it was. When
+#' nothing has changed the store is not written at all.
+#'
+#' @param store_path `character(1)` path to an existing `.duckdb` store.
+#' @inheritParams crd_store_build
+#' @return Invisibly, a [tibble][tibble::tibble] with one row per resolved
+#'   file the store now holds (`citation_key`, `src_path`), as
+#'   [crd_store_build()] returns. Prints how many documents were added,
+#'   replaced, removed and kept.
+#' @seealso [crd_store_build()] to build a store from scratch.
+#' @export
+#' @examples
+#' \dontrun{
+#' crd_store_build("data/rag/vca_refs.duckdb", collection = "vca",
+#'                 library = "NewGraphEnvironment")
+#' # ... a paper is added to the collection in Zotero, another is trashed ...
+#' crd_store_update("data/rag/vca_refs.duckdb", collection = "vca",
+#'                  library = "NewGraphEnvironment")
+#' }
+crd_store_update <- function(store_path,
+                             collection = NULL,
+                             citation_keys = NULL,
+                             zotero_dir = "~/Zotero",
+                             library = getOption("cred.zotero_library")) {
+  chk::chk_string(store_path)
+  if (is.null(collection) == is.null(citation_keys)) {
+    stop("Supply exactly one of `collection` or `citation_keys`.", call. = FALSE)
+  }
+  .crd_need(c("ragnar", "DBI", "duckdb"))
+  if (!file.exists(store_path)) {
+    stop("No store at ", store_path, "\n  crd_store_build() creates one.", call. = FALSE)
+  }
+  # A copy of the database file alone would leave the log's transactions out.
+  if (file.exists(paste0(store_path, ".wal"))) {
+    stop("The store has a write-ahead log beside it (", basename(store_path), ".wal), so ",
+         "a process has it open or did not close it.\n  Close it, or open and close it ",
+         "once with ragnar::ragnar_store_connect(read_only = FALSE), and retry.",
+         call. = FALSE)
+  }
+
+  src <- .crd_store_sources(collection, citation_keys, zotero_dir, library)
+
+  con <- DBI::dbConnect(duckdb::duckdb(), store_path, read_only = TRUE)
+  docs <- DBI::dbGetQuery(con, "SELECT doc_id, origin FROM documents")
+  rec <- .crd_sources_read(con)
+  DBI::dbDisconnect(con, shutdown = TRUE)
+  docs$id <- .crd_origin_id(docs$origin)
+
+  paths <- unique(src$src_path)
+  ids <- .crd_origin_id(paths)
+  here <- file.exists(paths)
+  stored <- ids %in% docs$id
+
+  if (any(!here & !stored)) {
+    warning("Skipping ", sum(!here & !stored), " missing file(s): ",
+            paste(.crd_store_who(paths[!here & !stored], src), collapse = ", "), call. = FALSE)
+  }
+  if (any(!here & stored)) {
+    message("Keeping ", sum(!here & stored), " stored document(s) whose file is not on ",
+            "this machine:\n", paste0("  ", .crd_store_who(paths[!here & stored], src),
+                                      collapse = "\n"))
+  }
+
+  md5 <- rep(NA_character_, length(paths))
+  md5[here] <- unname(tools::md5sum(paths[here]))
+  was <- if (is.null(rec)) rep(NA_character_, length(ids)) else rec$md5[match(ids, rec$origin_id)]
+  unrecorded <- here & stored & is.na(was)
+  added <- here & !stored
+  replaced <- here & stored & !is.na(was) & md5 != was
+  removed <- !docs$id %in% ids
+
+  # The record the store should end with: every kept or ingested file's md5,
+  # and the old entry for a stored file this machine cannot read.
+  new_rec <- function(ingested) {
+    take <- (here & stored & !replaced) | (here & paths %in% ingested)
+    keep_old <- (!here & stored & !is.na(was)) | (replaced & !paths %in% ingested)
+    data.frame(origin_id = c(ids[take], ids[keep_old]), md5 = c(md5[take], was[keep_old]))
+  }
+  record_current <- !is.null(rec) && !any(unrecorded) &&
+    setequal(paste(rec$origin_id, rec$md5), with(new_rec(character()), paste(origin_id, md5)))
+
+  n_kept <- sum(!docs$id %in% ids[added | replaced] & !removed)
+  if (!any(added) && !any(replaced) && !any(removed) && record_current) {
+    message("Store is current: ", store_path, " | kept: ", n_kept)
+    return(invisible(src[.crd_origin_id(src$src_path) %in% docs$id, , drop = FALSE]))
+  }
+  if (any(unrecorded)) {
+    message("Recording the md5 of ", sum(unrecorded), " stored file(s) the store has no ",
+            "record for, as they are now.\n  A change made to one of them before this ",
+            "update cannot be seen; rebuild with crd_store_build() to be sure of them.")
+  }
+
+  # The work is done on a copy, and the copy replaces the store only once it
+  # is finished: ragnar commits each document on its own and builds the index
+  # once at the end, so a store updated in place and interrupted would be left
+  # with an index that does not match its documents.
+  work <- paste0(store_path, ".updating-", Sys.getpid())
+  if (!file.copy(store_path, work, overwrite = TRUE)) {
+    stop("Could not copy the store to ", work, call. = FALSE)
+  }
+  store <- NULL
+  on.exit({
+    if (!is.null(store)) try(DBI::dbDisconnect(store@con, shutdown = TRUE), silent = TRUE)
+    unlink(c(work, paste0(work, ".wal")))
+  }, add = TRUE)
+  store <- ragnar::ragnar_store_connect(work, read_only = FALSE)
+
+  to_ingest <- paths[added | replaced]
+  if (length(to_ingest) > 0L) {
+    probe <- tryCatch(store@embed("cred update probe"), error = function(e) e)
+    if (inherits(probe, "condition")) {
+      stop("The store's embedder could not embed, so nothing can be added:\n  ",
+           .crd_indent_cause(conditionMessage(probe)), "\n",
+           .crd_embed_remedy(.crd_retrieval_failure(probe), probe, store = store,
+                             context = "connect"),
+           call. = FALSE)
+    }
+    .crd_check_store_embedding(store, name = basename(store_path))
+  }
+
+  # Two statements, not one transaction: `embeddings` holds a foreign key on
+  # `documents`, and duckdb checks it against rows as they were when the
+  # transaction began, so a document cannot go in the transaction that deleted
+  # its embeddings. The copy is what makes the update all-or-nothing.
+  drop_docs <- function(doc_id) {
+    if (length(doc_id) == 0L) return(invisible(0L))
+    DBI::dbExecute(store@con, "DELETE FROM embeddings WHERE doc_id = ?", params = list(doc_id))
+    DBI::dbExecute(store@con, "DELETE FROM documents WHERE doc_id = ?", params = list(doc_id))
+  }
+  # Before the ingest, which rebuilds the index once it has ingested.
+  drop_docs(docs$doc_id[removed])
+
+  ing <- list(ingested = character(), skipped = tibble::tibble(origin = character(), reason = character()),
+              notes = tibble::tibble(origin = character(), kind = character(), detail = character()))
+  if (length(to_ingest) > 0L) {
+    message("Ingesting ", length(to_ingest), " PDF(s) into ", store_path)
+    ing <- .crd_store_ingest(store, to_ingest, progress = FALSE)
+  }
+
+  # A replaced file ingested under a different origin (the store was built on
+  # another machine) is a new document; its old one goes now. Under the same
+  # origin ragnar has already replaced it in place. One that could not be
+  # ingested keeps its old document, and its old md5, so the next update tries
+  # it again.
+  now <- DBI::dbGetQuery(store@con, "SELECT doc_id, origin FROM documents")
+  old <- docs[docs$id %in% ids[replaced & paths %in% ing$ingested], , drop = FALSE]
+  stale <- old$doc_id[!old$doc_id %in% now$doc_id[now$origin %in% ing$ingested]]
+  drop_docs(stale)
+  # ragnar's ingest rebuilds the index whenever it is given a path, ingested or
+  # not; a removal it never saw, or one made after it, needs it rebuilt again.
+  if (length(stale) > 0L || (length(to_ingest) == 0L && any(removed))) {
+    ragnar::ragnar_store_build_index(store)
+  }
+
+  final <- new_rec(ing$ingested)
+  .crd_sources_write(store@con, final$origin_id, final$md5)
+
+  n_docs <- DBI::dbGetQuery(store@con, "SELECT COUNT(*) AS n FROM documents")$n
+  n_chunks <- DBI::dbGetQuery(store@con, "SELECT COUNT(*) AS n FROM chunks")$n
+  DBI::dbDisconnect(store@con, shutdown = TRUE)
+  store <- NULL
+  if (!file.rename(work, store_path)) {
+    stop("Could not move the updated store into place at ", store_path,
+         "; the store is unchanged.", call. = FALSE)
+  }
+
+  .crd_store_report(ing, src)
+  n_added <- sum(added & paths %in% ing$ingested)
+  n_replaced <- sum(replaced & paths %in% ing$ingested)
+  message("Store updated: ", store_path, " | added: ", n_added, " | replaced: ", n_replaced,
+          " | removed: ", sum(removed), " | kept: ", n_kept + sum(replaced) - n_replaced,
+          " | docs: ", n_docs, " | chunks: ", n_chunks)
+  held <- .crd_origin_id(src$src_path) %in% c(docs$id[!removed], .crd_origin_id(ing$ingested))
+  invisible(src[held, , drop = FALSE])
+}
+
 #' Split a store source URI into bucket and key prefix
 #'
 #' @param source `character(1)` `s3://bucket/prefix/` URI.
