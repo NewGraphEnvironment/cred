@@ -175,6 +175,10 @@ and `.data` bindings.
 |---|---|---|---|---|
 | 1 | 2 (shared notes log splices past 4 KB; two prose claims about ragnar) | 2 | 0 | n/a |
 | 2 | 0 (Clean); one unreported invalid-UTF-8 case probed: `MarkdownDocument()` refuses invalid UTF-8 inside the reader's tryCatch, so it is unreachable | 0 | 0 | n |
+| 3 | 0 (Clean); asked for the mechanism behind round 1 (claims about dependency or OS behaviour made from memory rather than the installed code or a measurement) and checked every such claim in the diff, plus shared state between workers | 0 | 0 | n |
+
+Ended on a clean round 3 with no inside-a-fix finding in any round. Full suite after: FAIL 0 |
+SKIP 2 | PASS 790 (the 2 skips predate the branch).
 
 ## Errors Encountered
 

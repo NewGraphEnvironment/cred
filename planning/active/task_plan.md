@@ -119,10 +119,10 @@ Approved by the user at the plan gate, 2026-10-31 (recommendations accepted as w
 - [ ] Post the two upstream drafts — only on the user's word for each
 
 ## Validation
-- [ ] Tests pass (`devtools::test()`; the e2e test also under `R CMD check`, since workers run
+- [x] Tests pass (`devtools::test()`; the e2e test also under `R CMD check`, since workers run
       against the installed package)
-- [ ] `/code-check` clean (once over the branch with `/code-check branch`)
-- [ ] PWF checkboxes match landed work
+- [x] `/code-check` clean (once over the branch with `/code-check branch`)
+- [x] PWF checkboxes match landed work
 - [ ] `/planning-archive` on completion
 
 Verification: the Phase 1 tests and their restored-defect runs prove each mechanism offline. The
