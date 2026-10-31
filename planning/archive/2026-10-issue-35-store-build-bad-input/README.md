@@ -45,9 +45,9 @@ handles both forms and is tested against both, and the version gap is #43.
 
 ## Owed
 
-- Post the two upstream drafts — only on the user's word for each
+- Post the three upstream drafts — only on the user's word for each
 
-The drafts (a comment for ollama/ollama#14186 and a tidyverse/ragnar issue) are in
+The drafts (a comment for ollama/ollama#14186 and two tidyverse/ragnar issues: the NUL and single-chunk abort, and a `{` in a path aborting the ingest) are in
 `findings.md`, "Upstream drafts". Nothing has been posted.
 
 Closed by: PR for branch `35-crd-store-build-an-oversize-chunk-aborts`

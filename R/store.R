@@ -1951,15 +1951,18 @@ crd_search <- function(store, query, top_k = 5L,
 #' more than one collection is an error listing each, with its `parent/child`
 #' path. A collection's subcollections are not included.
 #'
-#' **What cannot be read or embedded.** One PDF never costs the build. A PDF
-#' that markitdown cannot read, such as one whose text carries a NUL byte, is
+#' **What cannot be read or embedded.** One PDF that cannot be read or
+#' embedded does not cost the build. A PDF that markitdown cannot read, such as one whose text carries a NUL byte, is
 #' read with [pdftools::pdf_text()] instead, without markdown headings. A PDF
 #' neither can read is skipped, and a warning names it and why. A chunk the
 #' embedding model refuses whole, such as a long run of figure glyphs, is
 #' split until each part embeds; a part still refused at 64 characters is
 #' left out of the embeddings. Both are reported. A failure of the embedding
 #' service itself still stops the build and leaves no store: it would cost
-#' every PDF still to come, silently, rather than one that is named.
+#' every PDF still to come, silently, rather than one that is named. So does
+#' a PDF whose path contains `{` or `}`, for a reason in ragnar rather than the
+#' PDF: ragnar prints each ingested path through cli, which reads the braces as
+#' code.
 #'
 #' @param store_path `character(1)` path for the `.duckdb` store to create.
 #' @param collection `character(1)` Zotero collection name, or a

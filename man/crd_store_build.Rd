@@ -71,15 +71,18 @@ than one library, on two live items in one, or only in a library other than
 more than one collection is an error listing each, with its \code{parent/child}
 path. A collection's subcollections are not included.
 
-\strong{What cannot be read or embedded.} One PDF never costs the build. A PDF
-that markitdown cannot read, such as one whose text carries a NUL byte, is
+\strong{What cannot be read or embedded.} One PDF that cannot be read or
+embedded does not cost the build. A PDF that markitdown cannot read, such as one whose text carries a NUL byte, is
 read with \code{\link[pdftools:pdftools]{pdftools::pdf_text()}} instead, without markdown headings. A PDF
 neither can read is skipped, and a warning names it and why. A chunk the
 embedding model refuses whole, such as a long run of figure glyphs, is
 split until each part embeds; a part still refused at 64 characters is
 left out of the embeddings. Both are reported. A failure of the embedding
 service itself still stops the build and leaves no store: it would cost
-every PDF still to come, silently, rather than one that is named.
+every PDF still to come, silently, rather than one that is named. So does
+a PDF whose path contains \verb{\{} or \verb{\}}, for a reason in ragnar rather than the
+PDF: ragnar prints each ingested path through cli, which reads the braces as
+code.
 }
 \examples{
 \dontrun{

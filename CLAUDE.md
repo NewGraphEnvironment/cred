@@ -290,7 +290,7 @@ Shipped: [#22](https://github.com/NewGraphEnvironment/cred/issues/22) ragnar ret
   identically — which is why the `s3api` probes exist.
 - **Provenance describes where a store was built**, read from the store's own directory rather
   than the process's working directory.
-- **One PDF never costs the build; the embedding service failing still does.** ragnar's worker
+- **One unreadable PDF or refused chunk does not cost the build; the embedding service failing still does.** ragnar's worker
   swallows an embed error, and the main process then re-embeds with no handler. So a single
   chunk the model refuses ended the whole ingest. `crd_store_build()` therefore gives ragnar
   its own `prepare` (`.crd_ingest_prepare()`), which reads, chunks and embeds in the worker. It
@@ -299,7 +299,11 @@ Shipped: [#22](https://github.com/NewGraphEnvironment/cred/issues/22) ragnar ret
   each range once (ragnar keys `embeddings`, which the `chunks` view joins, on
   `(doc_id, start, end)`, and halves of neighbouring chunks collide), and drops a part at 64 characters. Any other embed failure leaves the chunks
   unembedded, so ragnar's main-process embed aborts the build and the store is deleted, as
-  before. Characters do not predict a refusal: a 1,887-character run of `•` is refused, while a
+  before. One PDF can still cost the build, and the cause is ragnar's, not cred's: a path containing `{` or `}`
+  aborts the ingest under 0.3.0 and the development version alike, because ragnar prints
+  `ingested: <path>` through `cli_alert_info()`, which evaluates the braces. That is surfaced
+  upstream, not worked around: `progress = FALSE` would avoid it, but would also hide progress
+  on builds that take hours. Characters do not predict a refusal: a 1,887-character run of `•` is refused, while a
   2,073-character paragraph is not. So there is no length cap.
   [#35](https://github.com/NewGraphEnvironment/cred/issues/35),
   `research/ollama-embedding-context.md`.

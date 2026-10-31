@@ -180,6 +180,28 @@ and `.data` bindings.
 Ended on a clean round 3 with no inside-a-fix finding in any round. Full suite after: FAIL 0 |
 SKIP 2 | PASS 790 (the 2 skips predate the branch).
 
+### Second issue for tidyverse/ragnar
+
+> **`ragnar_store_ingest(progress = TRUE)`: a path containing `{` aborts the ingest**
+>
+> Each stored document is reported with `cli::cli_alert_info(paste("ingested:", origin))`.
+> cli interpolates the string, so a path such as `/tmp/The {BC} report.pdf` raises
+> `Could not evaluate cli {} expression: BC` and ends the ingest. Every document not yet
+> written is lost. Seen in 0.3.0 and in main at 06f7c3e. Fix: `cli::cli_alert_info("ingested: {origin}")`,
+> or `cli::cli_alert_info(paste("ingested:", cli::format_inline("{.file {origin}}")))`.
+
+## Code-check rounds on the CI fix (c0fd677)
+
+| Round | Findings | Fixed | Accepted | Inside previous fix? |
+|---|---|---|---|---|
+| 1 | 0 (Clean) | 0 | 0 | n/a |
+| 2 | 0 (Clean) | 0 | 0 | n |
+| 3 | 1: a PDF path with `{`/`}` aborts the ingest via ragnar's `cli_alert_info()`, under both ragnar versions, so "One PDF never costs the build" was false. Upstream; reproduced; 0 of the local Zotero storage paths have a brace | claim qualified in roxygen and CLAUDE.md; ragnar draft above; not worked around (`progress = FALSE` would hide progress on long builds) | 0 | n (pre-existing on the branch) |
+
+Rounds 2 and 3 ran concurrently: round 1 changed nothing, so both reviewed the same tree.
+Round 3 also enumerated every ragnar function the ingest reaches that differs between 0.3.0
+and 0.3.1.9000 (27 changed, 13 dev-only); only worker-failure reporting differs in effect.
+
 ## Errors Encountered
 
 | Error | Resolution |
