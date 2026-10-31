@@ -32,7 +32,9 @@ R/
 │                  crd_search (hybrid/BM25/VSS + citation-key
 │                  resolution), crd_store_build (Zotero collection or keys → DuckDB,
 │                  through cred's own worker `prepare`: pdftools fallback, split on a
-│                  refused chunk), crd_store_push (merge-on-write manifest + ETag compare-and-swap)
+│                  refused chunk; records each file's md5 in `cred_sources`),
+│                  crd_store_update (only new, changed and removed documents, on a copy),
+│                  crd_store_push (merge-on-write manifest + ETag compare-and-swap)
 ├── pdf.R        — PDF text extraction + paragraph splitting (pdftools)
 └── docx.R       — Word doc extraction (officer) + .paraphrase_tokens(), .token_score()
                    (internal matching functions reused by abstract matching)
@@ -47,6 +49,8 @@ tests/testthat/
 ├── test-store-push.R — manifest merge, S3 probes, push guards (all offline)
 ├── test-store-build.R — worker prepare (fallback, split, drop, skip) and the build's report;
 │                      end-to-end through ragnar's mirai workers on an offline store
+├── test-store-update.R — origin id, md5 record, and crd_store_update() end to end
+│                      (parity with a fresh build, cross-machine, failure leaves the store)
 ├── test-zotero.R    — library scoping, trash, attachment pick, collection resolution
 │                      (multi-library fixture built by helper-zotero.R)
 └── test-sentence.R
@@ -321,6 +325,28 @@ Shipped: [#22](https://github.com/NewGraphEnvironment/cred/issues/22) ragnar ret
   handled, and the `documents` table, not the conditions, decides what was ingested. Test a
   change here against both: install the development ragnar into a scratch library and run the
   tests with `R_LIBS` pointing at it, so the mirai workers load it too.
+- **An update chooses what ragnar reads; ragnar's own skip saves nothing here.**
+  `ragnar_store_update_v2()` skips an unchanged document only at the database step, after
+  `prepare` has run, and cred's `prepare` reads **and embeds** in the worker. So
+  `crd_store_update()` hands ragnar only origins it does not hold: a replaced document is
+  deleted first, then read again as new. That also keeps ragnar's version-specific skip rules
+  (0.3.1.9000 skips by mtime) out of the decision. A changed file is seen by the md5 cred
+  records in its own `cred_sources` table, keyed by origin id: the `storage/<KEY>/<file>` tail
+  of an origin, read from the path text (a stored origin carries another machine's prefix),
+  else the whole path. An entry missing from the record is recorded as the file is now, and
+  the update says it cannot vouch for it.
+  [#44](https://github.com/NewGraphEnvironment/cred/issues/44),
+  `research/ragnar-store-update.md`.
+
+  **The update is all-or-nothing because it works on a copy**, renamed over the store only when
+  finished: ragnar commits each document alone and builds the index once at the end, so an
+  in-place update that stopped would leave an index out of step with its documents. Deletes are
+  two statements, never one transaction: ragnar 0.3.1's schema has a foreign key from
+  `embeddings` to `documents`, and duckdb refuses the parent delete in the transaction that
+  deleted the children (the development ragnar dropped the key, so CI cannot catch a
+  transactional delete). An update whose result changes nothing (nothing ingested or dropped,
+  record unchanged) discards the copy, so a permanently unreadable PDF does not rewrite the
+  store, and its md5, on every run.
 
 <!-- BEGIN SOUL CONVENTIONS — DO NOT EDIT BELOW THIS LINE -->
 

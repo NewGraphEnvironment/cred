@@ -51,23 +51,10 @@
   }), baseenv())
 }
 
-# Reads a text file as a MarkdownDocument without markitdown, so the tests need
-# no Python. Base R and ragnar only, for the same reason as the embed above.
-.crd_test_read_text <- eval(quote(function(path) {
-  ragnar::MarkdownDocument(paste(readLines(path, warn = FALSE), collapse = "\n"),
-                           origin = path)
-}), baseenv())
-
 .crd_test_doc <- function(text, dir = withr::local_tempdir(.local_envir = parent.frame())) {
   path <- tempfile(tmpdir = dir, fileext = ".md")
   writeLines(text, path)
   path
-}
-
-.crd_test_prose <- function(n = 300L, seed = 1L) {
-  vocab <- c("culvert", "barrier", "fish", "passage", "stream", "salmon", "habitat",
-             "riparian", "bankfull", "width", "beaver", "wetland", "coho", "channel")
-  withr::with_seed(seed, paste(sample(vocab, n, replace = TRUE), collapse = " "))
 }
 
 # The notes directory `prepare` writes each document's notes file into.
@@ -474,7 +461,8 @@ test_that("an ingest still fails whole when the embedding service is down", {
 local_build_mocks <- function(ingest, env = parent.frame()) {
   dir <- withr::local_tempdir(.local_envir = env)
   paths <- file.path(dir, c("a.pdf", "b.pdf", "c.pdf"))
-  file.create(paths)
+  # Distinct bytes, so a record that pairs a file with another's md5 shows.
+  for (p in paths) writeLines(basename(p), p)
   # keyD cites the same file as keyA: one document, two citations.
   create <- ragnar::ragnar_store_create
   local_mocked_bindings(
@@ -534,6 +522,30 @@ test_that("crd_store_build() names a skipped PDF by key and returns only what it
   expect_identical(out$citation_key, c("keyA", "keyB", "keyD"))
   expect_true(any(grepl("Read with pdftools.*keyA/keyD \\(a.pdf\\): Embedded NUL", msgs)))
   expect_true(any(grepl("Split chunks.*keyB \\(b.pdf\\) \\(2\\)", msgs)))
+  expect_true(file.exists(target))
+
+  # The record holds what was ingested, once per file, and not the skipped one.
+  con <- DBI::dbConnect(duckdb::duckdb(), target, read_only = TRUE)
+  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  rec <- .crd_sources_read(con)
+  expect_setequal(rec$origin_id, .crd_origin_id(paths[1:2]))
+  expect_identical(rec$md5[match(.crd_origin_id(paths[1:2]), rec$origin_id)],
+                   unname(tools::md5sum(paths[1:2])))
+})
+
+test_that("crd_store_build() keeps the store when it cannot write the source record", {
+  skip_if_not_installed("ragnar", "0.3.0")
+  skip_if_not_installed("duckdb")
+  ingest <- function(paths) {
+    list(ingested = paths, skipped = tibble::tibble(origin = character(), reason = character()),
+         notes = no_notes())
+  }
+  local_build_mocks(ingest)
+  local_mocked_bindings(.crd_sources_write = function(...) stop("disk full"))
+  target <- withr::local_tempfile(fileext = ".duckdb")
+
+  expect_warning(suppressMessages(crd_store_build(target, citation_keys = "keyA")),
+                 "Could not record.*disk full")
   expect_true(file.exists(target))
 })
 
