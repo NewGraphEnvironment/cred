@@ -99,10 +99,10 @@ Approved by the user at the plan gate, 2026-10-31 (recommendations accepted as w
 - [x] AC2, AC3: replace an assertion that always held, and a floor fixture halving could cut
 
 ## Phase 3: Live verification (local; nothing committed that names local paths or the collection)
-- [ ] Build the four-paper collection from the issue. It completes; ESL is ingested and its two
+- [x] Build the four-paper collection from the issue. It completes; ESL is ingested and its two
       `•` chunks are reported split; Bates et al. is reported read with pdftools. Record the
       time, plus doc and chunk counts.
-- [ ] `crd_search()` on the built store returns a Bates et al. passage for a cross-validation
+- [x] `crd_search()` on the built store returns a Bates et al. passage for a cross-validation
       query
 
 ## Phase 4: Docs and record

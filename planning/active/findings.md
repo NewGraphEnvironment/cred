@@ -111,6 +111,22 @@ Mutation table, review fixes:
 | all held notes written on the unsplit path | 1 (no split reported) |
 | a note per halving | 1 (split) |
 
+## Live verification (2026-10-31, Ollama 0.24.0, nomic-embed-text, ragnar 0.3.0)
+
+The four-paper collection from the issue, built with the branch at `6c4e5a5`:
+
+- Completed in **4.25 min**: 4 documents, 2,838 chunks. Before the change it aborted and left no store.
+- ESL: 2 chunks refused whole and split (one note each). Bates et al.: read with pdftools after
+  markitdown's `Embedded NUL in string.`
+- `crd_store_connect(verify = FALSE)` (connect-time embedding probe on) then `crd_search()` for
+  a cross-validation query: 5 of 7 rows from Bates et al., 2 from ESL.
+- An earlier build at `19f82ac`, before the review fixes, gave the same counts in 4.28 min. The
+  duplicate-range defect (B1) is real, but ESL's halves did not collide.
+
+**Cost of embedding inside `prepare`**: the two papers both versions can build
+(`bengio_grandvalet2004NoUnbiased`, `chen_yang2021OneStandard`), alternating main and branch:
+main 10.6 s and 10.4 s, branch 10.5 s and 10.6 s, 177 chunks each. No measurable cost.
+
 ## Errors Encountered
 
 | Error | Resolution |
