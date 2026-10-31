@@ -1829,6 +1829,9 @@ GDAL accepts a UTC offset in a GeoPackage `DATETIME` and silently drops it, retu
 ### QGIS embeds a layer's style in the `.qgs`, so rewriting the `.qml` sidecar changes nothing
 A `.qgs` carries each layer's style **inside** its `<maplayer>` node — the sidecar's children are copied in when the layer is declared.
 
+### A QGIS value map's empty choice is a fixed GUID value; its `<NULL>` label is editable
+When reading a value map's choices from a `.qml` or `.qgs`, drop QGIS's empty choice by its value, `{2839923C-8B7D-419E-B84B-CA2FE9B80EC7}`, not by its `<NULL>` label, which a form author can edit.
+
 ### A GeoPackage is a SQLite database, and that leaks in three ways
 Writing to one directly (a `layer_styles` row, an attribute fix) is a plain `INSERT` and needs no GDAL.
 
