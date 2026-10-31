@@ -313,3 +313,90 @@ test_that("an ingest still fails whole when the embedding service is down", {
     class = "httr2_failure"
   )
 })
+
+# --- crd_store_build()'s report ----------------------------------------------
+#
+# Zotero, Ollama and the ingest are replaced: the tests above cover the ingest,
+# and these cover only what crd_store_build() says about its result and what it
+# leaves on disk.
+
+local_build_mocks <- function(ingest, env = parent.frame()) {
+  dir <- withr::local_tempdir(.local_envir = env)
+  paths <- file.path(dir, c("a.pdf", "b.pdf", "c.pdf"))
+  file.create(paths)
+  create <- ragnar::ragnar_store_create
+  local_mocked_bindings(
+    .crd_zot_key_pdfs = function(...) {
+      list(
+        sources = tibble::tibble(citation_key = c("keyA", "keyB", "keyC"), src_path = paths),
+        left_out = tibble::tibble(citation_key = character(), item = character(),
+                                  title = character(), reason = character())
+      )
+    },
+    .crd_ollama_check = function(...) invisible(NULL),
+    .crd_store_ingest = function(store, paths, ...) ingest(paths),
+    .env = env
+  )
+  local_mocked_bindings(
+    ragnar_store_create = function(location, embed, overwrite) {
+      create(location, embed = function(x) matrix(1, nrow = length(x), ncol = 4L), version = 2)
+    },
+    .package = "ragnar", .env = env
+  )
+  paths
+}
+
+no_notes <- function() tibble::tibble(origin = character(), kind = character(), detail = character())
+
+test_that("crd_store_build() names a skipped PDF by key and returns only what it ingested", {
+  skip_if_not_installed("ragnar", "0.3.0")
+  skip_if_not_installed("duckdb")
+  ingest <- function(paths) {
+    list(
+      ingested = paths[1:2],
+      skipped = tibble::tibble(origin = paths[3], reason = "markdown reader: x; pdftools: y"),
+      notes = tibble::tibble(origin = paths[c(1, 2, 2)],
+                             kind = c("read_pdftools", "chunk_split", "chunk_split"),
+                             detail = c("Embedded NUL in string.", "characters 1-900", "characters 901-1800"))
+    )
+  }
+  paths <- local_build_mocks(ingest)
+  target <- withr::local_tempfile(fileext = ".duckdb")
+
+  msgs <- character()
+  w <- expect_warning(
+    withCallingHandlers(
+      out <- crd_store_build(target, citation_keys = c("keyA", "keyB", "keyC")),
+      message = function(m) {
+        msgs <<- c(msgs, conditionMessage(m))
+        invokeRestart("muffleMessage")
+      }
+    ),
+    "Skipped 1 PDF"
+  )
+  expect_match(conditionMessage(w), "keyC (c.pdf): markdown reader: x; pdftools: y", fixed = TRUE)
+  expect_identical(out$citation_key, c("keyA", "keyB"))
+  expect_true(any(grepl("Read with pdftools.*keyA \\(a.pdf\\): Embedded NUL", msgs)))
+  expect_true(any(grepl("Split chunks.*keyB \\(b.pdf\\) \\(2\\)", msgs)))
+  expect_true(file.exists(target))
+})
+
+test_that("crd_store_build() stops and leaves no store when no PDF could be ingested", {
+  skip_if_not_installed("ragnar", "0.3.0")
+  skip_if_not_installed("duckdb")
+  ingest <- function(paths) {
+    list(
+      ingested = character(),
+      skipped = tibble::tibble(origin = paths, reason = "no text"),
+      notes = no_notes()
+    )
+  }
+  local_build_mocks(ingest)
+  target <- withr::local_tempfile(fileext = ".duckdb")
+
+  expect_error(
+    suppressMessages(crd_store_build(target, citation_keys = c("keyA", "keyB", "keyC"))),
+    "No PDF could be ingested:\n  keyA (a.pdf): no text", fixed = TRUE
+  )
+  expect_false(file.exists(target))
+})

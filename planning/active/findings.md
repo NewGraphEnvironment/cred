@@ -47,6 +47,40 @@ Ollama 0.24.0 and ragnar 0.3.0; scripts were throwaway and are not committed.
 - Upstream: ollama/ollama#14186 (open, 2026-02-10): truncate ignored since 0.13.5. On 0.24.0
   truncation works for prose, so the `•` case is a narrower residue of it.
 
+## Implementation facts (2026-10-31)
+
+- **ragnar re-raises a worker's error with `warning(cond)` but keeps its error class**, so it
+  reaches `error =` calling handlers and never `warning =` ones; `muffleWarning` is still the
+  restart available (measured with a `simpleError` passed to `warning()`). A skip is therefore
+  its own class, `cred_ingest_skip`, and mirai carries the class back from the worker (the e2e
+  test asserts no warning escapes).
+- `store@embed` from `ragnar_store_create()` deparses to
+  `function (x) ragnar::embed_ollama(x = x, model = "nomic-embed-text")` with environment
+  `base`, so `prepare` can close over it and be serialised to workers.
+- `ragnar::embed_ollama()`'s 400 is classed
+  `httr2_http_400 / httr2_http / httr2_error / rlang_error / error / condition`; connection
+  refused is `httr2_failure`.
+- An ingest whose every document is skipped returns cleanly (the index builds on an empty
+  store), so `crd_store_build()`'s zero-ingested stop is what deletes the store.
+- Refused chunks are searched for within batches of ten (embed_ollama's batch size), so a
+  2,404-chunk book with two refused chunks re-embeds a few batches, not the book.
+
+## Mutation table
+
+Each defect restored in a scratch copy; `test-store-build.R` run under `load_all()`.
+
+| Defect restored | Tests red |
+|---|---|
+| refused chunk not split (`stop(emb)`) | 3 (split, drop, e2e split) |
+| no pdftools fallback | 1 (fallback) |
+| `prepare` parented on the cred namespace | 1 (self-contained) |
+| `prepare` calls a cred helper | 8 (every test that runs `prepare`) |
+| skip not muffled | 1 (e2e unreadable) |
+| every embed error treated as a 400 | 2 (unembedded, e2e service down) |
+| floor of 0 instead of `min_chars` | 1 (drop) |
+| `crd_store_build()` returns every attempted file | 1 (report) |
+| `complete <- TRUE` before the zero-ingested stop | 1 (no store left) |
+
 ## Errors Encountered
 
 | Error | Resolution |

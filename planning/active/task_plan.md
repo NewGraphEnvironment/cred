@@ -63,25 +63,25 @@ Approved by the user at the plan gate, 2026-10-31 (recommendations accepted as w
       docs. The ingest finishes, the store holds the good docs, and the result names the
       skipped doc and its reason. Run it with the worker `prepare` serialised, which proves the
       `baseenv()` closure works in a worker.
-- [ ] Restore each defect (no split, no fallback, `prepare` closing over a cred helper) and
+- [x] Restore each defect (no split, no fallback, `prepare` closing over a cred helper) and
       confirm the matching test goes red
 
 ## Phase 2: Implement (`R/store.R`)
-- [ ] `.crd_ingest_prepare(embed, log, read = <read_as_markdown>)` is a factory. It returns
+- [x] `.crd_ingest_prepare(embed, log, read = <read_as_markdown>)` is a factory. It returns
       `function(path)` with `environment = list2env(..., parent = baseenv())`: read → fallback →
       `markdown_chunk()` → embed with split-on-400 → return chunks with `embedding`. It appends
       one tab-separated line per note (origin, kind, detail) to `log`, which workers can append
       to (local daemons, short single-line writes).
-- [ ] `.crd_store_ingest(store, paths)` builds `prepare` from `store@embed` (the store's own
+- [x] `.crd_store_ingest(store, paths)` builds `prepare` from `store@embed` (the store's own
       recorded embedder, so vectors cannot come from a different model). It runs
       `ragnar_store_ingest(prepare = )` under `withCallingHandlers()`, recording and muffling
       ragnar's per-document warnings. It returns `list(ingested, skipped, notes)`, with
       `ingested` read back from the `documents` table.
-- [ ] Wire into `crd_store_build()`. Message the notes (fallback reads, split or dropped chunks).
+- [x] Wire into `crd_store_build()`. Message the notes (fallback reads, split or dropped chunks).
       Raise one `warning()` naming each skipped document and why. If zero documents were
       ingested, stop and give the reasons, which still deletes the store. Return only ingested
       files, as the roxygen already promises (today it returns every attempted file).
-- [ ] Roxygen: a **What cannot be read or embedded** paragraph in `?crd_store_build`.
+- [x] Roxygen: a **What cannot be read or embedded** paragraph in `?crd_store_build`.
       `devtools::document()`, `lintr::lint_package()` with 0 lints.
 
 ## Phase 3: Live verification (local; nothing committed that names local paths or the collection)
