@@ -1657,6 +1657,272 @@ crd_search <- function(store, query, top_k = 5L,
        call. = FALSE)
 }
 
+#' The per-document `prepare` that `crd_store_build()` hands to ragnar
+#'
+#' Reads, chunks and embeds one document, so that a document or a chunk that
+#' cannot be handled costs that document or chunk, not the build
+#' (NewGraphEnvironment/cred#35). Two failures, both measured on real PDFs:
+#'
+#' - **A chunk the embedding model refuses whole.** A run of `•` glyphs costs
+#'   `nomic-embed-text` 2 tokens a character, and Ollama answers 400 ("the
+#'   input length exceeds the context length") rather than truncating it, as
+#'   it does for prose. ragnar's own worker swallows that error and the main
+#'   process re-embeds with no handler, so one such chunk ended
+#'   [ragnar::ragnar_store_ingest()]. Characters do not predict it — a
+#'   1,887-character glyph run fails where a 2,073-character paragraph does
+#'   not — so a chunk is split only when the model refuses it: a refused
+#'   batch of ten is bisected to the chunk, which is halved by character range
+#'   until each part embeds, and dropped, with a note, at `min_chars`. Halves
+#'   of neighbouring chunks inside one glyph run can land on the same range,
+#'   and ragnar's v2 store keys `embeddings` (which the `chunks` view joins) on
+#'   `(doc_id, start, end)`, so a repeated range is kept once. Only a 400 that names the context length is the
+#'   input's fault; any other failure (Ollama down, model missing, any other
+#'   400) leaves the chunks unembedded, so ragnar's main-process embed fails as
+#'   it always has and the build deletes its store rather than finishing short.
+#'   ragnar turns retries off in its workers; `prepare` turns them back on (20
+#'   tries within 180 s, the floor of the main process's
+#'   `max(3 * n_workers, 20)`), so a 429 or 503 under parallel load is retried
+#'   here rather than sent to a main-process embed that would meet the 400.
+#' - **A document markitdown cannot read.** Its text for some PDFs carries a
+#'   NUL, which R cannot hold. [pdftools::pdf_text()] reads those; a document
+#'   neither can read is skipped with a `cred_ingest_skip` error, which ragnar
+#'   turns into a warning and [.crd_store_ingest()] collects.
+#'
+#' **The returned function must not reach cred.** ragnar serialises `prepare`
+#' to its mirai workers, and a closure whose environment chains to the cred
+#' namespace is serialised as a reference to it, which a worker resolves by
+#' loading the *installed* cred. So its environment is parented on
+#' [baseenv()], it calls only base R and `pkg::` functions, and `embed` and
+#' `read` must be self-contained too: a store's own `@embed` is, because
+#' ragnar re-parents it to `baseenv()` before storing it.
+#'
+#' Notes go to a file of the document's own in `notes_dir`, one tab-separated
+#' line each (origin, kind, detail), because a worker has no other channel
+#' back: ragnar keeps only the chunks. They are held until the document's
+#' outcome is known, so a split is never reported for chunks that were then
+#' handed back unsplit. One file per document, not one shared file: an append
+#' larger than 4 KB is more than one `write()`, and workers appending to one
+#' file then splice each other's lines.
+#'
+#' @param embed `function(x)` returning one embedding row per input.
+#' @param notes_dir `character(1)` existing directory each document's notes
+#'   file is written to.
+#' @param read `function(path)` returning a `ragnar::MarkdownDocument`, or
+#'   `NULL` for [ragnar::read_as_markdown()].
+#' @param min_chars `integer(1)` a refused part this short or shorter is
+#'   dropped rather than split again.
+#' @return A `function(path)` returning `ragnar::MarkdownDocumentChunks`, with
+#'   an `embedding` column unless the embedding service itself failed.
+#' @noRd
+.crd_ingest_prepare <- function(embed, notes_dir, read = NULL, min_chars = 64L) {
+  if (is.null(read)) {
+    read <- eval(quote(function(path) ragnar::read_as_markdown(path)), baseenv())
+  }
+
+  prepare <- function(path) {
+    held <- character()
+    note <- function(kind, detail) {
+      held <<- c(held, paste0(path, "\t", kind, "\t", gsub("[\t\r\n]+", " ", detail), "\n"))
+    }
+    flush <- function(kinds = NULL) {
+      keep <- if (is.null(kinds)) held else held[grepl(paste0("\t(", paste(kinds, collapse = "|"), ")\t"), held)]
+      if (length(keep)) {
+        out <- tempfile(paste0("notes-", Sys.getpid(), "-"), tmpdir = notes_dir, fileext = ".tsv")
+        cat(paste(keep, collapse = ""), file = out)
+      }
+    }
+    skip <- function(reason) {
+      note("skipped", reason)
+      flush()
+      stop(structure(class = c("cred_ingest_skip", "error", "condition"),
+                     list(message = reason, call = NULL)))
+    }
+    op <- options(ragnar.embed.req_retry = list(max_tries = 20L, max_seconds = 180))
+    on.exit(options(op), add = TRUE)
+
+    md <- tryCatch(read(path), error = function(e) e)
+    if (inherits(md, "error") || !nzchar(trimws(as.character(md)))) {
+      why <- if (inherits(md, "error")) conditionMessage(md) else "no text"
+      txt <- tryCatch(paste(pdftools::pdf_text(path), collapse = "\n\n"),
+                      error = function(e) e)
+      if (inherits(txt, "error")) {
+        skip(paste0("markdown reader: ", why, "; pdftools: ", conditionMessage(txt)))
+      }
+      if (!nzchar(trimws(txt))) skip(paste0("no text (markdown reader: ", why, "; pdftools: no text)"))
+      md <- ragnar::MarkdownDocument(txt, origin = path)
+      note("read_pdftools", why)
+    }
+    doc <- as.character(md)
+
+    chunks <- tryCatch(ragnar::markdown_chunk(md), error = function(e) e)
+    if (inherits(chunks, "error")) skip(paste0("chunking: ", conditionMessage(chunks)))
+    context <- chunks$context
+    if (is.null(context)) context <- rep("", nrow(chunks))
+    context[is.na(context)] <- ""
+    rows <- data.frame(start = chunks$start, end = chunks$end, context = context,
+                       stringsAsFactors = FALSE)
+    rows$text <- substring(doc, rows$start, rows$end)
+
+    # What ragnar's own worker embeds for a chunk, so a store built here and
+    # one built by ragnar's default prepare embed the same strings.
+    input_of <- function(rows) {
+      ifelse(nzchar(rows$context), paste0(rows$context, "\n", rows$text), rows$text)
+    }
+    refused <- function(e) {
+      inherits(e, "httr2_http_400") && grepl("context length", conditionMessage(e), ignore.case = TRUE)
+    }
+    # `halved` is TRUE for a part of a chunk already split, so a refused chunk
+    # is noted once however many halvings it takes.
+    embed_rows <- function(rows, halved = FALSE) {
+      emb <- tryCatch(embed(input_of(rows)), error = function(e) e)
+      if (!inherits(emb, "error")) return(list(rows = rows, emb = emb))
+      if (!refused(emb)) stop(emb)
+      if (nrow(rows) > 1L) {
+        first <- seq_len(nrow(rows) %/% 2L)
+        a <- embed_rows(rows[first, , drop = FALSE], halved)
+        b <- embed_rows(rows[-first, , drop = FALSE], halved)
+        return(list(rows = rbind(a$rows, b$rows), emb = rbind(a$emb, b$emb)))
+      }
+      n <- rows$end - rows$start + 1L
+      where <- sprintf("characters %d-%d", rows$start, rows$end)
+      if (n <= min_chars) {
+        note("chunk_dropped", paste0(where, ": ", conditionMessage(emb)))
+        return(list(rows = rows[0L, , drop = FALSE], emb = NULL))
+      }
+      if (!halved) note("chunk_split", where)
+      mid <- rows$start + n %/% 2L - 1L
+      halves <- rows[c(1L, 1L), , drop = FALSE]
+      halves$start <- c(rows$start, mid + 1L)
+      halves$end <- c(mid, rows$end)
+      halves$text <- substring(doc, halves$start, halves$end)
+      embed_rows(halves, halved = TRUE)
+    }
+
+    # Batches of ten, as ragnar::embed_ollama() sends them, so a refused
+    # chunk is searched for within its batch, not by re-embedding the book.
+    batches <- split(seq_len(nrow(rows)), (seq_len(nrow(rows)) - 1L) %/% 10L)
+    done <- tryCatch(
+      lapply(batches, function(i) embed_rows(rows[i, , drop = FALSE])),
+      error = function(e) e
+    )
+    if (inherits(done, "error")) {
+      flush("read_pdftools")
+      return(chunks)
+    }
+
+    rows <- do.call(rbind, lapply(done, `[[`, "rows"))
+    emb <- do.call(rbind, lapply(done, `[[`, "emb"))
+    if (nrow(rows) == 0L) skip("no chunk could be embedded")
+    once <- !duplicated(rows[c("start", "end")])
+    rows <- rows[once, , drop = FALSE]
+    emb <- emb[once, , drop = FALSE]
+    rownames(rows) <- NULL
+    flush()
+    out <- ragnar::MarkdownDocumentChunks(rows, document = md)
+    out$embedding <- emb
+    out
+  }
+
+  environment(prepare) <- list2env(
+    list(embed = embed, notes_dir = notes_dir, read = read, min_chars = as.integer(min_chars)),
+    parent = baseenv()
+  )
+  prepare
+}
+
+#' Read the notes `.crd_ingest_prepare()`'s workers wrote
+#'
+#' Parsed field by field rather than with `strsplit()`, which drops a trailing
+#' empty field.
+#'
+#' @param notes_dir `character(1)` the directory the notes files are in.
+#' @return A [tibble][tibble::tibble] with `origin`, `kind`, `detail`.
+#' @noRd
+.crd_ingest_notes <- function(notes_dir) {
+  files <- sort(list.files(notes_dir, pattern = "[.]tsv$", full.names = TRUE))
+  lines <- unlist(lapply(files, readLines, warn = FALSE, encoding = "UTF-8"), use.names = FALSE)
+  if (is.null(lines)) lines <- character()
+  lines <- lines[nzchar(lines)]
+  rest <- sub("^[^\t]*\t", "", lines)
+  tibble::tibble(
+    origin = sub("\t.*$", "", lines),
+    kind = sub("\t.*$", "", rest),
+    detail = sub("^[^\t]*\t", "", rest)
+  )
+}
+
+#' Ingest documents into a store, past the ones that cannot be read or embedded
+#'
+#' Runs [ragnar::ragnar_store_ingest()] with [.crd_ingest_prepare()], embedding
+#' with the store's own `@embed` so no chunk can be embedded by a different
+#' model than the store records.
+#'
+#' How a document that failed in a worker comes back depends on ragnar's
+#' version, and both are handled, because `Remotes: tidyverse/ragnar` installs
+#' the development version while a released one may be what is installed:
+#'
+#' - **ragnar 0.3.0** re-raises the worker's error with `warning(cond)` but
+#'   keeps its class, so it reaches `error` calling handlers, never `warning`
+#'   ones, and `muffleWarning` is the restart `warning()` set up for it. Only
+#'   `cred_ingest_skip` is muffled; its reason is already in the notes. Any
+#'   other worker failure prints as ragnar raised it.
+#' - **ragnar 0.3.1.9000** raises a `ragnar_ingest_worker_error` warning with
+#'   a `path` field, and the worker's own class does not survive. Each is
+#'   muffled and kept by `path`: `prepare`'s note gives the reason where it
+#'   left one, and ragnar's message where it did not (a worker that crashed).
+#'
+#' Either way the `documents` table, not the conditions, decides what was
+#' ingested.
+#'
+#' @param store A `DuckDBRagnarStore` open for writing.
+#' @param paths `character` document paths.
+#' @param read As in [.crd_ingest_prepare()].
+#' @param progress `logical(1)` passed to ragnar. Default `FALSE`, and
+#'   [crd_store_build()] passes `FALSE`: ragnar's per-file progress output does
+#'   not handle every file name safely.
+#' @return A `list`: `ingested` (paths now in the store), `skipped`
+#'   (`origin`, `reason`) and `notes` (`origin`, `kind`, `detail`: fallback
+#'   reads, split and dropped chunks).
+#' @noRd
+.crd_store_ingest <- function(store, paths, read = NULL, progress = FALSE) {
+  notes_dir <- tempfile("cred-ingest-")
+  dir.create(notes_dir)
+  on.exit(unlink(notes_dir, recursive = TRUE), add = TRUE)
+  prepare <- .crd_ingest_prepare(store@embed, notes_dir, read = read)
+
+  worker_errors <- character()
+  withCallingHandlers(
+    ragnar::ragnar_store_ingest(store, paths, prepare = prepare, progress = progress),
+    error = function(e) {
+      if (inherits(e, "cred_ingest_skip") && !is.null(findRestart("muffleWarning"))) {
+        invokeRestart("muffleWarning")
+      }
+    },
+    ragnar_ingest_worker_error = function(w) {
+      if (is.character(w$path) && length(w$path) == 1L && !is.na(w$path)) {
+        worker_errors[[w$path]] <<- conditionMessage(w)
+        invokeRestart("muffleWarning")
+      }
+    }
+  )
+
+  notes <- .crd_ingest_notes(notes_dir)
+  paths <- unique(paths)
+  docs <- DBI::dbGetQuery(store@con, "SELECT origin FROM documents")$origin
+  said <- notes[notes$kind == "skipped", , drop = FALSE]
+  unsaid <- setdiff(paths, c(docs, said$origin))
+  unsaid_reason <- unname(worker_errors[unsaid])
+  unsaid_reason[is.na(unsaid_reason)] <- "not ingested; see ragnar's warning"
+  list(
+    ingested = paths[paths %in% docs],
+    skipped = tibble::tibble(
+      origin = c(said$origin, unsaid),
+      reason = c(said$detail, unsaid_reason)
+    ),
+    notes = notes[notes$kind != "skipped", , drop = FALSE]
+  )
+}
+
 #' Build a ragnar evidence store from Zotero PDFs
 #'
 #' Ingests the PDFs attached to a Zotero collection — or to an explicit set of
@@ -1687,6 +1953,20 @@ crd_search <- function(store, query, top_k = 5L,
 #' more than one collection is an error listing each, with its `parent/child`
 #' path. A collection's subcollections are not included.
 #'
+#' **What cannot be read or embedded.** One PDF that cannot be read or
+#' embedded does not cost the build. A PDF that markitdown cannot read, such as one whose text carries a NUL byte, is
+#' read with [pdftools::pdf_text()] instead, without markdown headings. A PDF
+#' neither can read is skipped, and a warning names it and why. A chunk the
+#' embedding model refuses whole, such as a long run of figure glyphs, is
+#' split until each part embeds; a part still refused at 64 characters is
+#' left out of the embeddings. Both are reported. A failure of the embedding
+#' service itself still stops the build and leaves no store: it would cost
+#' every PDF still to come, silently, rather than one that is named.
+#'
+#' ragnar's own progress output is off, because it does not handle every file
+#' name safely. The build says what it will ingest before it starts, and what
+#' it ingested, read differently, split or skipped when it ends.
+#'
 #' @param store_path `character(1)` path for the `.duckdb` store to create.
 #' @param collection `character(1)` Zotero collection name, or a
 #'   `parent/child` path when the name alone matches more than one. Supply
@@ -1699,7 +1979,7 @@ crd_search <- function(store, query, top_k = 5L,
 #' @inheritParams crd_zot_src_lookup
 #' @return Invisibly, a [tibble][tibble::tibble] with one row per ingested
 #'   file (`citation_key`, `src_path`), so a key with several PDFs has several
-#'   rows. Prints document and chunk counts.
+#'   rows; a skipped PDF has none. Prints document and chunk counts.
 #' @export
 #' @examples
 #' \dontrun{
@@ -1775,10 +2055,12 @@ crd_store_build <- function(store_path,
     overwrite = overwrite
   )
 
-  # Ingest is the long call that fails — an unreadable PDF, Ollama dying part
-  # way through, an interrupt. A half-ingested store left on disk is worse than
-  # none: the retry is refused as "already exists", and the short store answers
-  # queries from a fraction of the corpus without saying so.
+  # Ingest is the long call that fails — Ollama dying part way through, an
+  # interrupt. (An unreadable PDF or a refused chunk no longer does: those cost
+  # one document or one chunk, and are named; see .crd_ingest_prepare().) A
+  # half-ingested store left on disk is worse than none: the retry is refused
+  # as "already exists", and the short store answers queries from a fraction of
+  # the corpus without saying so.
   complete <- FALSE
   on.exit({
     try(DBI::dbDisconnect(store@con, shutdown = TRUE), silent = TRUE)
@@ -1786,12 +2068,50 @@ crd_store_build <- function(store_path,
   }, add = TRUE)
 
   message("Ingesting ", nrow(src), " PDF(s) into ", store_path)
-  ragnar::ragnar_store_ingest(store, src$src_path, progress = TRUE)
+  ing <- .crd_store_ingest(store, src$src_path, progress = FALSE)
+  # One file can sit under two keys (the same PDF cited twice), and is
+  # ingested once, so name every key it answers to.
+  who <- function(path) {
+    keys <- vapply(path, function(p) paste(src$citation_key[src$src_path == p], collapse = "/"),
+                   character(1L), USE.NAMES = FALSE)
+    paste0(keys, " (", basename(path), ")")
+  }
+  skipped <- if (nrow(ing$skipped) > 0L) {
+    paste0("  ", who(ing$skipped$origin), ": ", ing$skipped$reason, collapse = "\n")
+  }
+  if (length(ing$ingested) == 0L) {
+    stop("No PDF could be ingested:\n", skipped, call. = FALSE)
+  }
 
-  # The store is complete the moment ingest returns. Anything after this point
-  # only produces a progress message, and must never be able to delete an
-  # embedding run that can take hours.
+  # The store is complete the moment ingest returns with a document in it.
+  # Anything after this point only produces a progress message, and must never
+  # be able to delete an embedding run that can take hours.
   complete <- TRUE
+
+  notes <- ing$notes
+  pdftools_read <- notes[notes$kind == "read_pdftools", , drop = FALSE]
+  if (nrow(pdftools_read) > 0L) {
+    message("Read with pdftools, because markitdown could not:\n",
+            paste0("  ", who(pdftools_read$origin), ": ", pdftools_read$detail, collapse = "\n"))
+    if (length(ing$ingested) > 1L && all(ing$ingested %in% pdftools_read$origin)) {
+      message("  Every PDF was. That is markitdown failing on this machine rather than in ",
+              "the PDFs:\n  ragnar::read_as_markdown() on one of them shows why.")
+    }
+  }
+  split <- notes[notes$kind == "chunk_split", , drop = FALSE]
+  if (nrow(split) > 0L) {
+    n_split <- table(split$origin)
+    message("Split chunks the embedding model refused whole: ",
+            paste0(who(names(n_split)), " (", n_split, ")", collapse = ", "))
+  }
+  dropped <- notes[notes$kind == "chunk_dropped", , drop = FALSE]
+  if (nrow(dropped) > 0L) {
+    message("Left out of the embeddings, refused even when split:\n",
+            paste0("  ", who(dropped$origin), ": ", dropped$detail, collapse = "\n"))
+  }
+  if (!is.null(skipped)) {
+    warning("Skipped ", nrow(ing$skipped), " PDF(s):\n", skipped, call. = FALSE)
+  }
 
   count_rows <- function(table) {
     tryCatch(DBI::dbGetQuery(store@con, paste0("SELECT COUNT(*) AS n FROM ", table))$n,
@@ -1802,7 +2122,7 @@ crd_store_build <- function(store_path,
 
   message("Store built: ", store_path, " | docs: ", n_docs, " | chunks: ", n_chunks,
           " | model: ", model)
-  invisible(src)
+  invisible(src[src$src_path %in% ing$ingested, , drop = FALSE])
 }
 
 #' Split a store source URI into bucket and key prefix

@@ -39,7 +39,7 @@ accepted: it differs between machines. Default
 \value{
 Invisibly, a \link[tibble:tibble]{tibble} with one row per ingested
 file (\code{citation_key}, \code{src_path}), so a key with several PDFs has several
-rows. Prints document and chunk counts.
+rows; a skipped PDF has none. Prints document and chunk counts.
 }
 \description{
 Ingests the PDFs attached to a Zotero collection — or to an explicit set of
@@ -70,6 +70,20 @@ than one library, on two live items in one, or only in a library other than
 \code{library}, is left out with a warning. A collection name that matches
 more than one collection is an error listing each, with its \code{parent/child}
 path. A collection's subcollections are not included.
+
+\strong{What cannot be read or embedded.} One PDF that cannot be read or
+embedded does not cost the build. A PDF that markitdown cannot read, such as one whose text carries a NUL byte, is
+read with \code{\link[pdftools:pdftools]{pdftools::pdf_text()}} instead, without markdown headings. A PDF
+neither can read is skipped, and a warning names it and why. A chunk the
+embedding model refuses whole, such as a long run of figure glyphs, is
+split until each part embeds; a part still refused at 64 characters is
+left out of the embeddings. Both are reported. A failure of the embedding
+service itself still stops the build and leaves no store: it would cost
+every PDF still to come, silently, rather than one that is named.
+
+ragnar's own progress output is off, because it does not handle every file
+name safely. The build says what it will ingest before it starts, and what
+it ingested, read differently, split or skipped when it ends.
 }
 \examples{
 \dontrun{
