@@ -2270,7 +2270,8 @@ crd_store_build <- function(store_path,
 #' build would leave it out, and is tried again by the next update.
 #'
 #' **What is kept that a build would leave out.** A PDF that resolves in
-#' Zotero but is not on this machine keeps its stored document, and is named.
+#' Zotero but cannot be read on this machine, because it is not there or not
+#' readable, keeps its stored document, and is named.
 #' A partly synced Zotero `storage/` directory would otherwise strip the store
 #' of every file it has not downloaded.
 #'
@@ -2283,8 +2284,9 @@ crd_store_build <- function(store_path,
 #' **What a failure costs.** The update works on a copy beside the store and
 #' replaces the store with it only when it has finished. An update that stops
 #' part way, for whatever reason, leaves the store exactly as it was, and so
-#' does one that would leave it with no documents. When nothing has changed,
-#' or nothing that changed could be read, the store is not written at all.
+#' does one that would leave it with no documents. When the update would
+#' ingest nothing, drop nothing and record nothing new, the store is not
+#' written at all, so a new PDF that cannot be read does not rewrite it.
 #' Close any connection to the store before updating it.
 #'
 #' **After an update.** The store's md5 no longer matches the manifest, so
@@ -2335,9 +2337,12 @@ crd_store_update <- function(store_path,
   src <- .crd_store_sources(collection, citation_keys, zotero_dir, library)
   paths <- unique(src$src_path)
   ids <- .crd_origin_id(paths)
-  here <- file.exists(paths)
   md5 <- rep(NA_character_, length(paths))
-  md5[here] <- unname(tools::md5sum(paths[here]))
+  exists <- file.exists(paths)
+  md5[exists] <- unname(tools::md5sum(paths[exists]))
+  # A file is here when it can be read, not when it exists: md5sum() answers NA
+  # for one without read permission, and that NA would reach ragnar as a path.
+  here <- !is.na(md5)
 
   # Everything that can refuse runs against the original, read-only, before
   # anything is copied.
@@ -2373,13 +2378,13 @@ crd_store_update <- function(store_path,
   store <- NULL
 
   if (any(!here & !stored)) {
-    warning("Skipping ", sum(!here & !stored), " missing file(s): ",
+    warning("Skipping ", sum(!here & !stored), " missing or unreadable file(s): ",
             paste(.crd_store_who(paths[!here & !stored], src), collapse = ", "), call. = FALSE)
   }
   if (any(!here & stored)) {
-    message("Keeping ", sum(!here & stored), " stored document(s) whose file is not on ",
-            "this machine:\n", paste0("  ", .crd_store_who(paths[!here & stored], src),
-                                      collapse = "\n"))
+    message("Keeping ", sum(!here & stored), " stored document(s) whose file cannot be read ",
+            "on this machine:\n", paste0("  ", .crd_store_who(paths[!here & stored], src),
+                                         collapse = "\n"))
   }
 
   # The record the store should end with: the md5 of every file kept or

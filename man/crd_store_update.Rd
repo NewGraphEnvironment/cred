@@ -60,7 +60,8 @@ seen. A changed file that can no longer be read loses its document, as a
 build would leave it out, and is tried again by the next update.
 
 \strong{What is kept that a build would leave out.} A PDF that resolves in
-Zotero but is not on this machine keeps its stored document, and is named.
+Zotero but cannot be read on this machine, because it is not there or not
+readable, keeps its stored document, and is named.
 A partly synced Zotero \verb{storage/} directory would otherwise strip the store
 of every file it has not downloaded.
 
@@ -73,8 +74,9 @@ store holds, stops the update.
 \strong{What a failure costs.} The update works on a copy beside the store and
 replaces the store with it only when it has finished. An update that stops
 part way, for whatever reason, leaves the store exactly as it was, and so
-does one that would leave it with no documents. When nothing has changed,
-or nothing that changed could be read, the store is not written at all.
+does one that would leave it with no documents. When the update would
+ingest nothing, drop nothing and record nothing new, the store is not
+written at all, so a new PDF that cannot be read does not rewrite it.
 Close any connection to the store before updating it.
 
 \strong{After an update.} The store's md5 no longer matches the manifest, so

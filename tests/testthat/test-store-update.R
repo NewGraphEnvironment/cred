@@ -304,7 +304,7 @@ test_that("a stored document whose file is not on this machine is kept, and name
   unlink(world$paths["keyB"])
 
   res <- update(path, c("keyA", "keyB"))
-  expect_match(res$msgs, "Keeping 1 stored document(s) whose file is not on this machine:\n  keyB (keyB.md)",
+  expect_match(res$msgs, "Keeping 1 stored document(s) whose file cannot be read on this machine:\n  keyB (keyB.md)",
                fixed = TRUE)
   expect_match(res$msgs, "Store is current", fixed = TRUE)
   expect_length(contents(path)$ids, 2L)
@@ -410,4 +410,27 @@ test_that("after a removal the index scores as a fresh build's does", {
     sort(round(.crd_flat(res$metric_value, "numeric"), 8))
   }
   expect_identical(scores(path), scores(fresh))
+})
+
+test_that("a stored file this machine cannot read is kept like a missing one, recorded or not", {
+  skip_on_os("windows")
+  world <- local_update_world()
+  path <- build(world, c("keyA", "keyB"))
+  Sys.chmod(world$paths["keyB"], "000")
+  withr::defer(Sys.chmod(world$paths["keyB"], "644"))
+  if (file.access(world$paths["keyB"], 4L) == 0L) skip("an unreadable file is readable here (root?)")
+
+  res <- update(path, c("keyA", "keyB", "keyC"))
+  expect_match(res$msgs, "Keeping 1 stored document(s) whose file cannot be read on this machine:\n  keyB (keyB.md)",
+               fixed = TRUE)
+  expect_match(res$msgs, "added: 1 | replaced: 0 | removed: 0 | kept: 2", fixed = TRUE)
+  expect_length(contents(path)$ids, 3L)
+
+  # A store with no record cannot vouch for it either, and must not record NA.
+  con <- DBI::dbConnect(duckdb::duckdb(), path)
+  DBI::dbExecute(con, "DROP TABLE cred_sources")
+  DBI::dbDisconnect(con, shutdown = TRUE)
+  res <- update(path, c("keyA", "keyB", "keyC"))
+  expect_match(res$msgs, "Recording the md5 of 2 stored file(s)", fixed = TRUE)
+  expect_length(contents(path)$rec, 2L)
 })
