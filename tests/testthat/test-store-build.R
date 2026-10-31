@@ -157,21 +157,48 @@ test_that("prepare splits a chunk the model refuses until each part embeds", {
   expect_identical(covered(chunks), covered(whole))
 
   notes <- .crd_test_notes(log)
-  expect_gt(nrow(notes), 0L)
   expect_true(all(notes$kind == "chunk_split"))
   expect_true(all(notes$origin == path))
+  # One note per refused chunk, however many halvings it took.
+  refused <- sum(nchar(ifelse(nzchar(whole$context), paste0(whole$context, "\n", whole$text),
+                              whole$text)) > 700L)
+  expect_gt(refused, 0L)
+  expect_identical(nrow(notes), refused)
+})
+
+test_that("prepare keeps a range once when halves of neighbouring chunks coincide", {
+  skip_if_not_installed("ragnar", "0.3.0")
+  skip_if_not_installed("duckdb")
+  log <- .crd_test_log()
+  # A glyph run several chunks long: markdown_chunk() finds no boundary to snap
+  # to inside it, so neighbouring chunks overlap at fixed strides and their
+  # halves can repeat a range, which ragnar's chunks table refuses as a
+  # duplicate (doc_id, start, end) key.
+  text <- paste(.crd_test_prose(150L), "\n\n", strrep("\u2022", 4000L), "\n\n",
+                .crd_test_prose(150L, seed = 2L))
+  path <- .crd_test_doc(text)
+  prepare <- .crd_ingest_prepare(.crd_test_embed_limited(700L), log,
+                                 read = .crd_test_read_text)
+
+  chunks <- prepare(path)
+  expect_identical(anyDuplicated(data.frame(chunks$start, chunks$end)), 0L)
+  store <- ragnar::ragnar_store_create(embed = .crd_test_embed_limited(700L), version = 2)
+  withr::defer(DBI::dbDisconnect(store@con, shutdown = TRUE))
+  expect_no_error(ragnar::ragnar_store_update(store, chunks))
 })
 
 test_that("prepare drops and names a part the model still refuses at the floor", {
   skip_if_not_installed("ragnar", "0.3.0")
   log <- .crd_test_log()
-  text <- paste(.crd_test_prose(300L), "\n\nGLYPHRUN\n\n", .crd_test_prose(300L, seed = 2L))
+  text <- paste(.crd_test_prose(300L), "\n\n\u2603\n\n", .crd_test_prose(300L, seed = 2L))
   path <- .crd_test_doc(text)
-  # Refuses anything carrying the marker, however short: no split can help.
+  # Refuses anything holding one character, which no halving can cut in two,
+  # so the part around it is refused all the way down to the floor.
   refuse <- eval(quote(function(x) {
-    if (any(grepl("GLYPHRUN", x, fixed = TRUE))) {
+    if (any(grepl("\u2603", x, fixed = TRUE))) {
       stop(structure(class = c("httr2_http_400", "httr2_http", "httr2_error", "error", "condition"),
-                     list(message = "HTTP 400 Bad Request.", call = NULL)))
+                     list(message = "HTTP 400 Bad Request.\nthe input length exceeds the context length",
+                          call = NULL)))
     }
     matrix(1, nrow = length(x), ncol = 4L)
   }), baseenv())
@@ -179,7 +206,7 @@ test_that("prepare drops and names a part the model still refuses at the floor",
 
   chunks <- prepare(path)
   expect_chunks_consistent(chunks)
-  expect_false(any(grepl("GLYPHRUN", chunks$text, fixed = TRUE)))
+  expect_false(any(grepl("\u2603", chunks$text, fixed = TRUE)))
   expect_gt(nrow(chunks), 0L)
 
   notes <- .crd_test_notes(log)
@@ -204,6 +231,66 @@ test_that("prepare leaves the chunks unembedded on a failure that is not the inp
   chunks <- prepare(path)
   expect_false("embedding" %in% names(chunks))
   expect_gt(nrow(chunks), 0L)
+  expect_identical(nrow(.crd_test_notes(log)), 0L)
+})
+
+test_that("prepare retries a busy server itself, as ragnar's workers do not", {
+  skip_if_not_installed("ragnar", "0.3.0")
+  # ragnar sets this in every worker; without a retry there, a 429 or 503 hands
+  # the chunks back unsplit to a main-process embed that meets the 400.
+  withr::local_options(ragnar.embed.req_retry = FALSE)
+  log <- .crd_test_log()
+  path <- .crd_test_doc(.crd_test_prose(300L))
+  needs_retry <- eval(quote(function(x) {
+    if (!is.list(getOption("ragnar.embed.req_retry"))) stop("retries are off")
+    matrix(1, nrow = length(x), ncol = 4L)
+  }), baseenv())
+  chunks <- .crd_ingest_prepare(needs_retry, log, read = .crd_test_read_text)(path)
+  expect_true("embedding" %in% names(chunks))
+  expect_false(getOption("ragnar.embed.req_retry"))
+})
+
+test_that("prepare does not split for a 400 that is not about the context length", {
+  skip_if_not_installed("ragnar", "0.3.0")
+  log <- .crd_test_log()
+  path <- .crd_test_doc(.crd_test_prose(600L))
+  # A malformed request or another provider's refusal: splitting every chunk
+  # to the floor would cost thousands of requests and fix nothing.
+  bad_request <- eval(quote(function(x) {
+    stop(structure(class = c("httr2_http_400", "httr2_http", "httr2_error", "error", "condition"),
+                   list(message = "HTTP 400 Bad Request.\ninvalid input type", call = NULL)))
+  }), baseenv())
+  chunks <- .crd_ingest_prepare(bad_request, log, read = .crd_test_read_text)(path)
+  expect_false("embedding" %in% names(chunks))
+  expect_identical(nrow(.crd_test_notes(log)), 0L)
+})
+
+test_that("prepare reports no split when it hands the chunks back unsplit", {
+  skip_if_not_installed("ragnar", "0.3.0")
+  log <- .crd_test_log()
+  # A refused glyph run first, then, more than ten chunks on, a chunk the
+  # service fails on: the split happened in a batch whose result is discarded.
+  text <- paste(strrep("\u2022", 1500L), "\n\n", .crd_test_prose(4000L), "\n\nZZDOWN\n\n",
+                .crd_test_prose(100L, seed = 2L))
+  path <- .crd_test_doc(text)
+  embed <- eval(quote(function(x) {
+    if (any(grepl("ZZDOWN", x, fixed = TRUE))) {
+      stop(structure(class = c("httr2_failure", "httr2_error", "error", "condition"),
+                     list(message = "Failed to perform HTTP request.", call = NULL)))
+    }
+    if (any(nchar(x) > 700L)) {
+      stop(structure(class = c("httr2_http_400", "httr2_http", "httr2_error", "error", "condition"),
+                     list(message = "HTTP 400 Bad Request.\nthe input length exceeds the context length",
+                          call = NULL)))
+    }
+    matrix(1, nrow = length(x), ncol = 4L)
+  }), baseenv())
+  whole <- ragnar::markdown_chunk(.crd_test_read_text(path))
+  hit <- which(grepl("ZZDOWN", whole$text, fixed = TRUE))
+  expect_gt(min(hit), 10L)
+
+  chunks <- .crd_ingest_prepare(embed, log, read = .crd_test_read_text)(path)
+  expect_false("embedding" %in% names(chunks))
   expect_identical(nrow(.crd_test_notes(log)), 0L)
 })
 
@@ -283,9 +370,9 @@ test_that("an ingest finishes past a chunk the model refuses whole", {
   expect_identical(nrow(res$skipped), 0L)
   expect_true(any(res$notes$kind == "chunk_split" & res$notes$origin == glyphs))
 
-  n_emb <- DBI::dbGetQuery(store@con, "SELECT COUNT(*) AS n FROM embeddings")$n
-  n_chunks <- DBI::dbGetQuery(store@con, "SELECT COUNT(*) AS n FROM chunks")$n
-  expect_identical(n_emb, n_chunks)
+  stored <- DBI::dbGetQuery(store@con, "SELECT origin, start, \"end\" FROM chunks")
+  whole <- ragnar::markdown_chunk(.crd_test_read_text(glyphs))
+  expect_gt(sum(stored$origin == glyphs), nrow(whole))
 })
 
 test_that("an ingest still fails whole when the embedding service is down", {
@@ -324,17 +411,19 @@ local_build_mocks <- function(ingest, env = parent.frame()) {
   dir <- withr::local_tempdir(.local_envir = env)
   paths <- file.path(dir, c("a.pdf", "b.pdf", "c.pdf"))
   file.create(paths)
+  # keyD cites the same file as keyA: one document, two citations.
   create <- ragnar::ragnar_store_create
   local_mocked_bindings(
     .crd_zot_key_pdfs = function(...) {
       list(
-        sources = tibble::tibble(citation_key = c("keyA", "keyB", "keyC"), src_path = paths),
+        sources = tibble::tibble(citation_key = c("keyA", "keyB", "keyC", "keyD"),
+                                 src_path = paths[c(1, 2, 3, 1)]),
         left_out = tibble::tibble(citation_key = character(), item = character(),
                                   title = character(), reason = character())
       )
     },
     .crd_ollama_check = function(...) invisible(NULL),
-    .crd_store_ingest = function(store, paths, ...) ingest(paths),
+    .crd_store_ingest = function(store, paths, ...) ingest(unique(paths)),
     .env = env
   )
   local_mocked_bindings(
@@ -375,8 +464,8 @@ test_that("crd_store_build() names a skipped PDF by key and returns only what it
     "Skipped 1 PDF"
   )
   expect_match(conditionMessage(w), "keyC (c.pdf): markdown reader: x; pdftools: y", fixed = TRUE)
-  expect_identical(out$citation_key, c("keyA", "keyB"))
-  expect_true(any(grepl("Read with pdftools.*keyA \\(a.pdf\\): Embedded NUL", msgs)))
+  expect_identical(out$citation_key, c("keyA", "keyB", "keyD"))
+  expect_true(any(grepl("Read with pdftools.*keyA/keyD \\(a.pdf\\): Embedded NUL", msgs)))
   expect_true(any(grepl("Split chunks.*keyB \\(b.pdf\\) \\(2\\)", msgs)))
   expect_true(file.exists(target))
 })
@@ -396,7 +485,7 @@ test_that("crd_store_build() stops and leaves no store when no PDF could be inge
 
   expect_error(
     suppressMessages(crd_store_build(target, citation_keys = c("keyA", "keyB", "keyC"))),
-    "No PDF could be ingested:\n  keyA (a.pdf): no text", fixed = TRUE
+    "No PDF could be ingested:\n  keyA/keyD (a.pdf): no text", fixed = TRUE
   )
   expect_false(file.exists(target))
 })

@@ -1670,12 +1670,18 @@ crd_search <- function(store, query, top_k = 5L,
 #'   process re-embeds with no handler, so one such chunk ended
 #'   [ragnar::ragnar_store_ingest()]. Characters do not predict it — a
 #'   1,887-character glyph run fails where a 2,073-character paragraph does
-#'   not — so a chunk is split only when the model refuses it: halved by
-#'   character range until each part embeds, and dropped, with a note, at
-#'   `min_chars`. Only a 400 is the input's fault; any other embed failure
-#'   (Ollama down, model missing) leaves the chunks unembedded, so ragnar's
-#'   main-process embed fails as it always has and the build deletes its store
-#'   rather than finishing short.
+#'   not — so a chunk is split only when the model refuses it: a refused
+#'   batch of ten is bisected to the chunk, which is halved by character range
+#'   until each part embeds, and dropped, with a note, at `min_chars`. Halves
+#'   of neighbouring chunks inside one glyph run can land on the same range,
+#'   and ragnar's `chunks` table keys on `(doc_id, start, end)`, so a repeated
+#'   range is kept once. Only a 400 that names the context length is the
+#'   input's fault; any other failure (Ollama down, model missing, any other
+#'   400) leaves the chunks unembedded, so ragnar's main-process embed fails as
+#'   it always has and the build deletes its store rather than finishing short.
+#'   ragnar turns retries off in its workers; `prepare` turns them back on, as
+#'   the main process has them, so a 429 or 503 under parallel load is retried
+#'   here rather than sent to a main-process embed that would meet the 400.
 #' - **A document markitdown cannot read.** Its text for some PDFs carries a
 #'   NUL, which R cannot hold. [pdftools::pdf_text()] reads those; a document
 #'   neither can read is skipped with a `cred_ingest_skip` error, which ragnar
@@ -1691,6 +1697,9 @@ crd_search <- function(store, query, top_k = 5L,
 #'
 #' Notes go to `log`, one tab-separated line each (origin, kind, detail),
 #' because a worker has no other channel back: ragnar keeps only the chunks.
+#' They are held until the document's outcome is known and written in one
+#' call, so a split is never reported for chunks that were then handed back
+#' unsplit, and lines from parallel workers do not interleave.
 #'
 #' @param embed `function(x)` returning one embedding row per input.
 #' @param log `character(1)` path the notes are appended to.
@@ -1707,15 +1716,22 @@ crd_search <- function(store, query, top_k = 5L,
   }
 
   prepare <- function(path) {
+    held <- character()
     note <- function(kind, detail) {
-      cat(path, "\t", kind, "\t", gsub("[\t\r\n]+", " ", detail), "\n",
-          sep = "", file = log, append = TRUE)
+      held <<- c(held, paste0(path, "\t", kind, "\t", gsub("[\t\r\n]+", " ", detail), "\n"))
+    }
+    flush <- function(kinds = NULL) {
+      keep <- if (is.null(kinds)) held else held[grepl(paste0("\t(", paste(kinds, collapse = "|"), ")\t"), held)]
+      if (length(keep)) cat(paste(keep, collapse = ""), file = log, append = TRUE)
     }
     skip <- function(reason) {
       note("skipped", reason)
+      flush()
       stop(structure(class = c("cred_ingest_skip", "error", "condition"),
                      list(message = reason, call = NULL)))
     }
+    op <- options(ragnar.embed.req_retry = list(max_tries = 20L, max_seconds = 180))
+    on.exit(options(op), add = TRUE)
 
     md <- tryCatch(read(path), error = function(e) e)
     if (inherits(md, "error") || !nzchar(trimws(as.character(md)))) {
@@ -1745,14 +1761,19 @@ crd_search <- function(store, query, top_k = 5L,
     input_of <- function(rows) {
       ifelse(nzchar(rows$context), paste0(rows$context, "\n", rows$text), rows$text)
     }
-    embed_rows <- function(rows) {
+    refused <- function(e) {
+      inherits(e, "httr2_http_400") && grepl("context length", conditionMessage(e), ignore.case = TRUE)
+    }
+    # `halved` is TRUE for a part of a chunk already split, so a refused chunk
+    # is noted once however many halvings it takes.
+    embed_rows <- function(rows, halved = FALSE) {
       emb <- tryCatch(embed(input_of(rows)), error = function(e) e)
       if (!inherits(emb, "error")) return(list(rows = rows, emb = emb))
-      if (!inherits(emb, "httr2_http_400")) stop(emb)
+      if (!refused(emb)) stop(emb)
       if (nrow(rows) > 1L) {
         first <- seq_len(nrow(rows) %/% 2L)
-        a <- embed_rows(rows[first, , drop = FALSE])
-        b <- embed_rows(rows[-first, , drop = FALSE])
+        a <- embed_rows(rows[first, , drop = FALSE], halved)
+        b <- embed_rows(rows[-first, , drop = FALSE], halved)
         return(list(rows = rbind(a$rows, b$rows), emb = rbind(a$emb, b$emb)))
       }
       n <- rows$end - rows$start + 1L
@@ -1761,13 +1782,13 @@ crd_search <- function(store, query, top_k = 5L,
         note("chunk_dropped", paste0(where, ": ", conditionMessage(emb)))
         return(list(rows = rows[0L, , drop = FALSE], emb = NULL))
       }
-      note("chunk_split", where)
+      if (!halved) note("chunk_split", where)
       mid <- rows$start + n %/% 2L - 1L
       halves <- rows[c(1L, 1L), , drop = FALSE]
       halves$start <- c(rows$start, mid + 1L)
       halves$end <- c(mid, rows$end)
       halves$text <- substring(doc, halves$start, halves$end)
-      embed_rows(halves)
+      embed_rows(halves, halved = TRUE)
     }
 
     # Batches of ten, as ragnar::embed_ollama() sends them, so a refused
@@ -1777,12 +1798,19 @@ crd_search <- function(store, query, top_k = 5L,
       lapply(batches, function(i) embed_rows(rows[i, , drop = FALSE])),
       error = function(e) e
     )
-    if (inherits(done, "error")) return(chunks)
+    if (inherits(done, "error")) {
+      flush("read_pdftools")
+      return(chunks)
+    }
 
     rows <- do.call(rbind, lapply(done, `[[`, "rows"))
     emb <- do.call(rbind, lapply(done, `[[`, "emb"))
     if (nrow(rows) == 0L) skip("no chunk could be embedded")
+    once <- !duplicated(rows[c("start", "end")])
+    rows <- rows[once, , drop = FALSE]
+    emb <- emb[once, , drop = FALSE]
     rownames(rows) <- NULL
+    flush()
     out <- ragnar::MarkdownDocumentChunks(rows, document = md)
     out$embedding <- emb
     out
@@ -2004,8 +2032,12 @@ crd_store_build <- function(store_path,
 
   message("Ingesting ", nrow(src), " PDF(s) into ", store_path)
   ing <- .crd_store_ingest(store, src$src_path)
+  # One file can sit under two keys (the same PDF cited twice), and is
+  # ingested once, so name every key it answers to.
   who <- function(path) {
-    paste0(src$citation_key[match(path, src$src_path)], " (", basename(path), ")")
+    keys <- vapply(path, function(p) paste(src$citation_key[src$src_path == p], collapse = "/"),
+                   character(1L), USE.NAMES = FALSE)
+    paste0(keys, " (", basename(path), ")")
   }
   skipped <- if (nrow(ing$skipped) > 0L) {
     paste0("  ", who(ing$skipped$origin), ": ", ing$skipped$reason, collapse = "\n")
@@ -2024,6 +2056,10 @@ crd_store_build <- function(store_path,
   if (nrow(pdftools_read) > 0L) {
     message("Read with pdftools, because markitdown could not:\n",
             paste0("  ", who(pdftools_read$origin), ": ", pdftools_read$detail, collapse = "\n"))
+    if (length(ing$ingested) > 1L && all(ing$ingested %in% pdftools_read$origin)) {
+      message("  Every PDF was. That is markitdown failing on this machine rather than in ",
+              "the PDFs:\n  ragnar::read_as_markdown() on one of them shows why.")
+    }
   }
   split <- notes[notes$kind == "chunk_split", , drop = FALSE]
   if (nrow(split) > 0L) {

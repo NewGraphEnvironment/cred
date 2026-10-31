@@ -81,6 +81,36 @@ Each defect restored in a scratch copy; `test-store-build.R` run under `load_all
 | `crd_store_build()` returns every attempted file | 1 (report) |
 | `complete <- TRUE` before the zero-ingested stop | 1 (no store left) |
 
+## Plan review disposition
+
+Review in `review-plan.md`. Each claim was probed before it was acted on.
+
+| Finding | Verdict | Action |
+|---|---|---|
+| B1 duplicate ranges | **Reproduced**: prose + 4,000 `•`, limit 700 → 48 rows, 2 repeated ranges; `ragnar_store_update()` fails with `duplicate key "1, 4801, 5200"`. The live ESL build happened to miss it. | Keep a range once; test via an in-memory store |
+| B2 handler class | True of the plan text; the code was already right (measured earlier) | Plan text corrected |
+| G1 batch bisection | True of the plan text | Phase 2b and the roxygen |
+| G2 worker retries off | Confirmed: `embed_req_retry()` reads `ragnar.embed.req_retry`, which ragnar sets to `FALSE` in workers | `prepare` sets the main-process policy locally |
+| G3 any 400 splits | Real cost risk | Split only on 400 + "context length" (class first, message only within the class) |
+| G4 stale notes | Real | Notes held, written in one `cat()` on the outcome |
+| G5 worker crash | Already covered by `unsaid` | None |
+| G7 counts / first key | Real | Note once per chunk; `who()` joins keys |
+| A2 markitdown missing | Real | Message when every PDF fell back |
+| AC1 e2e cannot prove no-cred | True | Plan claim reworded; the structure test is the guard |
+| AC2 always-true assertion | True (`chunks` is a view on `embeddings`) | Replaced with a split-row count |
+| AC3 cuttable marker | True | Single-character refusal |
+| AC4 no timing baseline | Fair | Phase 3 compares against main on the papers main can build |
+
+Mutation table, review fixes:
+
+| Defect restored | Tests red |
+|---|---|
+| no range dedupe | 1 (neighbouring halves) |
+| no retry in `prepare` | 1 (retry) |
+| every 400 splits | 1 (non-context 400) |
+| all held notes written on the unsplit path | 1 (no split reported) |
+| a note per halving | 1 (split) |
+
 ## Errors Encountered
 
 | Error | Resolution |

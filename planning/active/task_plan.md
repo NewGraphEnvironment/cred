@@ -61,8 +61,10 @@ Approved by the user at the plan gate, 2026-10-31 (recommendations accepted as w
 - [x] End to end through the real `ragnar_store_ingest()` on an offline store (the
       `.crd_test_embed` pattern, mirai workers): one doc that both readers reject plus good
       docs. The ingest finishes, the store holds the good docs, and the result names the
-      skipped doc and its reason. Run it with the worker `prepare` serialised, which proves the
-      `baseenv()` closure works in a worker.
+      skipped doc and its reason. The worker `prepare` is serialised here. *(Corrected after the
+      plan review, AC1: this cannot prove `prepare` is free of cred, because under R CMD check the
+      workers load the code under test. The structure test, `topenv()` = `baseenv()`, is the
+      guard.)*
 - [x] Restore each defect (no split, no fallback, `prepare` closing over a cred helper) and
       confirm the matching test goes red
 
@@ -74,8 +76,10 @@ Approved by the user at the plan gate, 2026-10-31 (recommendations accepted as w
       to (local daemons, short single-line writes).
 - [x] `.crd_store_ingest(store, paths)` builds `prepare` from `store@embed` (the store's own
       recorded embedder, so vectors cannot come from a different model). It runs
-      `ragnar_store_ingest(prepare = )` under `withCallingHandlers()`, recording and muffling
-      ragnar's per-document warnings. It returns `list(ingested, skipped, notes)`, with
+      `ragnar_store_ingest(prepare = )` under `withCallingHandlers()`. *(Corrected after the plan
+      review, B2: ragnar re-raises a worker's error with `warning(cond)` but keeps its error class,
+      so the handler is `error =`. It muffles only `cred_ingest_skip`, via the `muffleWarning`
+      restart.)* The `documents` table is the ground truth for what was ingested. It returns `list(ingested, skipped, notes)`, with
       `ingested` read back from the `documents` table.
 - [x] Wire into `crd_store_build()`. Message the notes (fallback reads, split or dropped chunks).
       Raise one `warning()` naming each skipped document and why. If zero documents were
@@ -83,6 +87,16 @@ Approved by the user at the plan gate, 2026-10-31 (recommendations accepted as w
       files, as the roxygen already promises (today it returns every attempted file).
 - [x] Roxygen: a **What cannot be read or embedded** paragraph in `?crd_store_build`.
       `devtools::document()`, `lintr::lint_package()` with 0 lints.
+
+## Phase 2b: Plan-review fixes (review-plan.md)
+- [x] B1: halves of neighbouring refused chunks can repeat a `(start, end)` range, which ragnar's
+      primary key refuses. Keep the range once.
+- [x] G2: turn retries back on inside `prepare`, because ragnar turns them off in its workers
+- [x] G3: split only for a 400 whose message names the context length
+- [x] G4: hold notes until the outcome is known, and write them in one call
+- [x] G7: one `chunk_split` note per refused chunk; name every key a file sits under
+- [x] A2: say so when every PDF fell back to pdftools
+- [x] AC2, AC3: replace an assertion that always held, and a floor fixture halving could cut
 
 ## Phase 3: Live verification (local; nothing committed that names local paths or the collection)
 - [ ] Build the four-paper collection from the issue. It completes; ESL is ingested and its two
