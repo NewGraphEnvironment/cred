@@ -11,7 +11,7 @@
 ## Citation
 
 Source:
-[`inst/CITATION`](https://github.com/NewGraphEnvironment/cred/blob/v0.5.0/inst/CITATION)
+[`inst/CITATION`](https://github.com/NewGraphEnvironment/cred/blob/main/inst/CITATION)
 
 Irvine A (2026). *cred: Citation Review and Evidence Documentation*. New
 Graph Environment Ltd.

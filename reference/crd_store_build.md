@@ -60,7 +60,8 @@ crd_store_build(
 Invisibly, a
 [tibble](https://tibble.tidyverse.org/reference/tibble.html) with one
 row per ingested file (`citation_key`, `src_path`), so a key with
-several PDFs has several rows. Prints document and chunk counts.
+several PDFs has several rows; a skipped PDF has none. Prints document
+and chunk counts.
 
 ## Details
 
@@ -92,6 +93,22 @@ more than one library, on two live items in one, or only in a library
 other than `library`, is left out with a warning. A collection name that
 matches more than one collection is an error listing each, with its
 `parent/child` path. A collection's subcollections are not included.
+
+**What cannot be read or embedded.** One PDF that cannot be read or
+embedded does not cost the build. A PDF that markitdown cannot read,
+such as one whose text carries a NUL byte, is read with
+[`pdftools::pdf_text()`](https://docs.ropensci.org/pdftools//reference/pdftools.html)
+instead, without markdown headings. A PDF neither can read is skipped,
+and a warning names it and why. A chunk the embedding model refuses
+whole, such as a long run of figure glyphs, is split until each part
+embeds; a part still refused at 64 characters is left out of the
+embeddings. Both are reported. A failure of the embedding service itself
+still stops the build and leaves no store: it would cost every PDF still
+to come, silently, rather than one that is named.
+
+ragnar's own progress output is off, because it does not handle every
+file name safely. The build says what it will ingest before it starts,
+and what it ingested, read differently, split or skipped when it ends.
 
 ## Examples
 

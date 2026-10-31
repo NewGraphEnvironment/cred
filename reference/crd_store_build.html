@@ -36,7 +36,7 @@ for both semantic and BM25 retrieval."><meta property="og:image" content="https:
 <div class="row">
   <main id="main" class="col-md-9"><div class="page-header">
       <img src="../logo.png" class="logo" alt=""><h1>Build a ragnar evidence store from Zotero PDFs</h1>
-      <small class="dont-index">Source: <a href="https://github.com/NewGraphEnvironment/cred/blob/v0.5.0/R/store.R" class="external-link"><code>R/store.R</code></a></small>
+      <small class="dont-index">Source: <a href="https://github.com/NewGraphEnvironment/cred/blob/main/R/store.R" class="external-link"><code>R/store.R</code></a></small>
       <div class="d-none name"><code>crd_store_build.Rd</code></div>
     </div>
 
@@ -102,7 +102,7 @@ accepted: it differs between machines. Default
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
     <p>Invisibly, a <a href="https://tibble.tidyverse.org/reference/tibble.html" class="external-link">tibble</a> with one row per ingested
 file (<code>citation_key</code>, <code>src_path</code>), so a key with several PDFs has several
-rows. Prints document and chunk counts.</p>
+rows; a skipped PDF has none. Prints document and chunk counts.</p>
     </div>
     <div class="section level2">
     <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
@@ -126,6 +126,18 @@ than one library, on two live items in one, or only in a library other than
 <code>library</code>, is left out with a warning. A collection name that matches
 more than one collection is an error listing each, with its <code>parent/child</code>
 path. A collection's subcollections are not included.</p>
+<p><strong>What cannot be read or embedded.</strong> One PDF that cannot be read or
+embedded does not cost the build. A PDF that markitdown cannot read, such as one whose text carries a NUL byte, is
+read with <code><a href="https://docs.ropensci.org/pdftools//reference/pdftools.html" class="external-link">pdftools::pdf_text()</a></code> instead, without markdown headings. A PDF
+neither can read is skipped, and a warning names it and why. A chunk the
+embedding model refuses whole, such as a long run of figure glyphs, is
+split until each part embeds; a part still refused at 64 characters is
+left out of the embeddings. Both are reported. A failure of the embedding
+service itself still stops the build and leaves no store: it would cost
+every PDF still to come, silently, rather than one that is named.</p>
+<p>ragnar's own progress output is off, because it does not handle every file
+name safely. The build says what it will ingest before it starts, and what
+it ingested, read differently, split or skipped when it ends.</p>
     </div>
 
     <div class="section level2">
