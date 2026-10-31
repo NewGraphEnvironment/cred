@@ -1986,6 +1986,102 @@ crd_search <- function(store, query, top_k = 5L,
   invisible(rec)
 }
 
+#' Resolve a build's or an update's sources, and say what is left out
+#'
+#' Says what the store will not hold, and which items it holds several files
+#' for, before an ingest that can take hours.
+#'
+#' @inheritParams crd_store_build
+#' @return A [tibble][tibble::tibble] (`citation_key`, `src_path`), one row
+#'   per resolved PDF, whether or not the file is on this machine. Errors when
+#'   nothing resolved.
+#' @noRd
+.crd_store_sources <- function(collection, citation_keys, zotero_dir, library) {
+  resolved <- if (!is.null(collection)) {
+    chk::chk_string(collection)
+    .crd_zot_collection_pdfs(collection, zotero_dir = zotero_dir, library = library)
+  } else {
+    chk::chk_character(citation_keys)
+    .crd_zot_key_pdfs(citation_keys, zotero_dir = zotero_dir, library = library)
+  }
+  src <- resolved$sources
+
+  out <- resolved$left_out
+  if (nrow(out) > 0L) {
+    who <- ifelse(is.na(out$citation_key), paste0(out$item, " ", out$title), out$citation_key)
+    message("Leaving out ", nrow(out), " item(s):\n",
+            paste0("  ", who, ": ", out$reason, collapse = "\n"))
+  }
+  n_files <- table(src$citation_key)
+  if (any(n_files > 1L)) {
+    several <- n_files[n_files > 1L]
+    message("Taking several PDFs for ", length(several), " item(s): ",
+            paste0(names(several), " (", several, ")", collapse = ", "))
+  }
+  if (nrow(src) == 0L) stop("No PDF attachments resolved to ingest.", call. = FALSE)
+  src
+}
+
+#' Name a document by every citation key it answers to
+#'
+#' One file can sit under two keys (the same PDF cited twice), and is ingested
+#' once, so name every key it answers to.
+#'
+#' @param path `character` document paths.
+#' @param src As returned by [.crd_store_sources()].
+#' @return `character`, parallel to `path`: `key1/key2 (file.pdf)`.
+#' @noRd
+.crd_store_who <- function(path, src) {
+  keys <- vapply(path, function(p) paste(src$citation_key[src$src_path == p], collapse = "/"),
+                 character(1L), USE.NAMES = FALSE)
+  paste0(keys, " (", basename(path), ")")
+}
+
+#' The skipped documents of an ingest, one line each, or `NULL`
+#' @param ing As returned by [.crd_store_ingest()].
+#' @param src As returned by [.crd_store_sources()].
+#' @noRd
+.crd_store_skipped <- function(ing, src) {
+  if (nrow(ing$skipped) == 0L) return(NULL)
+  paste0("  ", .crd_store_who(ing$skipped$origin, src), ": ", ing$skipped$reason, collapse = "\n")
+}
+
+#' Report what an ingest read differently, split, dropped or skipped
+#'
+#' @param ing As returned by [.crd_store_ingest()].
+#' @param src As returned by [.crd_store_sources()].
+#' @return `NULL`, invisibly. Messages, and a warning for skipped documents.
+#' @noRd
+.crd_store_report <- function(ing, src) {
+  who <- function(path) .crd_store_who(path, src)
+  notes <- ing$notes
+  pdftools_read <- notes[notes$kind == "read_pdftools", , drop = FALSE]
+  if (nrow(pdftools_read) > 0L) {
+    message("Read with pdftools, because markitdown could not:\n",
+            paste0("  ", who(pdftools_read$origin), ": ", pdftools_read$detail, collapse = "\n"))
+    if (length(ing$ingested) > 1L && all(ing$ingested %in% pdftools_read$origin)) {
+      message("  Every PDF was. That is markitdown failing on this machine rather than in ",
+              "the PDFs:\n  ragnar::read_as_markdown() on one of them shows why.")
+    }
+  }
+  split <- notes[notes$kind == "chunk_split", , drop = FALSE]
+  if (nrow(split) > 0L) {
+    n_split <- table(split$origin)
+    message("Split chunks the embedding model refused whole: ",
+            paste0(who(names(n_split)), " (", n_split, ")", collapse = ", "))
+  }
+  dropped <- notes[notes$kind == "chunk_dropped", , drop = FALSE]
+  if (nrow(dropped) > 0L) {
+    message("Left out of the embeddings, refused even when split:\n",
+            paste0("  ", who(dropped$origin), ": ", dropped$detail, collapse = "\n"))
+  }
+  skipped <- .crd_store_skipped(ing, src)
+  if (!is.null(skipped)) {
+    warning("Skipped ", nrow(ing$skipped), " PDF(s):\n", skipped, call. = FALSE)
+  }
+  invisible(NULL)
+}
+
 #' Build a ragnar evidence store from Zotero PDFs
 #'
 #' Ingests the PDFs attached to a Zotero collection — or to an explicit set of
@@ -2076,30 +2172,7 @@ crd_store_build <- function(store_path,
          call. = FALSE)
   }
 
-  resolved <- if (!is.null(collection)) {
-    chk::chk_string(collection)
-    .crd_zot_collection_pdfs(collection, zotero_dir = zotero_dir, library = library)
-  } else {
-    chk::chk_character(citation_keys)
-    .crd_zot_key_pdfs(citation_keys, zotero_dir = zotero_dir, library = library)
-  }
-  src <- resolved$sources
-
-  # Say what the store will not hold, and which items it holds several files
-  # for, before an ingest that can take hours.
-  out <- resolved$left_out
-  if (nrow(out) > 0L) {
-    who <- ifelse(is.na(out$citation_key), paste0(out$item, " ", out$title), out$citation_key)
-    message("Leaving out ", nrow(out), " item(s):\n",
-            paste0("  ", who, ": ", out$reason, collapse = "\n"))
-  }
-  n_files <- table(src$citation_key)
-  if (any(n_files > 1L)) {
-    several <- n_files[n_files > 1L]
-    message("Ingesting several PDFs for ", length(several), " item(s): ",
-            paste0(names(several), " (", several, ")", collapse = ", "))
-  }
-  if (nrow(src) == 0L) stop("No PDF attachments resolved to ingest.", call. = FALSE)
+  src <- .crd_store_sources(collection, citation_keys, zotero_dir, library)
 
   exists_flag <- file.exists(src$src_path)
   if (any(!exists_flag)) {
@@ -2135,18 +2208,8 @@ crd_store_build <- function(store_path,
   md5 <- tools::md5sum(unique(src$src_path))
   message("Ingesting ", nrow(src), " PDF(s) into ", store_path)
   ing <- .crd_store_ingest(store, src$src_path, progress = FALSE)
-  # One file can sit under two keys (the same PDF cited twice), and is
-  # ingested once, so name every key it answers to.
-  who <- function(path) {
-    keys <- vapply(path, function(p) paste(src$citation_key[src$src_path == p], collapse = "/"),
-                   character(1L), USE.NAMES = FALSE)
-    paste0(keys, " (", basename(path), ")")
-  }
-  skipped <- if (nrow(ing$skipped) > 0L) {
-    paste0("  ", who(ing$skipped$origin), ": ", ing$skipped$reason, collapse = "\n")
-  }
   if (length(ing$ingested) == 0L) {
-    stop("No PDF could be ingested:\n", skipped, call. = FALSE)
+    stop("No PDF could be ingested:\n", .crd_store_skipped(ing, src), call. = FALSE)
   }
 
   # The store is complete the moment ingest returns with a document in it.
@@ -2165,30 +2228,7 @@ crd_store_build <- function(store_path,
     }
   )
 
-  notes <- ing$notes
-  pdftools_read <- notes[notes$kind == "read_pdftools", , drop = FALSE]
-  if (nrow(pdftools_read) > 0L) {
-    message("Read with pdftools, because markitdown could not:\n",
-            paste0("  ", who(pdftools_read$origin), ": ", pdftools_read$detail, collapse = "\n"))
-    if (length(ing$ingested) > 1L && all(ing$ingested %in% pdftools_read$origin)) {
-      message("  Every PDF was. That is markitdown failing on this machine rather than in ",
-              "the PDFs:\n  ragnar::read_as_markdown() on one of them shows why.")
-    }
-  }
-  split <- notes[notes$kind == "chunk_split", , drop = FALSE]
-  if (nrow(split) > 0L) {
-    n_split <- table(split$origin)
-    message("Split chunks the embedding model refused whole: ",
-            paste0(who(names(n_split)), " (", n_split, ")", collapse = ", "))
-  }
-  dropped <- notes[notes$kind == "chunk_dropped", , drop = FALSE]
-  if (nrow(dropped) > 0L) {
-    message("Left out of the embeddings, refused even when split:\n",
-            paste0("  ", who(dropped$origin), ": ", dropped$detail, collapse = "\n"))
-  }
-  if (!is.null(skipped)) {
-    warning("Skipped ", nrow(ing$skipped), " PDF(s):\n", skipped, call. = FALSE)
-  }
+  .crd_store_report(ing, src)
 
   count_rows <- function(table) {
     tryCatch(DBI::dbGetQuery(store@con, paste0("SELECT COUNT(*) AS n FROM ", table))$n,

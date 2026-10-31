@@ -11,3 +11,6 @@
   (test-store-update.R; test-store-build.R record + failed-write tests). The extra `cred_sources` table
   was checked against `ragnar_store_connect()`, `ragnar_store_build_index()`, `crd_store_connect()`,
   `crd_search()` and `.crd_store_describe()` on a copy of the offline fixture: no change.
+- Phase 2: `.crd_store_sources()`, `.crd_store_who()`, `.crd_store_skipped()`, `.crd_store_report()` extracted from
+  `crd_store_build()`; build tests unchanged and green. One wording change: "Ingesting several PDFs for" is now
+  "Taking several PDFs for", since an update keeps some of them rather than ingesting (no test asserted it).

@@ -58,9 +58,9 @@ Decided by me (reject the plan to change any of these):
 - [x] Check that `ragnar_store_connect()` and `crd_search()` still work on a store carrying the extra table, and that `.crd_store_describe()` counts are unchanged
 
 ## Phase 2: Share build's resolve and report
-- [ ] Move the resolve, left-out, several-PDFs and missing-file reporting (`R/store.R:2016-2047`) into `.crd_store_sources()`
-- [ ] Move the post-ingest report (pdftools reads, split, dropped, skipped, `who()`) into `.crd_store_report()`
-- [ ] `crd_store_build()` behaves as before: the existing `test-store-build.R` report tests pass unchanged
+- [x] Move the resolve, left-out, several-PDFs and missing-file reporting (`R/store.R:2016-2047`) into `.crd_store_sources()`
+- [x] Move the post-ingest report (pdftools reads, split, dropped, skipped, `who()`) into `.crd_store_report()`
+- [x] `crd_store_build()` behaves as before: the existing `test-store-build.R` report tests pass unchanged
 
 ## Phase 3: `crd_store_update()`
 - [ ] Tests first (the Phase 4 tests that can be written against the signature)
