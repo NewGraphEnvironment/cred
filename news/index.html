@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">cred</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.4.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.5.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -32,9 +32,24 @@
 <div class="row">
   <main id="main" class="col-md-9"><div class="page-header">
       <img src="../logo.png" class="logo" alt=""><h1>Changelog</h1>
-      <small>Source: <a href="https://github.com/NewGraphEnvironment/cred/blob/main/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
+      <small>Source: <a href="https://github.com/NewGraphEnvironment/cred/blob/v0.5.0/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.5.0" id="cred-050">cred 0.5.0<a class="anchor" aria-label="anchor" href="#cred-050"></a></h2>
+<p>A citation key names an item only within one Zotero library, and the lookups behind the audit and <code><a href="../reference/crd_store_build.html">crd_store_build()</a></code> treated it as global. They took whichever attachment had the highest itemID, so a store could hold another library’s copy of a paper, a file in the trash, or an appendix in place of the report, and the build output said nothing (<a href="https://github.com/NewGraphEnvironment/cred/issues/40" class="external-link">#40</a>).</p>
+<ul><li>
+<strong><code>library</code></strong> on <code><a href="../reference/crd_zot_src_lookup.html">crd_zot_src_lookup()</a></code>, <code><a href="../reference/crd_zot_abstract_lookup.html">crd_zot_abstract_lookup()</a></code>, <code><a href="../reference/crd_store_build.html">crd_store_build()</a></code>, <code><a href="../reference/crd_aud_verify_all.html">crd_aud_verify_all()</a></code> and <code><a href="../reference/crd_aud_verify_abstract.html">crd_aud_verify_abstract()</a></code>: <code>"user"</code>, a group name or a groupID, defaulting to <code>getOption("cred.zotero_library")</code>. Zotero’s internal libraryID is refused because it differs between machines. With no library set, a key found in more than one library now warns and resolves to nothing, where it used to resolve silently.</li>
+<li>
+<strong>Ambiguity is reported, never guessed.</strong> A key on more than one live item is left unresolved with a warning naming the remedy. A collection name matching several collections is an error listing each by path, and a <code>parent/child</code> path picks one.</li>
+<li>
+<strong>The trash is never a source</strong>: trashed items, attachments and collections are excluded, and linked URLs are not files.</li>
+<li>
+<strong>One file per key for the audit, every PDF for a store.</strong> <code><a href="../reference/crd_zot_src_lookup.html">crd_zot_src_lookup()</a></code> takes the attachment Zotero itself opens (PDF first, so an item with a Word file and a PDF now gives the PDF) and names the files it left out. <code><a href="../reference/crd_store_build.html">crd_store_build()</a></code> ingests every live PDF of an item, so appendices are searchable, returns one row per file, and lists every collection member it leaves out with the reason.</li>
+<li>
+<strong>Citation.</strong> <code><a href="https://rdrr.io/r/utils/citation.html" class="external-link">citation()</a></code> and <code>CITATION.cff</code> cite the package by its Zenodo concept DOI and name New Graph Environment Ltd. as publisher. The entry’s key is the package name and its note reads “Version x”, so <code><a href="https://rdrr.io/pkg/knitr/man/write_bib.html" class="external-link">knitr::write_bib()</a></code> keeps it. <code>CITATION.cff</code> is no longer shipped in the tarball.</li>
+<li>The small hex logo’s name no longer overlaps its icon.</li>
+</ul></div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.4.0" id="cred-040">cred 0.4.0<a class="anchor" aria-label="anchor" href="#cred-040"></a></h2>
 <p><code><a href="../reference/crd_store_connect.html">crd_store_connect()</a></code> verified a store by comparing its md5 against the shared manifest, and that compare cannot see the failure it was being credited with. It answers <em>“is this the file the manifest describes”</em> — stale, truncated, locally rebuilt. A store whose embedding model moved underneath it has <strong>exactly</strong> the bytes the manifest recorded, so the compare is structurally unable to see it, and a search against such a store answers differently while looking healthy.</p>
