@@ -70,10 +70,9 @@
   withr::with_seed(seed, paste(sample(vocab, n, replace = TRUE), collapse = " "))
 }
 
+# The notes directory `prepare` writes each document's notes file into.
 .crd_test_log <- function(env = parent.frame()) {
-  log <- withr::local_tempfile(fileext = ".tsv", .local_envir = env)
-  file.create(log)
-  log
+  withr::local_tempdir(.local_envir = env)
 }
 
 .crd_test_notes <- function(log) .crd_ingest_notes(log)
@@ -166,14 +165,31 @@ test_that("prepare splits a chunk the model refuses until each part embeds", {
   expect_identical(nrow(notes), refused)
 })
 
+test_that("each document's notes go to a file of their own", {
+  skip_if_not_installed("ragnar", "0.3.0")
+  # Parallel workers appending to one shared file splice each other's lines
+  # once a document's notes pass 4 KB (more than one write()).
+  dir <- .crd_test_log()
+  glyphs <- paste(.crd_test_prose(100L), "\n\n", strrep("\u2022", 1500L), "\n\n", .crd_test_prose(100L, 2L))
+  paths <- c(.crd_test_doc(glyphs), .crd_test_doc(glyphs))
+  prepare <- .crd_ingest_prepare(.crd_test_embed_limited(700L), dir, read = .crd_test_read_text)
+  for (p in paths) prepare(p)
+
+  files <- list.files(dir, full.names = TRUE)
+  expect_length(files, 2L)
+  per_file <- vapply(files, function(f) length(unique(sub("\t.*$", "", readLines(f)))), integer(1L))
+  expect_true(all(per_file == 1L))
+  expect_setequal(.crd_test_notes(dir)$origin, paths)
+})
+
 test_that("prepare keeps a range once when halves of neighbouring chunks coincide", {
   skip_if_not_installed("ragnar", "0.3.0")
   skip_if_not_installed("duckdb")
   log <- .crd_test_log()
   # A glyph run several chunks long: markdown_chunk() finds no boundary to snap
   # to inside it, so neighbouring chunks overlap at fixed strides and their
-  # halves can repeat a range, which ragnar's chunks table refuses as a
-  # duplicate (doc_id, start, end) key.
+  # halves can repeat a range, which ragnar's v2 store refuses as a duplicate
+  # (doc_id, start, end) key on its embeddings table.
   text <- paste(.crd_test_prose(150L), "\n\n", strrep("\u2022", 4000L), "\n\n",
                 .crd_test_prose(150L, seed = 2L))
   path <- .crd_test_doc(text)

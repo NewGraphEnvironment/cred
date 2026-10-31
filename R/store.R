@@ -1674,13 +1674,14 @@ crd_search <- function(store, query, top_k = 5L,
 #'   batch of ten is bisected to the chunk, which is halved by character range
 #'   until each part embeds, and dropped, with a note, at `min_chars`. Halves
 #'   of neighbouring chunks inside one glyph run can land on the same range,
-#'   and ragnar's `chunks` table keys on `(doc_id, start, end)`, so a repeated
-#'   range is kept once. Only a 400 that names the context length is the
+#'   and ragnar's v2 store keys `embeddings` (which the `chunks` view joins) on
+#'   `(doc_id, start, end)`, so a repeated range is kept once. Only a 400 that names the context length is the
 #'   input's fault; any other failure (Ollama down, model missing, any other
 #'   400) leaves the chunks unembedded, so ragnar's main-process embed fails as
 #'   it always has and the build deletes its store rather than finishing short.
-#'   ragnar turns retries off in its workers; `prepare` turns them back on, as
-#'   the main process has them, so a 429 or 503 under parallel load is retried
+#'   ragnar turns retries off in its workers; `prepare` turns them back on (20
+#'   tries within 180 s, the floor of the main process's
+#'   `max(3 * n_workers, 20)`), so a 429 or 503 under parallel load is retried
 #'   here rather than sent to a main-process embed that would meet the 400.
 #' - **A document markitdown cannot read.** Its text for some PDFs carries a
 #'   NUL, which R cannot hold. [pdftools::pdf_text()] reads those; a document
@@ -1695,14 +1696,17 @@ crd_search <- function(store, query, top_k = 5L,
 #' `read` must be self-contained too: a store's own `@embed` is, because
 #' ragnar re-parents it to `baseenv()` before storing it.
 #'
-#' Notes go to `log`, one tab-separated line each (origin, kind, detail),
-#' because a worker has no other channel back: ragnar keeps only the chunks.
-#' They are held until the document's outcome is known and written in one
-#' call, so a split is never reported for chunks that were then handed back
-#' unsplit, and lines from parallel workers do not interleave.
+#' Notes go to a file of the document's own in `notes_dir`, one tab-separated
+#' line each (origin, kind, detail), because a worker has no other channel
+#' back: ragnar keeps only the chunks. They are held until the document's
+#' outcome is known, so a split is never reported for chunks that were then
+#' handed back unsplit. One file per document, not one shared file: an append
+#' larger than 4 KB is more than one `write()`, and workers appending to one
+#' file then splice each other's lines.
 #'
 #' @param embed `function(x)` returning one embedding row per input.
-#' @param log `character(1)` path the notes are appended to.
+#' @param notes_dir `character(1)` existing directory each document's notes
+#'   file is written to.
 #' @param read `function(path)` returning a `ragnar::MarkdownDocument`, or
 #'   `NULL` for [ragnar::read_as_markdown()].
 #' @param min_chars `integer(1)` a refused part this short or shorter is
@@ -1710,7 +1714,7 @@ crd_search <- function(store, query, top_k = 5L,
 #' @return A `function(path)` returning `ragnar::MarkdownDocumentChunks`, with
 #'   an `embedding` column unless the embedding service itself failed.
 #' @noRd
-.crd_ingest_prepare <- function(embed, log, read = NULL, min_chars = 64L) {
+.crd_ingest_prepare <- function(embed, notes_dir, read = NULL, min_chars = 64L) {
   if (is.null(read)) {
     read <- eval(quote(function(path) ragnar::read_as_markdown(path)), baseenv())
   }
@@ -1722,7 +1726,10 @@ crd_search <- function(store, query, top_k = 5L,
     }
     flush <- function(kinds = NULL) {
       keep <- if (is.null(kinds)) held else held[grepl(paste0("\t(", paste(kinds, collapse = "|"), ")\t"), held)]
-      if (length(keep)) cat(paste(keep, collapse = ""), file = log, append = TRUE)
+      if (length(keep)) {
+        out <- tempfile(paste0("notes-", Sys.getpid(), "-"), tmpdir = notes_dir, fileext = ".tsv")
+        cat(paste(keep, collapse = ""), file = out)
+      }
     }
     skip <- function(reason) {
       note("skipped", reason)
@@ -1817,7 +1824,7 @@ crd_search <- function(store, query, top_k = 5L,
   }
 
   environment(prepare) <- list2env(
-    list(embed = embed, log = log, read = read, min_chars = as.integer(min_chars)),
+    list(embed = embed, notes_dir = notes_dir, read = read, min_chars = as.integer(min_chars)),
     parent = baseenv()
   )
   prepare
@@ -1828,11 +1835,13 @@ crd_search <- function(store, query, top_k = 5L,
 #' Parsed field by field rather than with `strsplit()`, which drops a trailing
 #' empty field.
 #'
-#' @param log `character(1)` path to the notes file.
+#' @param notes_dir `character(1)` the directory the notes files are in.
 #' @return A [tibble][tibble::tibble] with `origin`, `kind`, `detail`.
 #' @noRd
-.crd_ingest_notes <- function(log) {
-  lines <- if (file.exists(log)) readLines(log, warn = FALSE, encoding = "UTF-8") else character()
+.crd_ingest_notes <- function(notes_dir) {
+  files <- sort(list.files(notes_dir, pattern = "[.]tsv$", full.names = TRUE))
+  lines <- unlist(lapply(files, readLines, warn = FALSE, encoding = "UTF-8"), use.names = FALSE)
+  if (is.null(lines)) lines <- character()
   lines <- lines[nzchar(lines)]
   rest <- sub("^[^\t]*\t", "", lines)
   tibble::tibble(
@@ -1852,7 +1861,7 @@ crd_search <- function(store, query, top_k = 5L,
 #' condition: ragnar calls `warning(cond)` on it but keeps its class, so it
 #' reaches `error` calling handlers, never `warning` ones, and `muffleWarning`
 #' is the restart `warning()` set up for it. Only `cred_ingest_skip` is
-#' muffled; its reason is already in the log.
+#' muffled; its reason is already in the notes.
 #'
 #' @param store A `DuckDBRagnarStore` open for writing.
 #' @param paths `character` document paths.
@@ -1863,10 +1872,10 @@ crd_search <- function(store, query, top_k = 5L,
 #'   reads, split and dropped chunks).
 #' @noRd
 .crd_store_ingest <- function(store, paths, read = NULL, progress = TRUE) {
-  log <- tempfile("cred-ingest-", fileext = ".tsv")
-  file.create(log)
-  on.exit(unlink(log), add = TRUE)
-  prepare <- .crd_ingest_prepare(store@embed, log, read = read)
+  notes_dir <- tempfile("cred-ingest-")
+  dir.create(notes_dir)
+  on.exit(unlink(notes_dir, recursive = TRUE), add = TRUE)
+  prepare <- .crd_ingest_prepare(store@embed, notes_dir, read = read)
 
   withCallingHandlers(
     ragnar::ragnar_store_ingest(store, paths, prepare = prepare, progress = progress),
@@ -1877,7 +1886,7 @@ crd_search <- function(store, query, top_k = 5L,
     }
   )
 
-  notes <- .crd_ingest_notes(log)
+  notes <- .crd_ingest_notes(notes_dir)
   paths <- unique(paths)
   docs <- DBI::dbGetQuery(store@con, "SELECT origin FROM documents")$origin
   said <- notes[notes$kind == "skipped", , drop = FALSE]

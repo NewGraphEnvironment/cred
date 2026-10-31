@@ -48,9 +48,9 @@ sends 10 inputs per request, so one refused input fails the whole request.
   no handler. One refused chunk therefore ends `ragnar_store_ingest()`.
 - If `prepare` returns chunks that already have an `embedding` column, both embeds are skipped.
 - Workers run with `ragnar.embed.req_retry = FALSE`, so they do not retry a 429 or 503. The main
-  process retries up to 20 times within 180 s.
-- The v2 `chunks` table is keyed on `(doc_id, start, end)`, and `text` must equal
-  `stri_sub(document, start, end)`.
+  process retries `max(3 * n_workers, 20)` times within 180 s.
+- The v2 store keys its `embeddings` table on `(doc_id, start, end)`. `chunks` is a view that joins
+  `embeddings` to `documents`, and a chunk's `text` must equal `stri_sub(document, start, end)`.
 
 cred's response, in `crd_store_build()`: cred's own `prepare` embeds in the worker and splits
 a chunk only on a 400 that names the context length. It keeps each range once, and falls back

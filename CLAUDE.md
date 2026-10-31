@@ -296,8 +296,8 @@ Shipped: [#22](https://github.com/NewGraphEnvironment/cred/issues/22) ragnar ret
   its own `prepare` (`.crd_ingest_prepare()`), which reads, chunks and embeds in the worker. It
   falls back to `pdftools` when markitdown cannot read a PDF (a NUL in its text). It splits a
   chunk by character range **only when the model answers 400 naming the context length**, keeps
-  each range once (ragnar keys `chunks` on `(doc_id, start, end)`, and halves of neighbouring
-  chunks collide), and drops a part at 64 characters. Any other embed failure leaves the chunks
+  each range once (ragnar keys `embeddings`, which the `chunks` view joins, on
+  `(doc_id, start, end)`, and halves of neighbouring chunks collide), and drops a part at 64 characters. Any other embed failure leaves the chunks
   unembedded, so ragnar's main-process embed aborts the build and the store is deleted, as
   before. Characters do not predict a refusal: a 1,887-character run of `•` is refused, while a
   2,073-character paragraph is not. So there is no length cap.
