@@ -1,3 +1,32 @@
+# cred 0.5.0
+
+A citation key names an item only within one Zotero library, and the lookups behind the audit
+and `crd_store_build()` treated it as global. They took whichever attachment had the highest
+itemID, so a store could hold another library's copy of a paper, a file in the trash, or an
+appendix in place of the report, and the build output said nothing
+([#40](https://github.com/NewGraphEnvironment/cred/issues/40)).
+
+* **`library`** on `crd_zot_src_lookup()`, `crd_zot_abstract_lookup()`, `crd_store_build()`,
+  `crd_aud_verify_all()` and `crd_aud_verify_abstract()`: `"user"`, a group name or a groupID,
+  defaulting to `getOption("cred.zotero_library")`. Zotero's internal libraryID is refused
+  because it differs between machines. With no library set, a key found in more than one
+  library now warns and resolves to nothing, where it used to resolve silently.
+* **Ambiguity is reported, never guessed.** A key on more than one live item is left
+  unresolved with a warning naming the remedy. A collection name matching several collections
+  is an error listing each by path, and a `parent/child` path picks one.
+* **The trash is never a source**: trashed items, attachments and collections are excluded, and
+  linked URLs are not files.
+* **One file per key for the audit, every PDF for a store.** `crd_zot_src_lookup()` takes the
+  attachment Zotero itself opens (PDF first, so an item with a Word file and a PDF now gives the
+  PDF) and names the files it left out. `crd_store_build()` ingests every live PDF of an item,
+  so appendices are searchable, returns one row per file, and lists every collection member it
+  leaves out with the reason.
+* **Citation.** `citation()` and `CITATION.cff` cite the package by its Zenodo concept DOI and
+  name New Graph Environment Ltd. as publisher. The entry's key is the package name and its
+  note reads "Version x", so `knitr::write_bib()` keeps it. `CITATION.cff` is no longer shipped
+  in the tarball.
+* The small hex logo's name no longer overlaps its icon.
+
 # cred 0.4.0
 
 `crd_store_connect()` verified a store by comparing its md5 against the shared manifest, and
