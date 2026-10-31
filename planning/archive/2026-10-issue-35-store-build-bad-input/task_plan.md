@@ -123,7 +123,7 @@ Approved by the user at the plan gate, 2026-10-31 (recommendations accepted as w
       against the installed package)
 - [x] `/code-check` clean (once over the branch with `/code-check branch`)
 - [x] PWF checkboxes match landed work
-- [ ] `/planning-archive` on completion
+- [x] `/planning-archive` on completion
 
 Verification: the Phase 1 tests and their restored-defect runs prove each mechanism offline. The
 Phase 3 build proves the reported case on the real PDFs, against a live Ollama.
