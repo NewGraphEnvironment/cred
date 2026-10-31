@@ -111,7 +111,7 @@ Approved by the user at the plan gate, 2026-10-31 (recommendations accepted as w
       list
 - [x] `research/ollama-embedding-context.md` gets the measured truncation behaviour and the `•`
       case, plus a README row
-- [ ] Edit the #35 body: the cause is token count, so "cap each chunk" is replaced by the
+- [x] Edit the #35 body: the cause is token count, so "cap each chunk" is replaced by the
       measured mechanism. Link the research file.
 - [x] Upstream drafts in `findings.md`
 
