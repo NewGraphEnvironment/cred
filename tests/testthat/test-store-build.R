@@ -369,6 +369,47 @@ test_that("an ingest finishes past an unreadable document and names it", {
   expect_setequal(docs, good)
 })
 
+test_that("an ingest takes ragnar's ragnar_ingest_worker_error warnings too", {
+  skip_if_not_installed("ragnar", "0.3.0")
+  skip_if_not_installed("duckdb")
+  skip_if_not_installed("rlang")
+  # ragnar's development version (0.3.1.9000, what `Remotes: tidyverse/ragnar`
+  # installs) reports a failed worker as this warning, with a `path` field and
+  # without the worker's own class, so the cred_ingest_skip handler never sees
+  # it. Raised here exactly as ragnar raises it, so the branch is covered
+  # whichever ragnar is installed; CI's R CMD check runs the real one.
+  dir <- withr::local_tempdir()
+  good <- .crd_test_doc(.crd_test_prose(800L), dir)
+  bad <- file.path(dir, "unreadable.pdf")
+  writeLines("not a pdf", bad)
+  crashed <- file.path(dir, "crashed.pdf")
+  writeLines("not a pdf", crashed)
+  reader <- eval(quote(function(path) {
+    if (grepl("[.]pdf$", path)) stop("Embedded NUL in string.")
+    ragnar::MarkdownDocument(paste(readLines(path, warn = FALSE), collapse = "\n"), origin = path)
+  }), baseenv())
+  store <- local_build_store(.crd_test_embed_limited(5000L))
+  local_mocked_bindings(
+    ragnar_store_ingest = function(store, paths, prepare, progress) {
+      ragnar::ragnar_store_update(store, prepare(paths[1]))
+      e <- tryCatch(prepare(paths[2]), error = function(e) e)
+      rlang::warn(sprintf('`prepare("%s")` signaled an Error: %s', paths[2], conditionMessage(e)),
+                  class = "ragnar_ingest_worker_error", path = paths[2], call = NULL)
+      rlang::warn("Worker interrupted.", class = "ragnar_ingest_worker_error", path = paths[3], call = NULL)
+      invisible(store)
+    },
+    .package = "ragnar"
+  )
+
+  res <- expect_no_warning(
+    .crd_store_ingest(store, c(good, bad, crashed), read = reader, progress = FALSE)
+  )
+  expect_identical(res$ingested, good)
+  expect_setequal(res$skipped$origin, c(bad, crashed))
+  expect_match(res$skipped$reason[res$skipped$origin == bad], "pdftools", fixed = TRUE)
+  expect_identical(res$skipped$reason[res$skipped$origin == crashed], "Worker interrupted.")
+})
+
 test_that("an ingest finishes past a chunk the model refuses whole", {
   skip_if_not_installed("ragnar", "0.3.0")
   skip_if_not_installed("duckdb")

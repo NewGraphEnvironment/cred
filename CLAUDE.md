@@ -309,10 +309,15 @@ Shipped: [#22](https://github.com/NewGraphEnvironment/cred/issues/22) ragnar ret
   parented on `baseenv()`, and its `embed` is the store's own `@embed`, which ragnar has already
   re-parented to `baseenv()`. The structure test (`topenv()` is `baseenv()`) is the guard. The
   end-to-end test cannot be: under `R CMD check` the workers load the code under test anyway.
-  A skipped document comes back from ragnar as `warning(cond)` **with its error class kept**.
-  So it reaches `error =` calling handlers, never `warning =` ones, and it is muffled by its
-  own class, `cred_ingest_skip`. The `documents` table, not the warnings, decides what was
-  ingested.
+  How a failed document comes back depends on ragnar's version, and `Remotes: tidyverse/ragnar`
+  means CI runs the development one while a machine may have 0.3.0. **0.3.0** re-raises it as
+  `warning(cond)` **with its error class kept**, so it reaches `error =` calling handlers, never
+  `warning =` ones, and is muffled by its own class, `cred_ingest_skip`. **0.3.1.9000** raises
+  a `ragnar_ingest_worker_error` warning with a `path` field and drops the worker's class, so
+  a handler written against one release passes its tests and fails the other's. Both are
+  handled, and the `documents` table, not the conditions, decides what was ingested. Test a
+  change here against both: install the development ragnar into a scratch library and run the
+  tests with `R_LIBS` pointing at it, so the mirai workers load it too.
 
 <!-- BEGIN SOUL CONVENTIONS — DO NOT EDIT BELOW THIS LINE -->
 

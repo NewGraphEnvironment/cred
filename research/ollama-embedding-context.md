@@ -3,7 +3,8 @@
 **Verified:** 2026-10-31 · **Issues:** #35 · **Produced by:** probes of a local Ollama 0.24.0
 `/api/embed` with `nomic-embed-text`, per-chunk token counts for the chunks ragnar 0.3.0 makes
 from a 764-page textbook, and reading ragnar 0.3.0's ingest code (`ragnar_store_ingest`,
-`do_ingest_remote_work`, `do_embed`, `ragnar_store_update_v2`, `embed_req_retry`). The numbers
+`do_ingest_remote_work`, `do_embed`, `ragnar_store_update_v2`, `embed_req_retry`), and
+ragnar's development `R/ingest.R` at `06f7c3e` for how worker failures are reported. The numbers
 are in the #35 archive's `findings.md`.
 
 ## The embedding model's limit is tokens, and characters do not predict it
@@ -41,8 +42,11 @@ sends 10 inputs per request, so one refused input fails the whole request.
 ## Where ragnar's ingest turns one bad input into a lost build
 
 - `prepare` runs in mirai workers. A worker's *read* error comes back as an error value. ragnar
-  re-raises it with `warning(cond)` but keeps the error class, so it reaches `error =` calling
-  handlers and never `warning =` ones. The document is skipped.
+  0.3.0 re-raises it with `warning(cond)` but keeps the error class, so it reaches `error =`
+  calling handlers and never `warning =` ones. The development version (0.3.1.9000 at
+  `06f7c3e`, which `Remotes: tidyverse/ragnar` installs) instead raises a
+  `ragnar_ingest_worker_error` warning with a `path` field, and the worker's own class is lost.
+  Either way the document is skipped.
 - A worker's *embed* error is swallowed (`tryCatch(..., error = function(e) NULL)`). The chunks
   return unembedded, and `ragnar_store_update_v2()` embeds them again in the main process with
   no handler. One refused chunk therefore ends `ragnar_store_ingest()`.

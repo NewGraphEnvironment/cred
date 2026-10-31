@@ -20,6 +20,12 @@ inside one glyph run repeat a `(start, end)` range, which ragnar's `embeddings` 
 refuses in the main process. That would have reintroduced the original abort. The live
 ESL build happened not to hit it.
 
+**A wrong turn kept.** Every local check, `R CMD check` included, ran against ragnar 0.3.0.
+The PR's own CI installs ragnar's development branch, because `Remotes: tidyverse/ragnar`
+names no ref, and there a failed worker comes back as a `ragnar_ingest_worker_error` warning
+rather than an error with its class kept. The merge stopped on the red check. The ingest now
+handles both forms and is tested against both, and the version gap is #43.
+
 ## Measurement
 
 - ESL (764 pages): 2,404 chunks, median 434 tokens, maximum 2,039. **2** refused, both runs of

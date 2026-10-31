@@ -1857,11 +1857,22 @@ crd_search <- function(store, query, top_k = 5L,
 #' with the store's own `@embed` so no chunk can be embedded by a different
 #' model than the store records.
 #'
-#' A document `prepare` skips comes back from ragnar as a re-raised error
-#' condition: ragnar calls `warning(cond)` on it but keeps its class, so it
-#' reaches `error` calling handlers, never `warning` ones, and `muffleWarning`
-#' is the restart `warning()` set up for it. Only `cred_ingest_skip` is
-#' muffled; its reason is already in the notes.
+#' How a document that failed in a worker comes back depends on ragnar's
+#' version, and both are handled, because `Remotes: tidyverse/ragnar` installs
+#' the development version while a released one may be what is installed:
+#'
+#' - **ragnar 0.3.0** re-raises the worker's error with `warning(cond)` but
+#'   keeps its class, so it reaches `error` calling handlers, never `warning`
+#'   ones, and `muffleWarning` is the restart `warning()` set up for it. Only
+#'   `cred_ingest_skip` is muffled; its reason is already in the notes. Any
+#'   other worker failure prints as ragnar raised it.
+#' - **ragnar 0.3.1.9000** raises a `ragnar_ingest_worker_error` warning with
+#'   a `path` field, and the worker's own class does not survive. Each is
+#'   muffled and kept by `path`: `prepare`'s note gives the reason where it
+#'   left one, and ragnar's message where it did not (a worker that crashed).
+#'
+#' Either way the `documents` table, not the conditions, decides what was
+#' ingested.
 #'
 #' @param store A `DuckDBRagnarStore` open for writing.
 #' @param paths `character` document paths.
@@ -1877,10 +1888,17 @@ crd_search <- function(store, query, top_k = 5L,
   on.exit(unlink(notes_dir, recursive = TRUE), add = TRUE)
   prepare <- .crd_ingest_prepare(store@embed, notes_dir, read = read)
 
+  worker_errors <- character()
   withCallingHandlers(
     ragnar::ragnar_store_ingest(store, paths, prepare = prepare, progress = progress),
     error = function(e) {
       if (inherits(e, "cred_ingest_skip") && !is.null(findRestart("muffleWarning"))) {
+        invokeRestart("muffleWarning")
+      }
+    },
+    ragnar_ingest_worker_error = function(w) {
+      if (is.character(w$path) && length(w$path) == 1L && !is.na(w$path)) {
+        worker_errors[[w$path]] <<- conditionMessage(w)
         invokeRestart("muffleWarning")
       }
     }
@@ -1891,11 +1909,13 @@ crd_search <- function(store, query, top_k = 5L,
   docs <- DBI::dbGetQuery(store@con, "SELECT origin FROM documents")$origin
   said <- notes[notes$kind == "skipped", , drop = FALSE]
   unsaid <- setdiff(paths, c(docs, said$origin))
+  unsaid_reason <- unname(worker_errors[unsaid])
+  unsaid_reason[is.na(unsaid_reason)] <- "not ingested; see ragnar's warning"
   list(
     ingested = paths[paths %in% docs],
     skipped = tibble::tibble(
       origin = c(said$origin, unsaid),
-      reason = c(said$detail, rep("not ingested; see ragnar's warning", length(unsaid)))
+      reason = c(said$detail, unsaid_reason)
     ),
     notes = notes[notes$kind != "skipped", , drop = FALSE]
   )

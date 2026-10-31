@@ -184,3 +184,4 @@ SKIP 2 | PASS 790 (the 2 skips predate the branch).
 
 | Error | Resolution |
 |-------|------------|
+| PR #42's R-CMD-check failed at `test-store-build.R:362`: `Actually got a <ragnar_ingest_worker_error>` | CI installs ragnar's development branch (`Remotes: tidyverse/ragnar`, 0.3.1.9000 at `06f7c3e`), which reports a worker failure as a `ragnar_ingest_worker_error` warning with a `path` field and drops the worker's class. Every local run, R CMD check included, used 0.3.0. Reproduced locally with dev ragnar in a scratch library (`R_LIBS`, so the workers load it too); `.crd_store_ingest()` now handles both forms; 75/75 pass under each; removing the new handler is red on both. Version gap filed as #43. |
