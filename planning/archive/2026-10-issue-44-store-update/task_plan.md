@@ -93,8 +93,8 @@ Decided by me (reject the plan to change any of these):
 
 - [x] Tests pass (`devtools::test()`), `lintr::lint_package()` reports 0 lints, `devtools::check()` is clean
 - [x] `/code-check` clean (once over the branch with `/code-check branch`)
-- [ ] PWF checkboxes match landed work
-- [ ] `/planning-archive` on completion
+- [x] PWF checkboxes match landed work
+- [x] `/planning-archive` on completion
 
 Verification: the parity test (update A→B equals a fresh build of B, by origin id and md5) is the
 acceptance test the issue names. The failure test proves the original store is untouched by md5.
