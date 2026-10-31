@@ -1,3 +1,23 @@
+# cred 0.6.0
+
+`crd_store_build()` no longer loses a whole build to one PDF it cannot read or one chunk the
+embedding model refuses ([#35](https://github.com/NewGraphEnvironment/cred/issues/35)). The
+model's limit is in tokens, and characters do not predict it: a figure rendered as a run of `•`
+glyphs is refused by `nomic-embed-text` where longer prose is not, so no cap on chunk length
+could have caught it. And markitdown's text for some PDFs carries a NUL byte, which R cannot
+hold.
+
+* A PDF markitdown cannot read is read with pdftools instead, without markdown headings. A PDF
+  neither can read is skipped and named in a warning.
+* A chunk the model refuses as longer than its context is split by character range until each
+  part embeds; a part still refused at 64 characters is left out and named.
+* A failure of the embedding service itself still stops the build and leaves no store.
+* ragnar's own progress output is off during the build, because it does not handle every file
+  name safely. The build says what it ingested, read differently, split or skipped when it ends.
+* The return value lists only the files actually ingested, as documented.
+* Works with ragnar 0.3.x and with its development branch, which report a failed worker
+  differently.
+
 # cred 0.5.0
 
 A citation key names an item only within one Zotero library, and the lookups behind the audit
