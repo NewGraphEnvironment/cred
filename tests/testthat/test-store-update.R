@@ -342,7 +342,9 @@ test_that("crd_store_update() refuses a missing store and one with a write-ahead
   path <- file.path(dir, "store.duckdb")
   expect_error(crd_store_update(path, citation_keys = "keyA"), "crd_store_build\\(\\) creates one")
   file.create(path, paste0(path, ".wal"))
-  expect_error(crd_store_update(path, citation_keys = "keyA"), "write-ahead log")
+  err <- expect_error(crd_store_update(path, citation_keys = "keyA"), "write-ahead log")
+  # A log left by a process that stopped cannot be closed; the message says how to replay it.
+  expect_match(conditionMessage(err), "DBI::dbDisconnect(DBI::dbConnect(duckdb::duckdb(),", fixed = TRUE)
   expect_error(crd_store_update(path), "exactly one of")
 })
 
@@ -464,4 +466,15 @@ test_that("the remedy for an unrecognised embedder failure fits an update", {
   expect_match(txt, "Nothing can\\s+be added")
   expect_no_match(txt, "BM25")
   expect_no_match(txt, "crd_store_connect")
+})
+
+test_that("the update probes its embedder once, and never through connect's check", {
+  # A second probe can fail where the first succeeded, and connect's check
+  # would then warn in connect's words, let the update carry on, and spend
+  # connect's once-per-session warning for that store.
+  world <- local_update_world()
+  path <- build(world, "keyA")
+  local_mocked_bindings(.crd_check_store_embedding = function(...) stop("connect's check was called"))
+  res <- update(path, c("keyA", "keyB"))
+  expect_match(res$msgs, "added: 1", fixed = TRUE)
 })

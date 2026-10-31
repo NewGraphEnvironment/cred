@@ -2333,8 +2333,12 @@ crd_store_update <- function(store_path,
   }
   # A copy of the database file alone would leave the log's transactions out.
   if (file.exists(paste0(store_path, ".wal"))) {
-    stop("The store has a write-ahead log beside it (", basename(store_path), ".wal), so ",
-         "a process has it open or did not close it.\n  Close it and retry.", call. = FALSE)
+    stop("The store has a write-ahead log beside it (", basename(store_path), ".wal): a ",
+         "process has it open, or one that had it open for writing stopped without closing it.\n",
+         "  Close the process that has it open and retry. If none does, opening it for writing ",
+         "once and closing it replays the log:\n",
+         "    DBI::dbDisconnect(DBI::dbConnect(duckdb::duckdb(), \"", store_path, "\"), shutdown = TRUE)",
+         call. = FALSE)
   }
   leftover <- Sys.glob(paste0(store_path, ".updating-*"))
   if (length(leftover) > 0L) {
@@ -2380,26 +2384,29 @@ crd_store_update <- function(store_path,
                              context = "update"),
            call. = FALSE)
     }
-    # The check connect runs, with advice for an update: connect's offers an
-    # argument this function does not have, and speaks of a manifest it never read.
-    tryCatch(
-      .crd_check_store_embedding(store, name = basename(store_path)),
-      cred_store_embedding_mismatch = function(e) {
-        rlang::abort(
-          paste0(
-            "Embedding width mismatch for '", basename(store_path), "', so nothing can be added.\n",
-            "  this store holds:                  ", e$store_size, "-wide embeddings\n",
-            "  its recorded embedder now returns: ", e$embed_width, "-wide\n",
-            "  The model that name resolves to on this machine is no longer the one the\n",
-            "  store was built with, and adding to it would mix the two.\n",
-            "    ollama pull ", .crd_fallback_model(store = store), "\n",
-            "  or rebuild with crd_store_build()."
-          ),
-          class = class(e)[seq_len(match("rlang_error", class(e)) - 1L)],
-          store_size = e$store_size, embed_width = e$embed_width, store_model = e$store_model
-        )
-      }
-    )
+    # The width compared here, from the one probe, rather than through
+    # .crd_check_store_embedding(): that probes again, and if the second probe
+    # failed it would warn in connect's words, let the update carry on, and
+    # spend connect's once-per-session warning for this store. Its advice is
+    # connect's too: an argument this function does not have, a manifest it
+    # never read.
+    meta <- .crd_store_meta_brief(store)
+    got <- .crd_embed_width(probe)
+    if (.crd_have(meta$size) && .crd_have(got) && !identical(got, as.integer(meta$size))) {
+      rlang::abort(
+        paste0(
+          "Embedding width mismatch for '", basename(store_path), "', so nothing can be added.\n",
+          "  this store holds:                  ", meta$size, "-wide embeddings\n",
+          "  its recorded embedder now returns: ", got, "-wide\n",
+          "  The model that name resolves to on this machine is no longer the one the\n",
+          "  store was built with, and adding to it would mix the two.\n",
+          "    ollama pull ", .crd_fallback_model(store = store), "\n",
+          "  or rebuild with crd_store_build()."
+        ),
+        class = c("cred_store_embedding_mismatch", "cred_store_embedding_check"),
+        store_size = as.integer(meta$size), embed_width = got, store_model = meta$model
+      )
+    }
   }
   DBI::dbDisconnect(store@con, shutdown = TRUE)
   store <- NULL
