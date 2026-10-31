@@ -8,7 +8,7 @@ message: If you use cred, please cite it by its DOI, 10.5281/zenodo.23254040.
 type: software
 license: MIT
 title: 'cred: Citation Review and Evidence Documentation'
-version: 0.6.0
+version: 0.7.0
 doi: 10.5281/zenodo.23254040
 abstract: Tools for extracting, auditing, and verifying inline citations in bookdown
   R Markdown documents. Supports systematic detection of hallucinated statistics or
@@ -27,7 +27,7 @@ preferred-citation:
     email: al@newgraphenvironment.com
     orcid: https://orcid.org/0000-0002-3495-2128
     affiliation: New Graph Environment Ltd.
-  version: 0.6.0
+  version: 0.7.0
   date-released: '2026-10-31'
   url: https://newgraphenvironment.github.io/cred/
   repository-code: https://github.com/NewGraphEnvironment/cred
