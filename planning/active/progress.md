@@ -43,3 +43,6 @@
   `.lintr`, `README.html`, `.data`), tracked in #32 and #38. Note M14 (transactional delete) passes under
   the dev ragnar, which dropped the FK: only a 0.3.1 run can catch it.
 - Next: `/code-check branch`.
+- `/code-check branch`: 3 rounds, 5 findings, all fixed with tests red first; round 3 found a defect inside round 2's
+  fix, so the loop ended by enumerating the 16 cred functions the update calls (findings.md). Agents this task: 1 plan
+  review + 3 reviewers.

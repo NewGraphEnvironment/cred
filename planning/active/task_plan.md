@@ -92,7 +92,7 @@ Decided by me (reject the plan to change any of these):
 ## Validation
 
 - [x] Tests pass (`devtools::test()`), `lintr::lint_package()` reports 0 lints, `devtools::check()` is clean
-- [ ] `/code-check` clean (once over the branch with `/code-check branch`)
+- [x] `/code-check` clean (once over the branch with `/code-check branch`)
 - [ ] PWF checkboxes match landed work
 - [ ] `/planning-archive` on completion
 

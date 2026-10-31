@@ -100,3 +100,21 @@ keep a WAL after CHECKPOINT and disconnect), and the leftover-copy warning.
 | Error | Resolution |
 |-------|------------|
 | `Violates foreign key constraint because key "doc_id: 1" is still referenced` deleting embeddings then documents in one `dbWithTransaction()` | Two autocommit statements; atomicity comes from the copy (ragnar 0.3.1 schema has the FK, dev ragnar dropped it) |
+
+## /code-check branch (2026-10-31, 23:05-23:50Z)
+
+| Round | Findings | Fixed | Accepted | Inside previous fix? |
+|-------|----------|-------|----------|----------------------|
+| 1 | 2 (unreadable file gives NA md5 into ragnar; roxygen overstated "not written") | 2 | 0 | — |
+| 2 | 1 (connect's mismatch error and "connect" remedy reused: `check_model`, manifest, BM25) | 1 | 0 | n |
+| 3 | 2 (borrowed check probes twice and spends connect's once-warning; WAL remedy cannot apply to a stale log) | 2 | 0 | **y** (round 2's wrapper) |
+
+Mechanism (round 3): code borrowed from another caller still assumes that caller's situation (build: exists =
+readable; connect: manifest, `check_model`, BM25 as consolation). Ended by enumeration: every cred function
+`crd_store_update()` calls, parsed from its body (16): `.crd_embed_remedy`, `.crd_embed_width`,
+`.crd_fallback_model`, `.crd_have`, `.crd_indent_cause`, `.crd_need`, `.crd_origin_id`, `.crd_retrieval_failure`,
+`.crd_sources_read`, `.crd_sources_write`, `.crd_store_ingest`, `.crd_store_meta_brief`, `.crd_store_report`,
+`.crd_store_skipped`, `.crd_store_sources`, `.crd_store_who`. Each is new for the update, pure, or checked
+against the update's situation by round 3 (its table, items 1-14) and holds; `.crd_check_store_embedding` no
+longer appears. Round 3's two new guards mutation-tested: M16 (width compare off) and M17 (stale-log remedy
+dropped) both red.
