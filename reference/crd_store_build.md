@@ -13,7 +13,8 @@ crd_store_build(
   citation_keys = NULL,
   model = "nomic-embed-text",
   zotero_dir = "~/Zotero",
-  overwrite = FALSE
+  overwrite = FALSE,
+  library = getOption("cred.zotero_library")
 )
 ```
 
@@ -25,7 +26,8 @@ crd_store_build(
 
 - collection:
 
-  `character(1)` Zotero collection name. Supply exactly one of
+  `character(1)` Zotero collection name, or a `parent/child` path when
+  the name alone matches more than one. Supply exactly one of
   `collection` or `citation_keys`.
 
 - citation_keys:
@@ -45,12 +47,20 @@ crd_store_build(
 
   `logical(1)` replace an existing store. Default `FALSE`.
 
+- library:
+
+  The Zotero library to resolve keys in: `"user"` for My Library, or a
+  group's name or groupID (as in its URL,
+  `zotero.org/groups/<groupID>`). Zotero's internal `libraryID` is not
+  accepted: it differs between machines. Default
+  `getOption("cred.zotero_library")`; `NULL` searches every library.
+
 ## Value
 
 Invisibly, a
 [tibble](https://tibble.tidyverse.org/reference/tibble.html) with one
-row per ingested source (`citation_key`, `src_path`). Prints document
-and chunk counts.
+row per ingested file (`citation_key`, `src_path`), so a key with
+several PDFs has several rows. Prints document and chunk counts.
 
 ## Details
 
@@ -66,11 +76,29 @@ out of band; see
 [`crd_store_connect()`](https://newgraphenvironment.github.io/cred/reference/crd_store_connect.md)
 for the retrieval side.
 
+**What is ingested.** Every live PDF of each item: an appendix, or the
+other parts of a multi-part report, are searchable too, and each still
+answers to its item's citation key. Byte-identical copies on one item
+are ingested once. Trashed items, trashed attachments and trashed
+collections are never used. Before ingesting, the build lists every item
+it leaves out and why (trashed, a note, a standalone attachment, no
+citation key, a citation key shared by several items, no live PDF; for
+`citation_keys`, also not found or unresolved), and the items it takes
+several PDFs from.
+
+**Which library.** Citation keys and collection names are unique within
+a Zotero library at best, so both resolve in `library`. A key found in
+more than one library, on two live items in one, or only in a library
+other than `library`, is left out with a warning. A collection name that
+matches more than one collection is an error listing each, with its
+`parent/child` path. A collection's subcollections are not included.
+
 ## Examples
 
 ``` r
 if (FALSE) { # \dontrun{
-crd_store_build("data/rag/vca_refs.duckdb", collection = "vca")
+crd_store_build("data/rag/vca_refs.duckdb", collection = "vca",
+                library = "NewGraphEnvironment")
 
 crd_store_build(
   "data/rag/adhoc.duckdb",

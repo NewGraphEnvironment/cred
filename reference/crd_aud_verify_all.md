@@ -16,7 +16,8 @@ crd_aud_verify_all(
   sources = NULL,
   zotero_dir = "~/Zotero",
   min_score = 0.2,
-  overwrite_verified = FALSE
+  overwrite_verified = FALSE,
+  library = getOption("cred.zotero_library")
 )
 ```
 
@@ -52,6 +53,13 @@ crd_aud_verify_all(
   `logical(1)` passed to
   [`crd_aud_fill_src()`](https://newgraphenvironment.github.io/cred/reference/crd_aud_fill_src.md).
   Default `FALSE`.
+
+- library:
+
+  The Zotero library citation keys resolve in, passed to
+  [`crd_zot_src_lookup()`](https://newgraphenvironment.github.io/cred/reference/crd_zot_src_lookup.md)
+  when `sources` is `NULL`; see there. Default
+  `getOption("cred.zotero_library")`.
 
 ## Value
 

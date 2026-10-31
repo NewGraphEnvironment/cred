@@ -315,6 +315,11 @@ automatically:</p>
 <span></span>
 <span><span class="va">audit_file</span> <span class="op">&lt;-</span> <span class="st">"qa/citation_audit.csv"</span></span>
 <span></span>
+<span><span class="co"># Citation keys are unique within one Zotero library, not across them, so</span></span>
+<span><span class="co"># name the library the report's bibliography comes from: "user" for My</span></span>
+<span><span class="co"># Library, or a group's name or groupID. Every lookup below uses it.</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/base/options.html" class="external-link">options</a></span><span class="op">(</span>cred.zotero_library <span class="op">=</span> <span class="st">"NewGraphEnvironment"</span><span class="op">)</span></span>
+<span></span>
 <span><span class="co"># Step 1 -- Extract or update citations from Rmd chapters</span></span>
 <span><span class="kw">if</span> <span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/files.html" class="external-link">file.exists</a></span><span class="op">(</span><span class="va">audit_file</span><span class="op">)</span><span class="op">)</span> <span class="op">{</span></span>
 <span>  <span class="fu"><a href="../reference/crd_aud_upd.html">crd_aud_upd</a></span><span class="op">(</span><span class="va">audit_file</span><span class="op">)</span></span>

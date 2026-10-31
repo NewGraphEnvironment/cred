@@ -13,7 +13,8 @@ crd_aud_verify_abstract(
   audit_file,
   zotero_dir = "~/Zotero",
   min_score = 0.2,
-  overwrite_verified = FALSE
+  overwrite_verified = FALSE,
+  library = getOption("cred.zotero_library")
 )
 ```
 
@@ -37,6 +38,15 @@ crd_aud_verify_abstract(
   `logical(1)` if `TRUE`, reprocess existing `"abstract_match"` rows.
   Never overwrites human-reviewed rows (`yes`, `no`, `corrected`,
   `context`). Default `FALSE`.
+
+- library:
+
+  The Zotero library citation keys resolve in, passed to
+  [`crd_zot_abstract_lookup()`](https://newgraphenvironment.github.io/cred/reference/crd_zot_abstract_lookup.md);
+  see
+  [`crd_zot_src_lookup()`](https://newgraphenvironment.github.io/cred/reference/crd_zot_src_lookup.md).
+  A key found in more than one library is warned about and left `NA`.
+  Default `getOption("cred.zotero_library")`.
 
 ## Value
 

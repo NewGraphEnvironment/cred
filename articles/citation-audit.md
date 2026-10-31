@@ -165,6 +165,11 @@ library(cred)
 
 audit_file <- "qa/citation_audit.csv"
 
+# Citation keys are unique within one Zotero library, not across them, so
+# name the library the report's bibliography comes from: "user" for My
+# Library, or a group's name or groupID. Every lookup below uses it.
+options(cred.zotero_library = "NewGraphEnvironment")
+
 # Step 1 -- Extract or update citations from Rmd chapters
 if (file.exists(audit_file)) {
   crd_aud_upd(audit_file)

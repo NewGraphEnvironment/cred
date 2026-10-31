@@ -54,7 +54,8 @@ for both semantic and BM25 retrieval.</p>
 <span>  citation_keys <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  model <span class="op">=</span> <span class="st">"nomic-embed-text"</span>,</span>
 <span>  zotero_dir <span class="op">=</span> <span class="st">"~/Zotero"</span>,</span>
-<span>  overwrite <span class="op">=</span> <span class="cn">FALSE</span></span>
+<span>  overwrite <span class="op">=</span> <span class="cn">FALSE</span>,</span>
+<span>  library <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/options.html" class="external-link">getOption</a></span><span class="op">(</span><span class="st">"cred.zotero_library"</span><span class="op">)</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
 
@@ -67,8 +68,9 @@ for both semantic and BM25 retrieval.</p>
 
 
 <dt id="arg-collection">collection<a class="anchor" aria-label="anchor" href="#arg-collection"></a></dt>
-<dd><p><code>character(1)</code> Zotero collection name. Supply exactly one
-of <code>collection</code> or <code>citation_keys</code>.</p></dd>
+<dd><p><code>character(1)</code> Zotero collection name, or a
+<code>parent/child</code> path when the name alone matches more than one. Supply
+exactly one of <code>collection</code> or <code>citation_keys</code>.</p></dd>
 
 
 <dt id="arg-citation-keys">citation_keys<a class="anchor" aria-label="anchor" href="#arg-citation-keys"></a></dt>
@@ -87,11 +89,20 @@ Default <code>"nomic-embed-text"</code> — the model the shared stores are buil
 <dt id="arg-overwrite">overwrite<a class="anchor" aria-label="anchor" href="#arg-overwrite"></a></dt>
 <dd><p><code>logical(1)</code> replace an existing store. Default <code>FALSE</code>.</p></dd>
 
+
+<dt id="arg-library">library<a class="anchor" aria-label="anchor" href="#arg-library"></a></dt>
+<dd><p>The Zotero library to resolve keys in: <code>"user"</code> for My
+Library, or a group's name or groupID (as in its URL,
+<code>zotero.org/groups/&lt;groupID&gt;</code>). Zotero's internal <code>libraryID</code> is not
+accepted: it differs between machines. Default
+<code>getOption("cred.zotero_library")</code>; <code>NULL</code> searches every library.</p></dd>
+
 </dl></div>
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
     <p>Invisibly, a <a href="https://tibble.tidyverse.org/reference/tibble.html" class="external-link">tibble</a> with one row per ingested
-source (<code>citation_key</code>, <code>src_path</code>). Prints document and chunk counts.</p>
+file (<code>citation_key</code>, <code>src_path</code>), so a key with several PDFs has several
+rows. Prints document and chunk counts.</p>
     </div>
     <div class="section level2">
     <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
@@ -101,12 +112,27 @@ store built without pinning is silently incomparable with every other store
 in the shared corpus while appearing entirely healthy.</p>
 <p>Building is expensive and machine-local. Sharing a built store is done out
 of band; see <code><a href="crd_store_connect.html">crd_store_connect()</a></code> for the retrieval side.</p>
+<p><strong>What is ingested.</strong> Every live PDF of each item: an appendix, or the other
+parts of a multi-part report, are searchable too, and each still answers to
+its item's citation key. Byte-identical copies on one item are ingested
+once. Trashed items, trashed attachments and trashed collections are never
+used. Before ingesting, the build lists every item it leaves out and why
+(trashed, a note, a standalone attachment, no citation key, a citation key
+shared by several items, no live PDF; for <code>citation_keys</code>, also not found
+or unresolved), and the items it takes several PDFs from.</p>
+<p><strong>Which library.</strong> Citation keys and collection names are unique within a
+Zotero library at best, so both resolve in <code>library</code>. A key found in more
+than one library, on two live items in one, or only in a library other than
+<code>library</code>, is left out with a warning. A collection name that matches
+more than one collection is an error listing each, with its <code>parent/child</code>
+path. A collection's subcollections are not included.</p>
     </div>
 
     <div class="section level2">
     <h2 id="ref-examples">Examples<a class="anchor" aria-label="anchor" href="#ref-examples"></a></h2>
     <div class="sourceCode"><pre class="sourceCode r"><code><span class="r-in"><span><span class="kw">if</span> <span class="op">(</span><span class="cn">FALSE</span><span class="op">)</span> <span class="op">{</span> <span class="co"># \dontrun{</span></span></span>
-<span class="r-in"><span><span class="fu">crd_store_build</span><span class="op">(</span><span class="st">"data/rag/vca_refs.duckdb"</span>, collection <span class="op">=</span> <span class="st">"vca"</span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="fu">crd_store_build</span><span class="op">(</span><span class="st">"data/rag/vca_refs.duckdb"</span>, collection <span class="op">=</span> <span class="st">"vca"</span>,</span></span>
+<span class="r-in"><span>                library <span class="op">=</span> <span class="st">"NewGraphEnvironment"</span><span class="op">)</span></span></span>
 <span class="r-in"><span></span></span>
 <span class="r-in"><span><span class="fu">crd_store_build</span><span class="op">(</span></span></span>
 <span class="r-in"><span>  <span class="st">"data/rag/adhoc.duckdb"</span>,</span></span>

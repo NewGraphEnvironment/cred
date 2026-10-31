@@ -56,7 +56,8 @@ attachment, loads the source document once and fills <code>quote</code>,
 <span>  sources <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  zotero_dir <span class="op">=</span> <span class="st">"~/Zotero"</span>,</span>
 <span>  min_score <span class="op">=</span> <span class="fl">0.2</span>,</span>
-<span>  overwrite_verified <span class="op">=</span> <span class="cn">FALSE</span></span>
+<span>  overwrite_verified <span class="op">=</span> <span class="cn">FALSE</span>,</span>
+<span>  library <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/options.html" class="external-link">getOption</a></span><span class="op">(</span><span class="st">"cred.zotero_library"</span><span class="op">)</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
 
@@ -88,6 +89,12 @@ Default <code>0.2</code>.</p></dd>
 <dt id="arg-overwrite-verified">overwrite_verified<a class="anchor" aria-label="anchor" href="#arg-overwrite-verified"></a></dt>
 <dd><p><code>logical(1)</code> passed to <code><a href="crd_aud_fill_src.html">crd_aud_fill_src()</a></code>.
 Default <code>FALSE</code>.</p></dd>
+
+
+<dt id="arg-library">library<a class="anchor" aria-label="anchor" href="#arg-library"></a></dt>
+<dd><p>The Zotero library citation keys resolve in, passed to
+<code><a href="crd_zot_src_lookup.html">crd_zot_src_lookup()</a></code> when <code>sources</code> is <code>NULL</code>; see there. Default
+<code>getOption("cred.zotero_library")</code>.</p></dd>
 
 </dl></div>
     <div class="section level2">
