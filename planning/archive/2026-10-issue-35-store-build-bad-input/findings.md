@@ -193,6 +193,16 @@ SKIP 2 | PASS 790 (the 2 skips predate the branch).
 | 3 | 1: ragnar's per-file progress output does not handle every file name safely (both ragnar versions), so "One PDF never costs the build" was false. Upstream; reproduced; 0 of the local Zotero storage paths affected | claim qualified (8e89bfd) | 0 | n (pre-existing on the branch) |
 | 4 | 3, inside round 3's fix (redacted record in `review-devfix-round4.md`): the consequence was more serious than round 3 said, the qualification's wording was wrong, and the drafted upstream fix did not work | user chose (2026-10-31): close it in cred and report to ragnar privately. ragnar's progress is off in `crd_store_build()`, with a test that fails if it is turned on; public ragnar draft withdrawn; wording replaced | 0 | **y** |
 
+**Ended by enumeration, not by a quiet round**, because round 4 found defects inside round 3's
+fix. The mechanism: text the user does not control (a file path) reaching a cli format
+string. The candidate set was every function in ragnar 0.3.1 (194) and the development version
+(205) whose source passes a `paste`/`sprintf`/`stri_c` result to a `cli_*` call, plus every
+message call in cred's `R/`. That gave exactly one site per ragnar version, the per-file line in
+`ragnar_store_ingest()`, which runs only when `progress = TRUE`. Neither ragnar opts rlang into cli
+formatting, and cred's own `rlang::warn()`/`abort()` calls do not interpolate (measured). cred
+calls `ragnar_store_ingest()` once, with `.crd_store_ingest()`'s `progress`, which defaults to
+`FALSE` and is passed `FALSE` by its only caller. Tests fail if either is turned back on.
+
 Rounds 2 and 3 ran concurrently: round 1 changed nothing, so both reviewed the same tree.
 Round 3 also enumerated every ragnar function the ingest reaches that differs between 0.3.0
 and 0.3.1.9000 (27 changed, 13 dev-only); only worker-failure reporting differs in effect.
