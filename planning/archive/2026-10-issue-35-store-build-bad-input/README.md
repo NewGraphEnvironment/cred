@@ -45,9 +45,10 @@ handles both forms and is tested against both, and the version gap is #43.
 
 ## Owed
 
-- Post the three upstream drafts — only on the user's word for each
+- Send the three upstream reports (two public drafts, one private) — only on the user's word for each
 
-The drafts (a comment for ollama/ollama#14186 and two tidyverse/ragnar issues: the NUL and single-chunk abort, and a `{` in a path aborting the ingest) are in
-`findings.md`, "Upstream drafts". Nothing has been posted.
+The public drafts (a comment for ollama/ollama#14186 and a tidyverse/ragnar issue on the NUL and the single-chunk abort) are in
+`findings.md`, "Upstream drafts". The third, about ragnar's progress output and file names, is a
+private report whose draft is kept out of this repository. Nothing has been sent.
 
 Closed by: PR for branch `35-crd-store-build-an-oversize-chunk-aborts`

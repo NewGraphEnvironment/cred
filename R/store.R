@@ -1877,12 +1877,14 @@ crd_search <- function(store, query, top_k = 5L,
 #' @param store A `DuckDBRagnarStore` open for writing.
 #' @param paths `character` document paths.
 #' @param read As in [.crd_ingest_prepare()].
-#' @param progress `logical(1)` passed to ragnar.
+#' @param progress `logical(1)` passed to ragnar. Default `FALSE`, and
+#'   [crd_store_build()] passes `FALSE`: ragnar's per-file progress output does
+#'   not handle every file name safely.
 #' @return A `list`: `ingested` (paths now in the store), `skipped`
 #'   (`origin`, `reason`) and `notes` (`origin`, `kind`, `detail`: fallback
 #'   reads, split and dropped chunks).
 #' @noRd
-.crd_store_ingest <- function(store, paths, read = NULL, progress = TRUE) {
+.crd_store_ingest <- function(store, paths, read = NULL, progress = FALSE) {
   notes_dir <- tempfile("cred-ingest-")
   dir.create(notes_dir)
   on.exit(unlink(notes_dir, recursive = TRUE), add = TRUE)
@@ -1959,10 +1961,11 @@ crd_search <- function(store, query, top_k = 5L,
 #' split until each part embeds; a part still refused at 64 characters is
 #' left out of the embeddings. Both are reported. A failure of the embedding
 #' service itself still stops the build and leaves no store: it would cost
-#' every PDF still to come, silently, rather than one that is named. So does
-#' a PDF whose path contains `{` or `}`, for a reason in ragnar rather than the
-#' PDF: ragnar prints each ingested path through cli, which reads the braces as
-#' code.
+#' every PDF still to come, silently, rather than one that is named.
+#'
+#' ragnar's own progress output is off, because it does not handle every file
+#' name safely. The build says what it will ingest before it starts, and what
+#' it ingested, read differently, split or skipped when it ends.
 #'
 #' @param store_path `character(1)` path for the `.duckdb` store to create.
 #' @param collection `character(1)` Zotero collection name, or a
@@ -2065,7 +2068,7 @@ crd_store_build <- function(store_path,
   }, add = TRUE)
 
   message("Ingesting ", nrow(src), " PDF(s) into ", store_path)
-  ing <- .crd_store_ingest(store, src$src_path)
+  ing <- .crd_store_ingest(store, src$src_path, progress = FALSE)
   # One file can sit under two keys (the same PDF cited twice), and is
   # ingested once, so name every key it answers to.
   who <- function(path) {

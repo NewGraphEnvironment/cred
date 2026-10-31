@@ -129,6 +129,10 @@ main 10.6 s and 10.4 s, branch 10.5 s and 10.6 s, 177 chunks each. No measurable
 
 ## Upstream drafts (NOT posted; each needs the user's word)
 
+A third report, about ragnar's progress output and file names, goes to tidyverse/ragnar
+**privately** (the user's choice, 2026-10-31). Its draft is deliberately not in this public
+repository.
+
 ### Comment on ollama/ollama#14186
 
 > On 0.24.0 truncation works for ordinary text but still fails for some inputs.
@@ -180,23 +184,14 @@ and `.data` bindings.
 Ended on a clean round 3 with no inside-a-fix finding in any round. Full suite after: FAIL 0 |
 SKIP 2 | PASS 790 (the 2 skips predate the branch).
 
-### Second issue for tidyverse/ragnar
-
-> **`ragnar_store_ingest(progress = TRUE)`: a path containing `{` aborts the ingest**
->
-> Each stored document is reported with `cli::cli_alert_info(paste("ingested:", origin))`.
-> cli interpolates the string, so a path such as `/tmp/The {BC} report.pdf` raises
-> `Could not evaluate cli {} expression: BC` and ends the ingest. Every document not yet
-> written is lost. Seen in 0.3.0 and in main at 06f7c3e. Fix: `cli::cli_alert_info("ingested: {origin}")`,
-> or `cli::cli_alert_info(paste("ingested:", cli::format_inline("{.file {origin}}")))`.
-
 ## Code-check rounds on the CI fix (c0fd677)
 
 | Round | Findings | Fixed | Accepted | Inside previous fix? |
 |---|---|---|---|---|
 | 1 | 0 (Clean) | 0 | 0 | n/a |
 | 2 | 0 (Clean) | 0 | 0 | n |
-| 3 | 1: a PDF path with `{`/`}` aborts the ingest via ragnar's `cli_alert_info()`, under both ragnar versions, so "One PDF never costs the build" was false. Upstream; reproduced; 0 of the local Zotero storage paths have a brace | claim qualified in roxygen and CLAUDE.md; ragnar draft above; not worked around (`progress = FALSE` would hide progress on long builds) | 0 | n (pre-existing on the branch) |
+| 3 | 1: ragnar's per-file progress output does not handle every file name safely (both ragnar versions), so "One PDF never costs the build" was false. Upstream; reproduced; 0 of the local Zotero storage paths affected | claim qualified (8e89bfd) | 0 | n (pre-existing on the branch) |
+| 4 | 3, inside round 3's fix (redacted record in `review-devfix-round4.md`): the consequence was more serious than round 3 said, the qualification's wording was wrong, and the drafted upstream fix did not work | user chose (2026-10-31): close it in cred and report to ragnar privately. ragnar's progress is off in `crd_store_build()`, with a test that fails if it is turned on; public ragnar draft withdrawn; wording replaced | 0 | **y** |
 
 Rounds 2 and 3 ran concurrently: round 1 changed nothing, so both reviewed the same tree.
 Round 3 also enumerated every ragnar function the ingest reaches that differs between 0.3.0

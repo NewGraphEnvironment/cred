@@ -299,12 +299,11 @@ Shipped: [#22](https://github.com/NewGraphEnvironment/cred/issues/22) ragnar ret
   each range once (ragnar keys `embeddings`, which the `chunks` view joins, on
   `(doc_id, start, end)`, and halves of neighbouring chunks collide), and drops a part at 64 characters. Any other embed failure leaves the chunks
   unembedded, so ragnar's main-process embed aborts the build and the store is deleted, as
-  before. One PDF can still cost the build, and the cause is ragnar's, not cred's: a path containing `{` or `}`
-  aborts the ingest under 0.3.0 and the development version alike, because ragnar prints
-  `ingested: <path>` through `cli_alert_info()`, which evaluates the braces. That is surfaced
-  upstream, not worked around: `progress = FALSE` would avoid it, but would also hide progress
-  on builds that take hours. Characters do not predict a refusal: a 1,887-character run of `•` is refused, while a
-  2,073-character paragraph is not. So there is no length cap.
+  before. **ragnar's progress output stays off** (`progress = FALSE`): its per-file message does
+  not handle arbitrary file names safely, which was reported to ragnar privately on
+  2026-10-31. Keep it off until ragnar's fix ships, and never put a file path into a cli
+  format string in cred either; pass it as a `{variable}`. Characters do not predict a
+  refusal: a 1,887-character run of `•` is refused, while a 2,073-character paragraph is not. So there is no length cap.
   [#35](https://github.com/NewGraphEnvironment/cred/issues/35),
   `research/ollama-embedding-context.md`.
 

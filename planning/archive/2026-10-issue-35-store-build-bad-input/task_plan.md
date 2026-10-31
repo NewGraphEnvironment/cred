@@ -116,7 +116,7 @@ Approved by the user at the plan gate, 2026-10-31 (recommendations accepted as w
 - [x] Upstream drafts in `findings.md`
 
 ## Owed at the end (reported, done after merge)
-- [ ] Post the three upstream drafts — only on the user's word for each
+- [ ] Send the three upstream reports (two public drafts, one private) — only on the user's word for each
 
 ## Validation
 - [x] Tests pass (`devtools::test()`; the e2e test also under `R CMD check`, since workers run

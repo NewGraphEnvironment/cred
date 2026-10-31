@@ -432,6 +432,13 @@ test_that("an ingest finishes past a chunk the model refuses whole", {
   expect_gt(sum(stored$origin == glyphs), nrow(whole))
 })
 
+test_that("ragnar's progress output is off unless asked for", {
+  # Its per-file line does not handle every file name safely, and Zotero file
+  # names are not ours to choose. crd_store_build() passes FALSE as well,
+  # which the build-report mocks below enforce.
+  expect_false(formals(.crd_store_ingest)$progress)
+})
+
 test_that("an ingest still fails whole when the embedding service is down", {
   skip_if_not_installed("ragnar", "0.3.0")
   skip_if_not_installed("duckdb")
@@ -480,7 +487,10 @@ local_build_mocks <- function(ingest, env = parent.frame()) {
       )
     },
     .crd_ollama_check = function(...) invisible(NULL),
-    .crd_store_ingest = function(store, paths, ...) ingest(unique(paths)),
+    .crd_store_ingest = function(store, paths, read = NULL, progress = TRUE) {
+      if (!isFALSE(progress)) stop("crd_store_build() must pass progress = FALSE")
+      ingest(unique(paths))
+    },
     .env = env
   )
   local_mocked_bindings(

@@ -79,10 +79,11 @@ embedding model refuses whole, such as a long run of figure glyphs, is
 split until each part embeds; a part still refused at 64 characters is
 left out of the embeddings. Both are reported. A failure of the embedding
 service itself still stops the build and leaves no store: it would cost
-every PDF still to come, silently, rather than one that is named. So does
-a PDF whose path contains \verb{\{} or \verb{\}}, for a reason in ragnar rather than the
-PDF: ragnar prints each ingested path through cli, which reads the braces as
-code.
+every PDF still to come, silently, rather than one that is named.
+
+ragnar's own progress output is off, because it does not handle every file
+name safely. The build says what it will ingest before it starts, and what
+it ingested, read differently, split or skipped when it ends.
 }
 \examples{
 \dontrun{
