@@ -335,7 +335,8 @@ Shipped: [#22](https://github.com/NewGraphEnvironment/cred/issues/22) ragnar ret
   of an origin, read from the path text (a stored origin carries another machine's prefix),
   else the whole path. An entry missing from the record is recorded as the file is now, and
   the update says it cannot vouch for it.
-  [#44](https://github.com/NewGraphEnvironment/cred/issues/44).
+  [#44](https://github.com/NewGraphEnvironment/cred/issues/44),
+  `research/ragnar-store-update.md`.
 
   **The update is all-or-nothing because it works on a copy**, renamed over the store only when
   finished: ragnar commits each document alone and builds the index once at the end, so an
