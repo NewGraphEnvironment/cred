@@ -10,14 +10,16 @@ crd_store_build(
   citation_keys = NULL,
   model = "nomic-embed-text",
   zotero_dir = "~/Zotero",
-  overwrite = FALSE
+  overwrite = FALSE,
+  library = getOption("cred.zotero_library")
 )
 }
 \arguments{
 \item{store_path}{\code{character(1)} path for the \code{.duckdb} store to create.}
 
-\item{collection}{\code{character(1)} Zotero collection name. Supply exactly one
-of \code{collection} or \code{citation_keys}.}
+\item{collection}{\code{character(1)} Zotero collection name, or a
+\code{parent/child} path when the name alone matches more than one. Supply
+exactly one of \code{collection} or \code{citation_keys}.}
 
 \item{citation_keys}{\code{character} vector of Better BibTeX citation keys.}
 
@@ -27,10 +29,17 @@ Default \code{"nomic-embed-text"} — the model the shared stores are built with
 \item{zotero_dir}{\code{character(1)} Zotero data directory. Default \code{"~/Zotero"}.}
 
 \item{overwrite}{\code{logical(1)} replace an existing store. Default \code{FALSE}.}
+
+\item{library}{The Zotero library to resolve keys in: \code{"user"} for My
+Library, or a group's name or groupID (as in its URL,
+\verb{zotero.org/groups/<groupID>}). Zotero's internal \code{libraryID} is not
+accepted: it differs between machines. Default
+\code{getOption("cred.zotero_library")}; \code{NULL} searches every library.}
 }
 \value{
 Invisibly, a \link[tibble:tibble]{tibble} with one row per ingested
-source (\code{citation_key}, \code{src_path}). Prints document and chunk counts.
+file (\code{citation_key}, \code{src_path}), so a key with several PDFs has several
+rows. Prints document and chunk counts.
 }
 \description{
 Ingests the PDFs attached to a Zotero collection — or to an explicit set of
@@ -45,10 +54,27 @@ in the shared corpus while appearing entirely healthy.
 
 Building is expensive and machine-local. Sharing a built store is done out
 of band; see \code{\link[=crd_store_connect]{crd_store_connect()}} for the retrieval side.
+
+\strong{What is ingested.} Every live PDF of each item: an appendix, or the other
+parts of a multi-part report, are searchable too, and each still answers to
+its item's citation key. Byte-identical copies on one item are ingested
+once. Trashed items, trashed attachments and trashed collections are never
+used. Before ingesting, the build lists every item it leaves out and why
+(trashed, a note, a standalone attachment, no citation key, a citation key
+shared by several items, no live PDF; for \code{citation_keys}, also not found
+or unresolved), and the items it takes several PDFs from.
+
+\strong{Which library.} Citation keys and collection names are unique within a
+Zotero library at best, so both resolve in \code{library}. A key found in more
+than one library, on two live items in one, or only in a library other than
+\code{library}, is left out with a warning. A collection name that matches
+more than one collection is an error listing each, with its \code{parent/child}
+path. A collection's subcollections are not included.
 }
 \examples{
 \dontrun{
-crd_store_build("data/rag/vca_refs.duckdb", collection = "vca")
+crd_store_build("data/rag/vca_refs.duckdb", collection = "vca",
+                library = "NewGraphEnvironment")
 
 crd_store_build(
   "data/rag/adhoc.duckdb",

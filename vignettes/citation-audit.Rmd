@@ -114,11 +114,11 @@ crd_aud_eval_inline(audit_file, overwrite = TRUE)
 # Step 3 -- verify against source documents
 d <- readr::read_csv(audit_file, show_col_types = FALSE)
 keys    <- unique(d$citation_key)
-sources <- crd_zot_src_lookup(keys, zotero_dir = toy_zotero_dir)
+sources <- crd_zot_src_lookup(keys, zotero_dir = toy_zotero_dir, library = "user")
 crd_aud_verify_all(audit_file = audit_file, sources = sources)
 
 # Step 4 -- abstract fallback
-crd_aud_verify_abstract(audit_file, zotero_dir = toy_zotero_dir)
+crd_aud_verify_abstract(audit_file, zotero_dir = toy_zotero_dir, library = "user")
 
 # Step 5 -- score
 crd_aud_score(audit_file)
@@ -284,6 +284,11 @@ Create `scripts/citation_audit.R` -- this is the one file you (or an LLM) run ev
 library(cred)
 
 audit_file <- "qa/citation_audit.csv"
+
+# Citation keys are unique within one Zotero library, not across them, so
+# name the library the report's bibliography comes from: "user" for My
+# Library, or a group's name or groupID. Every lookup below uses it.
+options(cred.zotero_library = "NewGraphEnvironment")
 
 # Step 1 -- Extract or update citations from Rmd chapters
 if (file.exists(audit_file)) {

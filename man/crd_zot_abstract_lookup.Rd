@@ -4,7 +4,11 @@
 \alias{crd_zot_abstract_lookup}
 \title{Retrieve Zotero abstracts for a vector of citation keys}
 \usage{
-crd_zot_abstract_lookup(citation_keys, zotero_dir = "~/Zotero")
+crd_zot_abstract_lookup(
+  citation_keys,
+  zotero_dir = "~/Zotero",
+  library = getOption("cred.zotero_library")
+)
 }
 \arguments{
 \item{citation_keys}{\code{character} vector of BBT citation keys.
@@ -12,6 +16,12 @@ crd_zot_abstract_lookup(citation_keys, zotero_dir = "~/Zotero")
 
 \item{zotero_dir}{\code{character(1)} path to the Zotero data directory.
 Default \code{"~/Zotero"}.}
+
+\item{library}{The Zotero library to resolve keys in: \code{"user"} for My
+Library, or a group's name or groupID (as in its URL,
+\verb{zotero.org/groups/<groupID>}). Zotero's internal \code{libraryID} is not
+accepted: it differs between machines. Default
+\code{getOption("cred.zotero_library")}; \code{NULL} searches every library.}
 }
 \value{
 A \link[tibble:tibble]{tibble} with columns:
@@ -19,14 +29,21 @@ A \link[tibble:tibble]{tibble} with columns:
 \item \code{citation_key} (\code{character}) — the input key.
 \item \code{abstract} (\code{character}) — abstract text, \code{NA} if not in database.
 }
+
+Attribute \code{unresolved}: the keys left \code{NA} because they matched more than
+one item or only another library, as distinct from keys with no abstract.
 }
 \description{
 Queries the local Zotero SQLite database for the \code{abstractNote} field of
 each supplied citation key. Returns a tibble with one row per key —
 including keys with no abstract (\code{abstract = NA}).
 }
-\examples{
-\dontrun{
-crd_zot_abstract_lookup(c("price_etal2026rebuildinggiis", "doe2021NoFile"))
+\details{
+Keys resolve as in \code{\link[=crd_zot_src_lookup]{crd_zot_src_lookup()}}: within \code{library}, never to a
+trashed item, and a key matching more than one item is \code{NA} with a warning
+saying so.
 }
+\examples{
+toy <- system.file("extdata", package = "cred")
+crd_zot_abstract_lookup("doe2021NoFile", zotero_dir = toy, library = "user")
 }

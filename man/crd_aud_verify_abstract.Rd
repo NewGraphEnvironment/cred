@@ -11,7 +11,8 @@ crd_aud_verify_abstract(
   audit_file,
   zotero_dir = "~/Zotero",
   min_score = 0.2,
-  overwrite_verified = FALSE
+  overwrite_verified = FALSE,
+  library = getOption("cred.zotero_library")
 )
 }
 \arguments{
@@ -25,6 +26,11 @@ Default \code{"~/Zotero"}.}
 \item{overwrite_verified}{\code{logical(1)} if \code{TRUE}, reprocess existing
 \code{"abstract_match"} rows. Never overwrites human-reviewed rows
 (\code{yes}, \code{no}, \code{corrected}, \code{context}). Default \code{FALSE}.}
+
+\item{library}{The Zotero library citation keys resolve in, passed to
+\code{\link[=crd_zot_abstract_lookup]{crd_zot_abstract_lookup()}}; see \code{\link[=crd_zot_src_lookup]{crd_zot_src_lookup()}}. A key found in
+more than one library is warned about and left \code{NA}. Default
+\code{getOption("cred.zotero_library")}.}
 }
 \value{
 The updated audit data frame, invisibly. Writes to \code{audit_file}.

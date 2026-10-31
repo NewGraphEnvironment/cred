@@ -9,7 +9,8 @@ crd_aud_verify_all(
   sources = NULL,
   zotero_dir = "~/Zotero",
   min_score = 0.2,
-  overwrite_verified = FALSE
+  overwrite_verified = FALSE,
+  library = getOption("cred.zotero_library")
 )
 }
 \arguments{
@@ -28,6 +29,10 @@ Default \code{0.2}.}
 
 \item{overwrite_verified}{\code{logical(1)} passed to \code{\link[=crd_aud_fill_src]{crd_aud_fill_src()}}.
 Default \code{FALSE}.}
+
+\item{library}{The Zotero library citation keys resolve in, passed to
+\code{\link[=crd_zot_src_lookup]{crd_zot_src_lookup()}} when \code{sources} is \code{NULL}; see there. Default
+\code{getOption("cred.zotero_library")}.}
 }
 \value{
 Invisibly returns the final audit \link[tibble:tibble]{tibble}.

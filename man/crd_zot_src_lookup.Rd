@@ -4,7 +4,11 @@
 \alias{crd_zot_src_lookup}
 \title{Resolve citation keys to source file paths via Zotero SQLite}
 \usage{
-crd_zot_src_lookup(citation_keys, zotero_dir = "~/Zotero")
+crd_zot_src_lookup(
+  citation_keys,
+  zotero_dir = "~/Zotero",
+  library = getOption("cred.zotero_library")
+)
 }
 \arguments{
 \item{citation_keys}{\code{character} vector of BBT citation keys to resolve.
@@ -12,6 +16,12 @@ crd_zot_src_lookup(citation_keys, zotero_dir = "~/Zotero")
 
 \item{zotero_dir}{\code{character(1)} path to the Zotero data directory.
 Default \code{"~/Zotero"}.}
+
+\item{library}{The Zotero library to resolve keys in: \code{"user"} for My
+Library, or a group's name or groupID (as in its URL,
+\verb{zotero.org/groups/<groupID>}). Zotero's internal \code{libraryID} is not
+accepted: it differs between machines. Default
+\code{getOption("cred.zotero_library")}; \code{NULL} searches every library.}
 }
 \value{
 A \link[tibble:tibble]{tibble} with columns:
@@ -25,17 +35,35 @@ Only rows where an attachment was found and the file exists on disk are
 returned. A warning is issued for keys with no resolvable attachment.
 }
 \description{
-Queries the local Zotero SQLite database to find PDF or Word document
-attachments for a vector of Better BibTeX citation keys. Returns a tibble
-suitable for passing to \code{\link[=crd_aud_verify_all]{crd_aud_verify_all()}}.
+Queries the local Zotero SQLite database to find a PDF or Word document
+attachment for each of a vector of Better BibTeX citation keys. Returns a
+tibble suitable for passing to \code{\link[=crd_aud_verify_all]{crd_aud_verify_all()}}.
 }
 \details{
-The database is copied to a temp file before querying to avoid locking
-conflicts with a running Zotero process.
+A citation key is unique within a Zotero library, not across libraries, so
+the same key can name different works in My Library and a group library.
+Name the library with \code{library}, or once per session with
+\code{options(cred.zotero_library = )}. With neither, every library is searched,
+and a key found in more than one is left unresolved with a warning rather
+than taken from whichever happens to come first. A key shared by two live
+items within one library is treated the same way.
+
+Trashed items and trashed attachments are never used.
+
+When an item has several attachments, the one taken is the one Zotero itself
+opens: a PDF before a Word document, then by URL (the attachment whose URL
+is the item's own, then one with any URL, then one with none), then the
+oldest. If that file is not on disk the next one is taken. A message names
+the file taken and the ones left out.
+
+The database is opened read-only and \code{immutable}, so a running Zotero is
+never locked.
 }
 \examples{
-\dontrun{
-keys <- c("price_etal2026rebuildinggiis", "winther_etal2024assessmentskeena")
-crd_zot_src_lookup(keys)
-}
+# The toy library shipped with cred holds its items in My Library
+toy <- system.file("extdata", package = "cred")
+crd_zot_src_lookup(
+  c("smith2020SalmonHabitat", "jones2019BeaverEcology"),
+  zotero_dir = toy, library = "user"
+)
 }

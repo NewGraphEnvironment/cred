@@ -153,9 +153,19 @@ if (file.exists(db_path)) unlink(db_path)
 
 con <- dbConnect(SQLite(), db_path)
 
+# Columns are the subset of Zotero's schema that cred reads, with Zotero's names.
+# tests/testthat/helper-zotero.R holds the same subset as `zot_schema`, and
+# test-zotero.R fails if this database lacks any of it.
+dbExecute(con, "CREATE TABLE libraries (libraryID INTEGER PRIMARY KEY, type TEXT NOT NULL)")
+dbExecute(con, "CREATE TABLE groups (
+  groupID   INTEGER PRIMARY KEY,
+  libraryID INT NOT NULL UNIQUE,
+  name      TEXT NOT NULL
+)")
 dbExecute(con, "CREATE TABLE items (
   itemID    INTEGER PRIMARY KEY,
   itemTypeID INTEGER,
+  dateAdded TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   libraryID INTEGER,
   key       TEXT NOT NULL
 )")
@@ -175,22 +185,54 @@ dbExecute(con, "CREATE TABLE itemDataValues (
 dbExecute(con, "CREATE TABLE itemAttachments (
   itemID        INTEGER PRIMARY KEY,
   parentItemID  INTEGER,
-  path          TEXT,
-  contentType   TEXT
+  linkMode      INTEGER,
+  contentType   TEXT,
+  path          TEXT
 )")
+dbExecute(con, "CREATE TABLE itemNotes (itemID INTEGER PRIMARY KEY, parentItemID INT, note TEXT)")
+dbExecute(con, "CREATE TABLE deletedItems (
+  itemID      INTEGER PRIMARY KEY,
+  dateDeleted DEFAULT CURRENT_TIMESTAMP NOT NULL
+)")
+dbExecute(con, "CREATE TABLE collections (
+  collectionID       INTEGER PRIMARY KEY,
+  collectionName     TEXT NOT NULL,
+  parentCollectionID INT DEFAULT NULL,
+  libraryID          INT NOT NULL,
+  key                TEXT NOT NULL
+)")
+dbExecute(con, "CREATE TABLE collectionItems (
+  collectionID INT NOT NULL,
+  itemID       INT NOT NULL,
+  orderIndex   INT NOT NULL DEFAULT 0
+)")
+dbExecute(con, "CREATE TABLE deletedCollections (
+  collectionID INTEGER PRIMARY KEY,
+  dateDeleted  DEFAULT CURRENT_TIMESTAMP NOT NULL
+)")
+
+# Everything lives in "My Library"; there are no groups.
+dbExecute(con, "INSERT INTO libraries VALUES (1, 'user')")
 
 dbExecute(con, "INSERT INTO fields VALUES (1, 'citationKey')")
 dbExecute(con, "INSERT INTO fields VALUES (2, 'title')")
 dbExecute(con, "INSERT INTO fields VALUES (3, 'abstractNote')")
+dbExecute(con, "INSERT INTO fields VALUES (4, 'url')")
+
+# A fixed dateAdded, so regenerating does not change the file for no reason
+.item <- function(id, type, key) {
+  dbExecute(con, "INSERT INTO items (itemID, itemTypeID, dateAdded, libraryID, key)
+                  VALUES (?, ?, '2020-01-01 00:00:00', 1, ?)", params = list(id, type, key))
+}
 
 # Parent items
-dbExecute(con, "INSERT INTO items VALUES (1, 14, 1, 'PARENT001')")  # smith2020
-dbExecute(con, "INSERT INTO items VALUES (2, 14, 1, 'PARENT002')")  # jones2019
-dbExecute(con, "INSERT INTO items VALUES (3, 14, 1, 'PARENT003')")  # doe2021 (no attachment)
+.item(1, 14, "PARENT001")  # smith2020
+.item(2, 14, "PARENT002")  # jones2019
+.item(3, 14, "PARENT003")  # doe2021 (no attachment)
 
 # Attachment items (key = storage subdirectory name)
-dbExecute(con, "INSERT INTO items VALUES (10, 3, 1, 'TOYPDF1')")
-dbExecute(con, "INSERT INTO items VALUES (20, 3, 1, 'TOYDOC1')")
+.item(10, 3, "TOYPDF1")
+.item(20, 3, "TOYDOC1")
 
 # Citation key values
 dbExecute(con, "INSERT INTO itemDataValues VALUES (1, 'smith2020SalmonHabitat')")
@@ -218,13 +260,14 @@ dbExecute(con, "INSERT INTO itemData VALUES (1, 3, 7)")  # smith2020 abstract
 dbExecute(con, "INSERT INTO itemData VALUES (2, 3, 8)")  # jones2019 abstract
 dbExecute(con, "INSERT INTO itemData VALUES (3, 3, 9)")  # doe2021 abstract
 
-# Attachments (item 3 has none — simulates metadata-only entry)
+# Attachments (item 3 has none — simulates metadata-only entry).
+# linkMode 1 is a file Zotero imported into storage/.
 dbExecute(con, "INSERT INTO itemAttachments VALUES (
-  10, 1, 'storage:salmon_habitat.pdf', 'application/pdf'
+  10, 1, 1, 'application/pdf', 'storage:salmon_habitat.pdf'
 )")
 dbExecute(con, "INSERT INTO itemAttachments VALUES (
-  20, 2, 'storage:beaver_ecology.docx',
-  'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+  20, 2, 1, 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'storage:beaver_ecology.docx'
 )")
 
 dbDisconnect(con)
