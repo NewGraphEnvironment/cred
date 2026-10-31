@@ -34,3 +34,6 @@
   handed an origin it holds; a result with nothing ingested or dropped and an unchanged record discards the
   copy; a zero-document result is refused; CHECKPOINT and a `<work>.wal` check before the rename; leftover
   `.updating-*` copies warn; the final message says to push or open with `verify = FALSE`.
+- Mutation table run (15 mutations, 22:50-22:58Z): 14 red at once; M4 (no index rebuild after a removal-only
+  update) survived the BM25 hit checks and was pinned by a new test comparing BM25 scores with a fresh build.
+  Table in findings.md. CLAUDE.md gains the update's design; `?crd_store_build` links `crd_store_update()`.

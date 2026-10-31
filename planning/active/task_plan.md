@@ -65,7 +65,7 @@ Decided by me (reject the plan to change any of these):
 ## Phase 3: `crd_store_update()`
 - [x] Tests first (the Phase 4 tests that can be written against the signature)
 - [x] Diff: resolved sources against the store's `documents.origin` by origin id, giving added (new id), replaced (md5 differs from the record), removed (stored id no longer resolved, apart from the missing-file case above) and kept
-- [x] Guards: refuse when `<store>.wal` exists (a copy would miss it); refuse a missing store; run the width probe and `.crd_ollama_check()` on the store's recorded model
+- [x] Guards: refuse when `<store>.wal` exists (a copy would miss it); refuse a missing store; probe the store's own `@embed` and run the width check, read-only on the original and only when something is to be ingested (was: `.crd_ollama_check()` on the recorded model, see findings); refuse a zero-document result; leave the store unwritten when nothing ingested or dropped and the record is unchanged
 - [x] Work on a sibling copy (`<store>.updating-<pid>`). Delete the removed and replaced documents from `embeddings` and `documents` by `doc_id`. Ingest the added and replaced paths through `.crd_store_ingest()` (which rebuilds the index). If the ingest had nothing to do, rebuild the index with `ragnar_store_build_index()`. Update the record, disconnect with `shutdown = TRUE`, then `file.rename()` over the original and check that it returned TRUE. On any failure, `on.exit` removes the copy
 - [x] Report added / replaced / removed / kept counts, plus the shared ingest report. Return invisibly the build-shaped tibble (`citation_key`, `src_path`) of the store's sources
 - [x] Roxygen with a `\dontrun{}` example (it needs Zotero and Ollama, like build's), `devtools::document()`, add to `_pkgdown.yml` and run `pkgdown::check_pkgdown()`
@@ -78,16 +78,16 @@ Decided by me (reject the plan to change any of these):
 - [x] Legacy store (no `cred_sources`): kept documents are recorded and the message is emitted
 - [x] Nothing to do: the file is untouched (mtime and md5 unchanged)
 - [x] Missing local file for a stored document: kept, and named
-- [ ] Restore each guard's defect and watch its test go red (mutation table in `findings.md`)
+- [x] Restore each guard's defect and watch its test go red (mutation table in `findings.md`)
 
 ## Phase 5: Docs and conventions
-- [ ] `CLAUDE.md`: the architecture line for `store.R`, the update's two design decisions (copy-then-rename; origin id and md5 record), and the measured fact that ragnar's skip saves nothing under cred's `prepare`
-- [ ] `?crd_store_build` points to `crd_store_update()`; check the vignette and README for build-only claims that are no longer true
+- [x] `CLAUDE.md`: the architecture line for `store.R`, the update's two design decisions (copy-then-rename; origin id and md5 record), and the measured fact that ragnar's skip saves nothing under cred's `prepare`
+- [x] `?crd_store_build` points to `crd_store_update()`; check the vignette and README for build-only claims that are no longer true
 - [ ] Run the store tests against the development ragnar in a scratch library with `R_LIBS` set (CLAUDE.md, mirai workers)
 
 ## Owed at the end (reported, done after merge)
 
-- [ ] Time a real one-paper update against the 26-minute rebuild on the shared store, and put the measured number in the archive README
+- [ ] Time a real one-paper update against the 26-minute rebuild on the shared store, with the store file size before and after (duckdb does not shrink a file after deletes), and put the measured numbers in the archive README
 
 ## Validation
 

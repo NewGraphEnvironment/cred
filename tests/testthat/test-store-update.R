@@ -394,3 +394,20 @@ test_that("a missing file no longer resolved is removed, though a resolved one i
   expect_match(res$msgs, "removed: 1", fixed = TRUE)
   expect_identical(contents(path)$ids, .crd_origin_id(unname(world$paths["keyA"])))
 })
+
+test_that("after a removal the index scores as a fresh build's does", {
+  # A removed document drops out of BM25 results even from a stale index, since
+  # results come through the `chunks` view. What a stale index keeps is the
+  # removed document's share of the term statistics, so its scores differ.
+  world <- local_update_world()
+  path <- build(world, c("keyA", "keyB", "keyC"))
+  update(path, c("keyA", "keyB"))
+  fresh <- build(world, c("keyA", "keyB"), name = "fresh.duckdb")
+  scores <- function(p) {
+    store <- ragnar::ragnar_store_connect(p, read_only = TRUE)
+    on.exit(DBI::dbDisconnect(store@con, shutdown = TRUE))
+    res <- ragnar::ragnar_retrieve_bm25(store, "culvert salmon", top_k = 50L)
+    sort(round(.crd_flat(res$metric_value, "numeric"), 8))
+  }
+  expect_identical(scores(path), scores(fresh))
+})

@@ -46,7 +46,57 @@ The result should hold the same documents a full build from the same arguments w
 - `.crd_zot_key_from_path()` already reads the attachment key as `basename(dirname(path))` matching
   `^[A-Z0-9]{8}$`; the origin id uses the same rule on the path text.
 
+## Plan review: what each finding came to (2026-10-31)
+
+Review in `review-plan.md`. Each verdict says what established it.
+
+| # | Finding | Verdict |
+|---|---------|---------|
+| 1 | FK refuses deletes in one transaction | **Real**, hit independently before the review arrived (`Violates foreign key constraint because key "doc_id: 1"`); fixed with two statements. M14 pins it on ragnar 0.3.1 |
+| 2 | Unreadable same-origin replacement recorded as replaced | **Real**: reproduced by a test before the fix (`replaced: 1`, new md5). Fixed by dropping replaced docs before ingest, the plan's original design |
+| 3 | WAL left beside the copy | Fixed defensively (CHECKPOINT, refuse rename if `<work>.wal`). Not reproduced: no test reaches a persisting WAL |
+| 4 | `verify = TRUE` overwrites an unpushed update; cached instance | Documented in roxygen and the final message. Not reproduced |
+| 5 | Permanently unreadable source rewrites the store every update | **Real**: test written first, red, then fixed (unchanged result discards the copy) |
+| 6 | Zero-document result | Fixed and tested. Removal-fraction guard **not added**: a wrong collection or library errors at resolution; a threshold is a number nobody has measured |
+| 7 | Per-document unrecorded rule | Already the draft's rule; roxygen now states it per file |
+| 8 | WAL remedy text unverified | Remedy reduced to "close it and retry"; the ragnar_store_connect suggestion removed |
+| 9 | Checks before copy; one index build | Done: probe and diff read-only on the original; with replaced docs dropped first, the index is built once (by ingest, or once after a removal-only drop) |
+| 10 | ragnar 0.3.1 vs 0.3.1.9000 store formats | Not cred's to fix (affects build too). Phase 5 runs the tests under the dev ragnar. Dev ragnar's mtime skip cannot bite: ragnar is never handed an origin it holds |
+| 11 | Deletes need vss loaded | Holds: deletes go through `ragnar_store_connect()`'s connection |
+| 12 | Linked files / renamed attachments re-ingest | Documented in roxygen |
+| 13 | Parity conditional on files present | Parity test has every file present; the kept-missing and missing-unresolved cases have their own tests |
+| 14 | Compare embeddings and orphans | Added to `contents()` |
+| 15 | Missing tests | Added: unreadable replacement, permanently unreadable, rename FALSE, zero docs, missing-unresolved. Not added: leftover work WAL (no way to make duckdb leave one after CHECKPOINT + disconnect in-process) |
+| 16 | File size beside the owed timing; leftover copies | Leftover `.updating-*` copies now warn; owed item amended to record size |
+
+## Mutation table (2026-10-31, ragnar 0.3.1, duckdb 1.5.2)
+
+Each guard's defect restored in `R/store.R` alone, the owning test file run, the file restored
+(driver: a python script over the committed tree, one mutation at a time).
+
+| Mutation | Red tests |
+|----------|-----------|
+| M1 origin id ignores the `storage/` component | linked-file id test |
+| M2 changed md5 not seen | changed file; changed elsewhere; unreadable replacement |
+| M3 replaced doc not dropped before ingest | changed file; changed elsewhere; unreadable replacement |
+| M4 no index rebuild after a removal-only update | **survived** the BM25 hit checks (results come through the `chunks` view, so a removed doc vanishes from a stale index); red once the test compared BM25 scores with a fresh build's ("after a removal the index scores as a fresh build's does") |
+| M5 a resolved file missing locally is removed | kept-and-named test |
+| M6 zero-document guard off | zero-document test |
+| M7 an unchanged result rewrites the store | unreadable replacement (second update's md5) |
+| M8 embedder probe off | embedder test (errors with ragnar's message instead) |
+| M9 WAL refusal off | refusal test |
+| M10 build writes no record | build report test; failed-write test |
+| M11 copy not cleaned up | failure test; rename test |
+| M12 a failed rename not reported | rename test |
+| M13 unrecorded files not announced | legacy-store test |
+| M14 deletes in one transaction | 9 tests error on the FK (ragnar 0.3.1 schema only) |
+| M15 a replaced-and-unreadable file's new md5 recorded | unreadable replacement |
+
+Not mutated: the CHECKPOINT and `<work>.wal` check before the rename (no in-process way to make duckdb
+keep a WAL after CHECKPOINT and disconnect), and the leftover-copy warning.
+
 ## Errors Encountered
 
 | Error | Resolution |
 |-------|------------|
+| `Violates foreign key constraint because key "doc_id: 1" is still referenced` deleting embeddings then documents in one `dbWithTransaction()` | Two autocommit statements; atomicity comes from the copy (ragnar 0.3.1 schema has the FK, dev ragnar dropped it) |

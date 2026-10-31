@@ -2135,10 +2135,13 @@ crd_search <- function(store, query, top_k = 5L,
 #'   Default `"nomic-embed-text"` — the model the shared stores are built with.
 #' @param zotero_dir `character(1)` Zotero data directory. Default `"~/Zotero"`.
 #' @param overwrite `logical(1)` replace an existing store. Default `FALSE`.
+#'   To add, replace or drop a few documents, [crd_store_update()] changes
+#'   only those.
 #' @inheritParams crd_zot_src_lookup
 #' @return Invisibly, a [tibble][tibble::tibble] with one row per ingested
 #'   file (`citation_key`, `src_path`), so a key with several PDFs has several
 #'   rows; a skipped PDF has none. Prints document and chunk counts.
+#' @seealso [crd_store_update()] to bring a built store up to date.
 #' @export
 #' @examples
 #' \dontrun{

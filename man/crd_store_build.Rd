@@ -28,7 +28,9 @@ Default \code{"nomic-embed-text"} — the model the shared stores are built with
 
 \item{zotero_dir}{\code{character(1)} Zotero data directory. Default \code{"~/Zotero"}.}
 
-\item{overwrite}{\code{logical(1)} replace an existing store. Default \code{FALSE}.}
+\item{overwrite}{\code{logical(1)} replace an existing store. Default \code{FALSE}.
+To add, replace or drop a few documents, \code{\link[=crd_store_update]{crd_store_update()}} changes
+only those.}
 
 \item{library}{The Zotero library to resolve keys in: \code{"user"} for My
 Library, or a group's name or groupID (as in its URL,
@@ -95,4 +97,7 @@ crd_store_build(
   citation_keys = c("hall_etal2007Predictingriver", "beechie_etal2005ClassificationHabitat")
 )
 }
+}
+\seealso{
+\code{\link[=crd_store_update]{crd_store_update()}} to bring a built store up to date.
 }
