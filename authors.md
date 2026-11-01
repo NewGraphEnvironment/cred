@@ -11,20 +11,20 @@
 ## Citation
 
 Source:
-[`inst/CITATION`](https://github.com/NewGraphEnvironment/cred/blob/main/inst/CITATION)
+[`inst/CITATION`](https://github.com/NewGraphEnvironment/cred/blob/v0.7.0/inst/CITATION)
 
 Irvine A (2026). *cred: Citation Review and Evidence Documentation*. New
 Graph Environment Ltd.
 [doi:10.5281/zenodo.23254040](https://doi.org/10.5281/zenodo.23254040).
-Version 0.6.0, <https://newgraphenvironment.github.io/cred/>.
+Version 0.7.0, <https://newgraphenvironment.github.io/cred/>.
 
     @Manual{cred,
       title = {cred: Citation Review and Evidence Documentation},
       author = {Allan Irvine},
       organization = {New Graph Environment Ltd.},
       year = {2026},
-      version = {0.6.0},
-      note = {Version 0.6.0},
+      version = {0.7.0},
+      note = {Version 0.7.0},
       url = {https://newgraphenvironment.github.io/cred/},
       doi = {10.5281/zenodo.23254040},
     }

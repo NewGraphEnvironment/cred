@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">cred</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.6.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.7.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -32,9 +32,17 @@
 <div class="row">
   <main id="main" class="col-md-9"><div class="page-header">
       <img src="../logo.png" class="logo" alt=""><h1>Changelog</h1>
-      <small>Source: <a href="https://github.com/NewGraphEnvironment/cred/blob/main/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
+      <small>Source: <a href="https://github.com/NewGraphEnvironment/cred/blob/v0.7.0/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.7.0" id="cred-070">cred 0.7.0<a class="anchor" aria-label="anchor" href="#cred-070"></a></h2>
+<p><code><a href="../reference/crd_store_update.html">crd_store_update()</a></code> brings a built evidence store up to date with Zotero without rebuilding it (<a href="https://github.com/NewGraphEnvironment/cred/issues/44" class="external-link">#44</a>). Adding one paper to a 263-document store had cost a 26-minute rebuild; the update reads and embeds only the PDFs that are new or changed, and removes the documents whose source no longer resolves.</p>
+<ul><li>Sources resolve exactly as in <code><a href="../reference/crd_store_build.html">crd_store_build()</a></code>, and documents are matched by their Zotero <code>storage/&lt;key&gt;/&lt;file&gt;</code>, so a store built on a machine whose Zotero lives elsewhere updates cleanly.</li>
+<li>A changed PDF is seen by its md5, which <code><a href="../reference/crd_store_build.html">crd_store_build()</a></code> and <code><a href="../reference/crd_store_update.html">crd_store_update()</a></code> now record in a <code>cred_sources</code> table inside the store. A stored file with no record is recorded as it is now, and the update says it cannot vouch for earlier changes to it.</li>
+<li>The update works on a copy and replaces the store only when finished, so a failure, or a result with no documents, leaves the store as it was. When nothing changes, the file is not written and its md5 does not move.</li>
+<li>It embeds with the store’s own recorded embedder, and only when something is to be ingested: a removal needs no embedding service. A PDF that resolves but cannot be read on this machine keeps its stored document.</li>
+</ul></div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.6.0" id="cred-060">cred 0.6.0<a class="anchor" aria-label="anchor" href="#cred-060"></a></h2>
 <p><code><a href="../reference/crd_store_build.html">crd_store_build()</a></code> no longer loses a whole build to one PDF it cannot read or one chunk the embedding model refuses (<a href="https://github.com/NewGraphEnvironment/cred/issues/35" class="external-link">#35</a>). The model’s limit is in tokens, and characters do not predict it: a figure rendered as a run of <code>•</code> glyphs is refused by <code>nomic-embed-text</code> where longer prose is not, so no cap on chunk length could have caught it. And markitdown’s text for some PDFs carries a NUL byte, which R cannot hold.</p>

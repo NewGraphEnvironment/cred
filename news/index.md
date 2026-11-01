@@ -1,5 +1,34 @@
 # Changelog
 
+## cred 0.7.0
+
+[`crd_store_update()`](https://newgraphenvironment.github.io/cred/reference/crd_store_update.md)
+brings a built evidence store up to date with Zotero without rebuilding
+it ([\#44](https://github.com/NewGraphEnvironment/cred/issues/44)).
+Adding one paper to a 263-document store had cost a 26-minute rebuild;
+the update reads and embeds only the PDFs that are new or changed, and
+removes the documents whose source no longer resolves.
+
+- Sources resolve exactly as in
+  [`crd_store_build()`](https://newgraphenvironment.github.io/cred/reference/crd_store_build.md),
+  and documents are matched by their Zotero `storage/<key>/<file>`, so a
+  store built on a machine whose Zotero lives elsewhere updates cleanly.
+- A changed PDF is seen by its md5, which
+  [`crd_store_build()`](https://newgraphenvironment.github.io/cred/reference/crd_store_build.md)
+  and
+  [`crd_store_update()`](https://newgraphenvironment.github.io/cred/reference/crd_store_update.md)
+  now record in a `cred_sources` table inside the store. A stored file
+  with no record is recorded as it is now, and the update says it cannot
+  vouch for earlier changes to it.
+- The update works on a copy and replaces the store only when finished,
+  so a failure, or a result with no documents, leaves the store as it
+  was. When nothing changes, the file is not written and its md5 does
+  not move.
+- It embeds with the store’s own recorded embedder, and only when
+  something is to be ingested: a removal needs no embedding service. A
+  PDF that resolves but cannot be read on this machine keeps its stored
+  document.
+
 ## cred 0.6.0
 
 [`crd_store_build()`](https://newgraphenvironment.github.io/cred/reference/crd_store_build.md)
