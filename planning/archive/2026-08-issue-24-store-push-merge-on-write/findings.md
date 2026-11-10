@@ -26,8 +26,8 @@ All checks run from R against the live bucket, aws-cli 2.34.34.
 
 ## Ownership context
 
-cred#22 scoped push out to rtj#194; rtj#194 named cred#22 as the durable home. Neither owned it.
-Both bodies corrected 2026-08-31: cred owns the manifest read/write code (this issue), rtj#194 owns
+cred#22 scoped push out to an internal issue; an internal issue named cred#22 as the durable home. Neither owned it.
+Both bodies corrected 2026-08-31: cred owns the manifest read/write code (this issue), an internal issue owns
 bucket, IAM and field access. The defect in `0157-rag-sync.R` is live until this lands.
 
 ## Issue context
@@ -53,8 +53,8 @@ An unreadable manifest is worse than no manifest, because the artifacts still lo
 
 ### Ownership — this issue exists to break a deferral loop
 
-cred#22 scoped push out, deferring to NewGraphEnvironment/rtj#194. rtj#194 names cred#22 as the
-durable home. Both are now settled: **cred owns the manifest read/write code; rtj#194 owns the
+cred#22 scoped push out, deferring to an internal issue. An internal issue names cred#22 as the
+durable home. Both are now settled: **cred owns the manifest read/write code; an internal issue owns the
 bucket, IAM, field access and the runbook.** This issue is cred's half.
 
 ## The contract
@@ -93,7 +93,7 @@ Shipped in v0.2.0 and directly reusable — the read half is done and tested:
 - `.crd_store_describe(store_path)` — counts, embedding model/size, bytes, md5, git provenance
 - `dry_run` prints the merged manifest without uploading
 
-Out of scope: bucket policy, IAM, retention, the field runbook — all rtj#194.
+Out of scope: bucket policy, IAM, retention, the field runbook — all an internal issue.
 
 ## Acceptance
 
@@ -106,7 +106,7 @@ Out of scope: bucket policy, IAM, retention, the field runbook — all rtj#194.
 
 ## Related
 
-- Relates to NewGraphEnvironment/rtj#194 (bucket, IAM, field access, runbook)
+- Relates to an internal issue (bucket, IAM, field access, runbook)
 - Follows #22 (build + store resolution, shipped in v0.2.0)
 - The defect lives in `fish_passage_template_reporting/scripts/04_planning/0157-rag-sync.R`,
   which this should retire

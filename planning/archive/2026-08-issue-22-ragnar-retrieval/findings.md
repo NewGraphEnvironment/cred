@@ -69,8 +69,8 @@ this as **resolving** a store, not owning bucket policy:
 - **Pull, verify, then use.** Compare local md5 against the manifest before opening — a store built
   against a different embedding model answers differently while looking fine.
 - **Push is out of scope here.** It is a build-side operation done rarely by whoever built the store,
-  and belongs with the bucket infrastructure in NewGraphEnvironment/rtj#194.
-- **The manifest contract is merge-on-write**, defined in rtj#194. A replace-semantics push has
+  and belongs with the bucket infrastructure in an internal issue.
+- **The manifest contract is merge-on-write**, defined in an internal issue. A replace-semantics push has
   already been observed to orphan a store; if `cred` ever gains a push, it inherits that requirement.
 
 ### Integration with existing cred
@@ -96,7 +96,7 @@ The same job is currently implemented five times:
 ```
 
 The copies have already diverged into a defect — `0157` replaces the shared manifest instead of
-merging, silently orphaning any store it did not push (detail in rtj#194). That is the argument for
+merging, silently orphaning any store it did not push (detail in an internal issue). That is the argument for
 package functions: a manifest merge implemented once and tested once, rather than per repo.
 
 Note `restoration_wedzin_kwa_2024` is **public** and its `rag_build.R` carries Zotero attachment keys
@@ -116,12 +116,12 @@ channel width, currently unresolved because the doc and the code disagree. `hall
 already embedded in that store, so this is a retrieval problem, which is exactly what this issue is
 for.
 
-Relates to NewGraphEnvironment/sred-2025-2026#14
+Relates to an internal issue
 Relates to NewGraphEnvironment/flooded#28
 Relates to NewGraphEnvironment/restoration_wedzin_kwa_2024#123
-Relates to NewGraphEnvironment/rtj#194 (bucket, manifest contract, field access)
+Relates to an internal issue (bucket, manifest contract, field access)
 Relates to NewGraphEnvironment/flooded#48 (first consumer of the shared store)
-Relates to NewGraphEnvironment/soul#23 (convention + cite-audit skill)
+Relates to an internal issue (convention + cite-audit skill)
 
 
 

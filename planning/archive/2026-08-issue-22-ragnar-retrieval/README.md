@@ -31,7 +31,7 @@ a `complete <- TRUE` set late enough that a failed reporting query would delete 
 embedding run, an `nzchar(NA)` guard hole, and `.Rbuildignore` shipping `planning/`, `CLAUDE.md`
 and `.claude/` in the tarball one commit after the repo was flipped public.
 
-Deliberately out of scope: push and manifest merge (rtj#194), integration with
+Deliberately out of scope: push and manifest merge, integration with
 `crd_aud_verify_all()` / `crd_zot_pull_quotes()` (#2), and retiring the five source scripts.
 
 Closed by: PR for issue #22

@@ -72,7 +72,7 @@ Guard with the `requireNamespace(..., quietly = TRUE)` + `stop()` pattern **alre
         `s3://<bucket>/<prefix>/` and never a real bucket. Precedent: `drift::dft_map_interactive()`
         `titiler_url = getOption("drift.titiler_url")` (`drift/R/dft_map_interactive.R:79`)
 - [x] Roxygen: no bucket value anywhere (cf. `flooded` v0.3.2 stripping an internal path)
-- [x] Push stays **out of scope** — build-side, belongs with rtj#194
+- [x] Push stays **out of scope** — build-side, belongs with an internal issue
 
 ## Phase 2 — Search (`crd_search`)
 
@@ -113,7 +113,7 @@ Guard with the `requireNamespace(..., quietly = TRUE)` + `stop()` pattern **alre
 
 ## Explicitly out of scope
 
-- **Push / manifest merge** — issue defers to rtj#194
+- **Push / manifest merge** — issue defers to an internal issue
 - **`crd_aud_verify_all()` and `crd_zot_pull_quotes()` integration** — issue says "could
   optionally"; `crd_zot_pull_quotes()` does not exist yet (issue #2). Speculative, deferred
 - **Retiring the five scripts and folding soul's `lit-search` skill onto these functions** —

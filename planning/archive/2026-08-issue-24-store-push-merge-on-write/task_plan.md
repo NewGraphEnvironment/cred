@@ -10,9 +10,9 @@ because it carried the bucket path. The committed implementation,
 the current run alone and overwrites the remote copy — so pushing store B silently drops store A,
 and `pull` then reports `skip A (not in log.json)` for a file sitting in the bucket.
 
-This issue exists partly to break a deferral loop: cred#22 scoped push out to rtj#194, which named
+This issue exists partly to break a deferral loop: cred#22 scoped push out to an internal issue, which named
 cred#22 as the durable home. Both bodies were corrected on 2026-08-31 — cred owns the manifest
-read/write code, rtj#194 owns bucket, IAM and field access.
+read/write code, an internal issue owns bucket, IAM and field access.
 
 An unreadable manifest is worse than no manifest, because the artifacts still look present.
 
@@ -106,7 +106,7 @@ An unreadable manifest is worse than no manifest, because the artifacts still lo
 
 ## Explicitly out of scope
 
-- **Bucket policy, IAM, retention, the field runbook** — rtj#194
+- **Bucket policy, IAM, retention, the field runbook** — an internal issue
 - **Retiring `0157-rag-sync.R`** — lives in `fish_passage_template_reporting`; follow-up there
   once this ships
 - **Pruning manifest entries for deleted stores** — deletion is not push's job

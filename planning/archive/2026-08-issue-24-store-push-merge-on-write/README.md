@@ -1,7 +1,7 @@
 ## Outcome
 
 Added `crd_store_push()` — the write half of the shared-manifest contract, closing a deferral loop
-in which cred#22 pointed at rtj#194 for this code and rtj#194 pointed back at cred#22, so neither
+in which cred#22 pointed at an internal issue for this code and an internal issue pointed back at cred#22, so neither
 owned it. The defect it fixes was live: the only committed push rebuilt `log.json` from the current
 run alone and overwrote the remote copy, silently orphaning every other store.
 
@@ -29,7 +29,7 @@ dangerous ones were not wrong logic but **wrong failure direction** — a probe 
 absence, a dropped precondition, a guard that silently skipped. Each looked correct and passed
 every test.
 
-Deliberately out of scope: bucket policy, IAM, retention and the field runbook (rtj#194);
+Deliberately out of scope: bucket policy, IAM, retention and the field runbook;
 content-addressed store keys, which would remove the binary/manifest window but change the shared
 bucket layout; retiring `0157-rag-sync.R`, which lives in `fish_passage_template_reporting`.
 
