@@ -10,7 +10,7 @@ every local test failed in CI.
 * Every ragnar can read every store, but ragnar 0.4.0 upgrades a store written by an older ragnar
   as soon as it opens it read-write, even if nothing is then written. The file grows (about 1.85x on
   two real stores), its md5 no longer matches the manifest, and its cosine and inner-product
-  indexes go unused until the index is rebuilt. `crd_store_connect(read_only = FALSE)` now warns
+  indexes can go unused until the index is rebuilt. `crd_store_connect(read_only = FALSE)` now warns
   before opening such a store. `crd_store_update()` upgrades a store only when it changes it, and
   rebuilds the index, so search on the result works as on a fresh build.
 * **Update cred everywhere a shared store is used.** Once a store has been upgraded, or rebuilt

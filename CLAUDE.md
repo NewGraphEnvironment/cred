@@ -352,14 +352,16 @@ Shipped: [#22](https://github.com/NewGraphEnvironment/cred/issues/22) ragnar ret
   ragnar (`cred_ragnar_too_old`), so CI and users run the same release. Every ragnar reads every
   store, but ragnar 0.4.0 **upgrades a pre-0.4.0 store in place on any read-write connect**, even
   one that writes nothing: three columns added to `documents`, the foreign key dropped, the file
-  about 1.85x larger, the md5 changed, and the HNSW indexes recreated **without their metric**,
-  so cosine queries scan until `ragnar_store_build_index()`. ragnar 0.3.x cannot ingest into an
+  about 1.85x larger, the md5 changed, and the HNSW indexes recreated from the SQL duckdb recorded
+  at creation, which **lacks the metric for any index made under duckdb before 2.0** (every real
+  pre-0.4.0 store), so cosine queries scan until `ragnar_store_build_index()`. ragnar 0.3.x cannot ingest into an
   upgraded store. So `crd_store_connect(read_only = FALSE)` warns first
   (`cred_store_upgrade`), `crd_store_update()` (which rebuilds the index on every copy it keeps, a record-only update included)
   says so in its help, and the manifest records `ragnar_version` (stamped into the store's own
   `cred_ragnar` table by build and update, never the pusher's session unless the store has no
   stamp) and `store_schema` read from the file. A pre-0.4.0 test store is built by hand
-  (`local_pre040_store()`): its indexes need their metrics written out, and its `embeddings`
+  (`local_pre040_store()`): its indexes need their metrics written out (and under duckdb 2.0 they
+  record them, so the upgrade keeps them, unlike a real old store), and its `embeddings`
   must be created under its final name, because duckdb keeps a renamed table's old name in the
   foreign key's reverse reference. [#43](https://github.com/NewGraphEnvironment/cred/issues/43),
   `research/ragnar-versions.md`.

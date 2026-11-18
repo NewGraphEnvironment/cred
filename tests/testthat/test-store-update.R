@@ -533,7 +533,7 @@ test_that("an update that changes a pre-0.4.0 store upgrades it, and it holds an
   expect_true(got$content_hash)
   expect_identical(got$fk, 0)
   expect_identical(got$hnsw, 3)
-  # The upgrade loses the cosine index's metric; the update's index rebuild restores it.
+  # The upgrade can lose the cosine index's metric; the update's index rebuild restores it.
   expect_true(.crd_test_cosine_indexed(path))
 
   scores <- function(p) {

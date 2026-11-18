@@ -40,9 +40,15 @@ Two stores built by ragnar 0.3.x with `nomic-embed-text` were copied and opened 
   upgraded store under 0.4.0 changes nothing again.
 - Retrieval after the upgrade returns the same hybrid chunks, and the same BM25 chunks and scores, as
   before it. HNSW recall loss would show here rather than on toy stores, and none did.
-- **The upgrade leaves only the L2 HNSW index usable.** `upgrade_v2_store()` recreates the indexes
-  from `duckdb_indexes().sql`, which omits each index's `WITH (metric = ...)`, so all three come back
-  as L2 indexes under their old names. Before the upgrade, `EXPLAIN` of an `ORDER BY` on
+- **The upgrade leaves only the L2 HNSW index usable on every store measured.** `upgrade_v2_store()`
+  recreates the indexes from `duckdb_indexes().sql`, the SQL duckdb recorded when each index was
+  created. duckdb 1.5.x records it without the `WITH (metric = ...)` clause; duckdb 2.0.0 records it
+  with the clause. So an index created under duckdb before 2.0, which is every store built before
+  ragnar 0.4.0 that we hold, comes back as an L2 index under its old name, whichever duckdb runs the
+  upgrade. A pine copy upgraded under duckdb 2.0.0 lost the metric exactly as under 1.5.6, and grew
+  to the same 52.7 MB. Only indexes created under duckdb 2.0 survive: this is why the regression test,
+  whose fixture creates its indexes under whatever duckdb is installed, passed on CI (duckdb 2.0.0)
+  where it was written to fail. Before the upgrade, `EXPLAIN` of an `ORDER BY` on
   `array_cosine_distance`, `array_negative_inner_product` and `array_distance` against a constant
   vector uses an HNSW scan for all three; after it, only for `array_distance`. Cosine and
   inner-product queries, cosine being ragnar's default, fall back to a full scan: the same answers,

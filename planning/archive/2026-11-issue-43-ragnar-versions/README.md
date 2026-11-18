@@ -33,7 +33,11 @@ index on a kept copy).
 - **HNSW metrics:** an `EXPLAIN` of a top-k query against a constant vector uses an HNSW scan for
   cosine, inner product and L2 before the upgrade, only for L2 after it, and for all three after
   `ragnar_store_build_index()`. A first probe that ordered by a subquery could not use any index, so
-  it told nothing apart; the constant-vector probe replaced it.
+  it told nothing apart; the constant-vector probe replaced it. After the PR opened, CI (duckdb 2.0.0) failed the test pinning
+  this defect. It turned out to depend on the duckdb that *created* the index, not the one running the
+  upgrade: duckdb 1.5.x records an index's SQL without the metric, and 2.0.0 records it with. A real pine
+  copy upgraded under duckdb 2.0.0 still lost the metric (and grew to the same 52.7 MB). The test now
+  asserts whatever the fixture's recorded SQL predicts, and passes under both versions.
 - **Validation** on `4b296eb`: 965 tests pass, 0 fail, 2 pre-existing docx skips. `R CMD check` shows 0
   errors and the three WARNINGs that predate the branch. lintr reports 0.
 

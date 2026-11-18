@@ -417,9 +417,10 @@ local_pre040_store <- function(env = parent.frame(), n_docs = 3L) {
   ))
   DBI::dbExecute(con, "INSERT INTO embeddings SELECT * FROM embeddings_rows")
   DBI::dbExecute(con, "DROP TABLE embeddings_rows")
-  # With their metrics, as ragnar_store_build_index() creates them. Not from
-  # duckdb_indexes().sql, which omits the metric (the defect in ragnar 0.4.0's
-  # own upgrade that .crd_test_cosine_indexed() looks for).
+  # With their metrics, as ragnar_store_build_index() creates them. duckdb 1.5.x
+  # records an index's SQL without the metric and duckdb 2.0 with it, so what
+  # ragnar 0.4.0's upgrade rebuilds from that record depends on the duckdb that
+  # created the index (.crd_test_index_sql_has_metric()).
   DBI::dbExecute(con, "SET hnsw_enable_experimental_persistence = true")
   for (m in c(cosine = "cosine", ip = "ip", l2sq = "l2sq")) {
     DBI::dbExecute(con, sprintf(
@@ -445,8 +446,9 @@ local_pre040_store <- function(env = parent.frame(), n_docs = 3L) {
 }
 
 # Whether a cosine top-k on the store can use an HNSW index. ragnar 0.4.0's
-# upgrade recreates the indexes without their metric, leaving only L2 usable
-# until the index is rebuilt. Asked with a constant vector: an index is never
+# upgrade recreates the indexes from the SQL duckdb recorded for them, which
+# under duckdb before 2.0 lacks the metric, leaving only L2 usable until the
+# index is rebuilt. Asked with a constant vector: an index is never
 # used for an ORDER BY against a subquery.
 .crd_test_cosine_indexed <- function(path) {
   con <- DBI::dbConnect(duckdb::duckdb(), path, read_only = TRUE)
@@ -458,4 +460,15 @@ local_pre040_store <- function(env = parent.frame(), n_docs = 3L) {
     "EXPLAIN SELECT chunk_id FROM embeddings ORDER BY array_cosine_distance(embedding, ", v, ") LIMIT 3"
   ))
   any(grepl("HNSW", unlist(plan)))
+}
+
+# Whether the SQL duckdb recorded for the store's cosine index names its metric:
+# duckdb 2.0 records it, duckdb 1.5.x does not. ragnar 0.4.0's upgrade rebuilds
+# the index from this record.
+.crd_test_index_sql_has_metric <- function(path) {
+  con <- DBI::dbConnect(duckdb::duckdb(), path, read_only = TRUE)
+  on.exit(DBI::dbDisconnect(con, shutdown = TRUE))
+  sql <- DBI::dbGetQuery(con, "SELECT sql FROM duckdb_indexes()
+                               WHERE table_name = 'embeddings' AND index_name = 'store_hnsw_cosine_index'")$sql
+  length(sql) == 1L && grepl("metric", sql, fixed = TRUE)
 }

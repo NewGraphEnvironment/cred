@@ -440,9 +440,10 @@
 #' ragnar (>= 0.4.0) upgrades a store written in the older schema the moment it
 #' connects to it read-write, whether or not anything is then written: the
 #' file grows (about 1.85x on two real stores), its md5 no longer matches the
-#' manifest, so the next verified connect downloads it again, and its cosine
-#' and inner-product HNSW indexes go unused until the index is rebuilt
-#' (`research/ragnar-versions.md`). The schema is read through a read-only
+#' manifest, so the next verified connect downloads it again, and, where its
+#' HNSW indexes were created by duckdb before 2.0 (as in every such store
+#' measured), its cosine and inner-product indexes go unused until the index is
+#' rebuilt (`research/ragnar-versions.md`). The schema is read through a read-only
 #' connection closed before ragnar opens the file, since once ragnar's connect
 #' returns the upgrade is already done (#43).
 #'
@@ -465,7 +466,7 @@
         "Opening ", label, " read-write lets ragnar upgrade it in place to the schema ragnar ",
         "0.4.0 writes, whether or not anything is written. The file grows, no longer matches ",
         "the manifest's md5 (so the next verified connect downloads it again), and its cosine ",
-        "and inner-product HNSW indexes go unused until ragnar::ragnar_store_build_index(). ",
+        "and inner-product HNSW indexes may go unused until ragnar::ragnar_store_build_index(). ",
         "Open it read-only unless you mean to write to it."
       ),
       class = "cred_store_upgrade"
@@ -533,8 +534,8 @@
 #' @param read_only `logical(1)` open the store read-only. Default `TRUE`.
 #'   `FALSE` on a store written before ragnar 0.4.0 lets ragnar upgrade it in
 #'   place, even if nothing is then written: the file grows, stops matching the
-#'   manifest's md5, and loses the use of its cosine and inner-product indexes
-#'   until the index is rebuilt. cred warns (class `cred_store_upgrade`) before
+#'   manifest's md5, and can lose the use of its cosine and inner-product
+#'   indexes until the index is rebuilt. cred warns (class `cred_store_upgrade`) before
 #'   opening such a store read-write.
 #' @param verify `logical(1)` check the local MD5 against the manifest.
 #'   Default `TRUE`. `FALSE` opens a local store without contacting `source` —
@@ -2651,7 +2652,7 @@ crd_store_update <- function(store_path,
   }
   # A copy kept with nothing ingested or dropped (only the record changed) has
   # had no index rebuild, and ragnar 0.4.0 may have upgraded it on open, which
-  # recreates its HNSW indexes without their metric. Every kept copy leaves
+  # recreates HNSW indexes made by duckdb before 2.0 without their metric. Every kept copy leaves
   # with a rebuilt index (#43).
   if (length(to_ingest) == 0L && length(dropped) == 0L) {
     ragnar::ragnar_store_build_index(store)
