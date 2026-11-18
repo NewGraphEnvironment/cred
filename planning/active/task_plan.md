@@ -80,12 +80,12 @@ What exploration found (ragnar 0.4.0 source and NEWS, read from the `v0.4.0` tag
 
 ## Phase 3: Record ragnar_version in the manifest, stamped in the store
 
-- [ ] Test first: a store built by `crd_store_build()` carries the stamp, and an update refreshes it;
+- [x] Test first: a store built by `crd_store_build()` carries the stamp, and an update refreshes it;
       `.crd_store_describe()` returns `ragnar_version` from the stamp and `store_format` from the
       schema; an unstamped store falls back to the session's ragnar with a warning, and to NA with no
       error when ragnar is absent; a merge keeps an older entry that lacks the fields exactly as it
       was.
-- [ ] Implement the stamp (a cred-owned table, written beside `cred_sources`), the read in
+- [x] Implement the stamp (a cred-owned table, written beside `cred_sources`), the read in
       `.crd_store_describe()` (`R/store.R:2752`), and document both fields in `crd_store_push()`.
 
 ## Phase 4: Act on Phase 1's verdict (compatible for 0.4.0; no format refusal)
@@ -125,6 +125,8 @@ What exploration found (ragnar 0.4.0 source and NEWS, read from the `v0.4.0` tag
       `progress` back on.
 - [ ] File a follow-up cred issue: compact a store after an upgrading update (G4; probe in
       `findings.md`).
+- [ ] Show the owner the upstream draft (findings.md, "HNSW metrics lost"): ragnar 0.4.0's upgrade
+      drops the HNSW metrics. Fork issue first; nothing is posted without the owner's word.
 - [ ] File a follow-up cred issue: use 0.4.0's `ingest_summary` in place of the `worker_errors`
       bookkeeping (S1).
 

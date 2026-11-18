@@ -2022,6 +2022,61 @@ crd_search <- function(store, query, top_k = 5L,
   invisible(rec)
 }
 
+#' Read and write which ragnar last built or updated a store
+#'
+#' A store does not record the ragnar that wrote it, and a manifest value taken
+#' from the pushing session describes the pusher, not the store. So
+#' [crd_store_build()] and [crd_store_update()] stamp the session's ragnar into
+#' the store's own one-row `cred_ragnar` table each time they write it, and
+#' [crd_store_push()] reads the stamp back (#43).
+#'
+#' @param con A DBI connection to the store, writable for the write.
+#' @return `.crd_ragnar_stamp_read()`: `character(1)`, `NA` for a store with no
+#'   stamp. `.crd_ragnar_stamp_write()`: the version written, invisibly.
+#' @noRd
+.crd_ragnar_stamp_read <- function(con) {
+  if (!DBI::dbExistsTable(con, "cred_ragnar")) return(NA_character_)
+  v <- DBI::dbGetQuery(con, "SELECT ragnar_version FROM cred_ragnar")$ragnar_version
+  if (length(v) != 1L || is.na(v)) return(NA_character_)
+  as.character(v)
+}
+
+#' @rdname .crd_ragnar_stamp_read
+#' @noRd
+.crd_ragnar_stamp_write <- function(con) {
+  v <- as.character(.crd_ragnar_version())
+  DBI::dbWithTransaction(con, {
+    DBI::dbExecute(con, "CREATE OR REPLACE TABLE cred_ragnar (ragnar_version VARCHAR NOT NULL)")
+    DBI::dbExecute(con, "INSERT INTO cred_ragnar VALUES (?)", params = list(v))
+  })
+  invisible(v)
+}
+
+#' The ragnar this session has, or `NA` where none is installed
+#'
+#' For [.crd_store_describe()]'s fallback: a push needs only DBI and duckdb.
+#' @return `character(1)`.
+#' @noRd
+.crd_ragnar_session_version <- function() {
+  if (!requireNamespace("ragnar", quietly = TRUE)) return(NA_character_)
+  as.character(.crd_ragnar_version())
+}
+
+#' Which ragnar schema a store is in
+#'
+#' ragnar 0.4.0 added `last_modified`, `content_hash` and `ingested_at` to
+#' `documents`, and upgrades an older store to them on a read-write connect
+#' (`research/ragnar-versions.md`). Read from the file, so it describes the
+#' store whatever ragnar is installed.
+#'
+#' @param con A DBI connection to the store.
+#' @return `"0.4.0"`, `"pre-0.4.0"`, or `NA` for a file with no `documents`.
+#' @noRd
+.crd_store_schema <- function(con) {
+  if (!DBI::dbExistsTable(con, "documents")) return(NA_character_)
+  if ("content_hash" %in% DBI::dbListFields(con, "documents")) "0.4.0" else "pre-0.4.0"
+}
+
 #' Resolve a build's or an update's sources, and say what is left out
 #'
 #' Says what the store will not hold, and which items it holds several files
@@ -2263,6 +2318,14 @@ crd_store_build <- function(store_path,
     error = function(e) {
       warning("Could not record the ingested files' md5 in the store: ", conditionMessage(e),
               "\n  crd_store_update() will treat this store as one built before records.",
+              call. = FALSE)
+    }
+  )
+  tryCatch(
+    .crd_ragnar_stamp_write(store@con),
+    error = function(e) {
+      warning("Could not record the ragnar version in the store: ", conditionMessage(e),
+              "\n  crd_store_push() will record this session's ragnar instead, and say so.",
               call. = FALSE)
     }
   )
@@ -2531,6 +2594,7 @@ crd_store_update <- function(store_path,
     return(current())
   }
   .crd_sources_write(store@con, final$origin_id, final$md5)
+  .crd_ragnar_stamp_write(store@con)
 
   n_chunks <- DBI::dbGetQuery(store@con, "SELECT COUNT(*) AS n FROM chunks")$n
   # duckdb closes a database, and checkpoints it, only when its last
@@ -2811,6 +2875,20 @@ crd_store_update <- function(store_path,
             call. = FALSE)
   }
 
+  # The ragnar that last wrote the store, from its own stamp. A store built
+  # before stamps existed falls back to this session's ragnar, loudly, as the
+  # model does above.
+  ragnar_version <- .crd_ragnar_stamp_read(con)
+  if (is.na(ragnar_version)) {
+    ragnar_version <- .crd_ragnar_session_version()
+    warning(basename(store_path), " records no ragnar version (built before cred stamped one) ",
+            "-- recording ",
+            if (is.na(ragnar_version)) "none, since ragnar is not installed here" else
+              paste0("this session's ragnar ", ragnar_version, ", which may not be the one that built it"),
+            ". Rebuilding or updating the store with crd_store_build() or crd_store_update() stamps it.",
+            call. = FALSE)
+  }
+
   git <- .crd_git_provenance(dirname(store_path))
 
   list(
@@ -2818,6 +2896,8 @@ crd_store_update <- function(store_path,
     chunks          = count_rows("chunks"),
     embedding_size  = size,
     embedding_model = model,
+    ragnar_version  = ragnar_version,
+    store_schema    = .crd_store_schema(con),
     store_name      = label,
     bytes           = unname(file.size(store_path)),
     md5             = tolower(unname(tools::md5sum(store_path))),
@@ -2950,6 +3030,15 @@ crd_store_update <- function(store_path,
 #' so. Removing the window entirely means content-addressed keys
 #' (`<name>-<md5>.duckdb`), which is a change to the shared bucket layout and
 #' belongs with the infrastructure rather than here.
+#'
+#' Each entry describes the store from the file itself: its counts, its
+#' embedding size and model, `ragnar_version` (the ragnar that last built or
+#' updated it, from the stamp [crd_store_build()] and [crd_store_update()]
+#' write into the store) and `store_schema` (`"0.4.0"` or `"pre-0.4.0"`: ragnar
+#' 0.4.0 upgrades an older store's schema when it opens it read-write, and
+#' ragnar 0.3.x cannot ingest into an upgraded one). A store built before the
+#' stamp existed is recorded with this session's ragnar, with a warning saying
+#' so, or with none where ragnar is not installed.
 #'
 #' Building the store is [crd_store_build()]; reading it back is
 #' [crd_store_connect()]. Bucket policy, IAM and retention are infrastructure

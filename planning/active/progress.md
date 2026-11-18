@@ -17,3 +17,11 @@
   test-store.R 57 pass, test-store-build.R 80 pass. Mutations: lowering the floor constant and
   removing the check each fail one test (patching both the namespace and `package:cred`, since
   `load_all()` attaches copies the tests resolve against).
+- Phase 3 done: `cred_ragnar` stamp written by build and update; `.crd_store_describe()` records
+  `ragnar_version` (stamp, else session with a warning, else NA) and `store_schema`. Pre-0.4.0
+  fixture `local_pre040_store()` added to helper-store.R. push 82, update 95, store 57 pass;
+  a no-op stamp write fails 3 tests.
+- Found while building the fixture: ragnar 0.4.0's upgrade recreates the HNSW indexes without
+  their metric, so cosine and inner-product queries lose the index until
+  `ragnar_store_build_index()`. Recorded in research and findings, with an upstream draft (not
+  posted).

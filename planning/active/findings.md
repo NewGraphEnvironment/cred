@@ -92,6 +92,40 @@ dbDisconnect(con, shutdown = TRUE)
 cat("size", file.size(src), "->", file.size(dst), "\n")
 ```
 
+### HNSW metrics lost in 0.4.0's upgrade (found 2026-11-18 while building the Phase 4 fixture)
+
+`duckdb_indexes().sql` shows `CREATE INDEX store_hnsw_cosine_index ON embeddings USING HNSW (embedding);`
+for every index, with no `WITH (metric = ...)`, and `upgrade_v2_store()` recreates them from it. On
+a pine copy, `EXPLAIN ... ORDER BY <fn>(embedding, <constant FLOAT[768]>) LIMIT 5` used an HNSW scan:
+before the upgrade for cosine / negative inner product / L2 = TRUE TRUE TRUE; after it, FALSE FALSE
+TRUE; after `ragnar_store_build_index()`, TRUE TRUE TRUE again. (A first probe ordering by a subquery
+could not use any index and so separated nothing.) Probe:
+
+```r
+suppressPackageStartupMessages(library(ragnar)); f <- commandArgs(TRUE)[1]
+lit <- paste0("[", paste(rep("0.036", 768), collapse = ","), "]::FLOAT[768]")
+plan <- function(fn) { s <- ragnar_store_connect(f, read_only = TRUE); on.exit(DBI::dbDisconnect(s@con, shutdown = TRUE))
+  p <- DBI::dbGetQuery(s@con, sprintf("EXPLAIN SELECT chunk_id FROM embeddings ORDER BY %s(embedding, %s) LIMIT 5", fn, lit)); any(grepl("HNSW", p[[2]])) }
+fns <- c("array_cosine_distance", "array_negative_inner_product", "array_distance")
+cat("before:", setNames(sapply(fns, plan), fns), "\n")
+s <- ragnar_store_connect(f, read_only = FALSE); DBI::dbDisconnect(s@con, shutdown = TRUE)
+cat("after: ", setNames(sapply(fns, plan), fns), "\n")
+s <- ragnar_store_connect(f, read_only = FALSE); ragnar_store_build_index(s); DBI::dbDisconnect(s@con, shutdown = TRUE)
+cat("after build_index:", setNames(sapply(fns, plan), fns), "\n")
+```
+
+Draft for upstream (tidyverse/ragnar), **not posted**, for the owner to approve. It goes through a
+fork issue first, as the upstream rules in CLAUDE.md say:
+
+> Thank you for 0.4.0. When `ragnar_store_connect(read_only = FALSE)` upgrades a v2 store made before
+> 0.4.0, `upgrade_v2_store()` recreates the HNSW indexes from `duckdb_indexes().sql`. On duckdb 1.5.6
+> that column omits the `WITH (metric = ...)` clause, so the cosine and inner-product indexes come
+> back as L2 indexes. Retrieval still returns the same results, by a full scan. Reprex: on a store
+> built with 0.3.1, `EXPLAIN` of an `array_cosine_distance` top-k against a constant vector shows an
+> HNSW scan before a read-write connect and not after it; `ragnar_store_build_index()` restores it.
+> One option might be to rebuild the indexes with `ragnar_store_build_index()` at the end of the
+> upgrade. Happy to send a pull request if that would help. This was found with Claude Code's help.
+
 ## Errors Encountered
 
 | Error | Resolution |

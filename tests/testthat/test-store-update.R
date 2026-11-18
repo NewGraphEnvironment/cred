@@ -202,6 +202,24 @@ test_that("an update holds what a fresh build from the same arguments holds", {
   expect_false(any(grepl("[.]updating-", list.files(world$root))))
 })
 
+test_that("a build stamps the ragnar that wrote the store, and an update that changes it restamps it", {
+  world <- local_update_world()
+  path <- build(world, c("keyA", "keyB"))
+  stamp <- function() {
+    con <- DBI::dbConnect(duckdb::duckdb(), path, read_only = TRUE)
+    on.exit(DBI::dbDisconnect(con, shutdown = TRUE))
+    .crd_ragnar_stamp_read(con)
+  }
+  expect_identical(stamp(), as.character(getNamespaceVersion("ragnar")))
+
+  local_mocked_bindings(.crd_ragnar_version = function() package_version("9.9.9"))
+  update(path, c("keyA", "keyB"))
+  # Nothing changed, so the store, stamp included, is the one the build wrote.
+  expect_identical(stamp(), as.character(getNamespaceVersion("ragnar")))
+  update(path, c("keyA", "keyB", "keyC"))
+  expect_identical(stamp(), "9.9.9")
+})
+
 test_that("an update ingests a changed file again, and an unchanged one never", {
   world <- local_update_world()
   path <- build(world, c("keyA", "keyB"))

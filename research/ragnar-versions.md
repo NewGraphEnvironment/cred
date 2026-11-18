@@ -40,6 +40,14 @@ Two stores built by ragnar 0.3.x with `nomic-embed-text` were copied and opened 
   upgraded store under 0.4.0 changes nothing again.
 - Retrieval after the upgrade returns the same hybrid chunks, and the same BM25 chunks and scores, as
   before it. HNSW recall loss would show here rather than on toy stores, and none did.
+- **The upgrade leaves only the L2 HNSW index usable.** `upgrade_v2_store()` recreates the indexes
+  from `duckdb_indexes().sql`, which omits each index's `WITH (metric = ...)`, so all three come back
+  as L2 indexes under their old names. Before the upgrade, `EXPLAIN` of an `ORDER BY` on
+  `array_cosine_distance`, `array_negative_inner_product` and `array_distance` against a constant
+  vector uses an HNSW scan for all three; after it, only for `array_distance`. Cosine and
+  inner-product queries, cosine being ragnar's default, fall back to a full scan: the same answers,
+  more slowly on a large store. `ragnar_store_build_index()` restores all three. This is a ragnar
+  defect, not a cred one.
 - `COPY FROM DATABASE` into a fresh file brings an upgraded store back to 27.8 MB (smaller than the
   original), with its three HNSW indexes, and the copy retrieves.
 
@@ -66,7 +74,8 @@ and ragnar, not the store.
   matches the manifest's md5: the next verified connect downloads the store again. Under 0.3.x the
   same open left the file as it was, so this is new with 0.4.0.
 - `crd_store_update()` opens its working copy read-write, so a pre-0.4.0 store comes out of an update
-  in 0.4.0 format. When the update changes nothing, the copy is discarded and the store keeps its
+  in 0.4.0 format. Every update that changes something rebuilds the index, so it also restores the
+  HNSW metrics the upgrade loses. A bare `crd_store_connect(read_only = FALSE)` does not. When the update changes nothing, the copy is discarded and the store keeps its
   old format.
 - cred's two-statement delete works under both formats. Under the 0.4.0 floor the working copy is
   always upgraded before the deletes run, so one transaction would work too, and no test can tell

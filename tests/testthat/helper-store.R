@@ -356,3 +356,72 @@ local_reset_fallback_warnings <- function(store, env = parent.frame()) {
              "riparian", "bankfull", "width", "beaver", "wetland", "coho", "channel")
   withr::with_seed(seed, paste(sample(vocab, n, replace = TRUE), collapse = " "))
 }
+
+# --- A store in the schema ragnar wrote before 0.4.0 (#43) -----------------
+#
+# ragnar 0.4.0 upgrades such a store in place on a read-write connect (columns
+# added to `documents`, the foreign key from `embeddings` dropped), and cred's
+# floor means no ragnar that writes the old schema is installed. So the fixture
+# is built with the installed ragnar and taken back to the old schema by hand:
+# the three columns dropped (all three: the upgrade tests for `content_hash`
+# alone and then adds every one, so a fixture keeping any of them fails the
+# upgrade), `embeddings` recreated with ragnar 0.3.0's statement verbatim,
+# foreign key included, and the HNSW indexes recreated from their own SQL.
+#
+# Never cached or shared: one read-write open upgrades it for every later
+# reader. Each call returns a fresh file.
+local_pre040_store <- function(env = parent.frame(), n_docs = 3L) {
+  skip_if_not_installed("ragnar", "0.4.0")
+  skip_if_not_installed("duckdb")
+  path <- withr::local_tempfile(fileext = ".duckdb", .local_envir = env)
+  store <- ragnar::ragnar_store_create(path, embed = .crd_test_embed, version = 2)
+  for (i in seq_len(n_docs)) {
+    doc <- ragnar::MarkdownDocument(
+      paste(.crd_test_prose(800L, i), sprintf("zzzold%02d", i)),
+      origin = file.path(tempdir(), "storage", sprintf("OLDKEY%02d", i), "doc.pdf")
+    )
+    ragnar::ragnar_store_insert(store, ragnar::markdown_chunk(doc))
+  }
+  ragnar::ragnar_store_build_index(store)
+  con <- store@con
+  hnsw <- DBI::dbGetQuery(con, "SELECT sql FROM duckdb_indexes()
+                                WHERE table_name = 'embeddings' AND sql ILIKE '%USING HNSW%'")$sql
+  emb_type <- DBI::dbGetQuery(con, "SELECT data_type FROM information_schema.columns
+                                    WHERE table_name = 'embeddings' AND column_name = 'embedding'")$data_type
+  for (col in c("last_modified", "content_hash", "ingested_at")) {
+    DBI::dbExecute(con, paste("ALTER TABLE documents DROP COLUMN", col))
+  }
+  DBI::dbExecute(con, paste0(
+    "CREATE TABLE embeddings_old (
+      doc_id INTEGER NOT NULL,
+      FOREIGN KEY (doc_id) REFERENCES documents (doc_id),
+      chunk_id INTEGER DEFAULT nextval('chunk_id_seq'),
+      start INTEGER,
+      \"end\" INTEGER,
+      PRIMARY KEY (doc_id, start, \"end\"),
+      context VARCHAR,
+      embedding ", emb_type, ")"
+  ))
+  DBI::dbExecute(con, "INSERT INTO embeddings_old SELECT * FROM embeddings")
+  DBI::dbExecute(con, "DROP TABLE embeddings")
+  DBI::dbExecute(con, "ALTER TABLE embeddings_old RENAME TO embeddings")
+  DBI::dbExecute(con, "SET hnsw_enable_experimental_persistence = true")
+  for (q in hnsw) DBI::dbExecute(con, q)
+  DBI::dbExecute(con, "CHECKPOINT")
+  DBI::dbDisconnect(con, shutdown = TRUE)
+  path
+}
+
+# What a store's schema says about which ragnar wrote it, read without ragnar
+# (whose read-write connect would change the answer).
+.crd_test_schema <- function(path) {
+  con <- DBI::dbConnect(duckdb::duckdb(), path, read_only = TRUE)
+  on.exit(DBI::dbDisconnect(con, shutdown = TRUE))
+  list(
+    content_hash = "content_hash" %in% DBI::dbListFields(con, "documents"),
+    fk = DBI::dbGetQuery(con, "SELECT COUNT(*) AS n FROM duckdb_constraints()
+                               WHERE table_name = 'embeddings' AND constraint_type = 'FOREIGN KEY'")$n,
+    hnsw = DBI::dbGetQuery(con, "SELECT COUNT(*) AS n FROM duckdb_indexes()
+                                 WHERE table_name = 'embeddings' AND sql ILIKE '%USING HNSW%'")$n
+  )
+}
