@@ -4,7 +4,7 @@
 `data-raw/ragnar_store_compat.R`, results in `data-raw/logs/ragnar_store_compat/20261118_*`; ragnar
 0.3.0, 0.3.1 and 0.4.0 from CRAN and a 0.3.0.9000 development install (`013253d`), each in its own
 library; duckdb 1.5.6, and 2.0.0 for the index-metric check; R 4.5.2, macOS; ragnar 0.4.0's `R/store.R` and `R/store-v2.R`; copies of two
-real stores built before 0.4.0 (28.6 MB and 94.6 MB, `nomic-embed-text`, file headers duckdb 1.4.3), probed under 0.4.0 by hand
+real stores built before 0.4.0 (28.6 MB and 94.6 MB, `nomic-embed-text`; their file headers name duckdb 1.4.3, the version that created the file), probed under 0.4.0 by hand
 (the commands are in the #43 archive's `findings.md`).
 
 ## Supported: CRAN ragnar >= 0.4.0
@@ -43,8 +43,9 @@ Two stores built by ragnar 0.3.x with `nomic-embed-text` were copied and opened 
 - **The upgrade leaves only the L2 HNSW index usable on every store measured.** `upgrade_v2_store()`
   recreates the indexes from `duckdb_indexes().sql`, the SQL duckdb recorded when each index was
   created. duckdb 1.5.x records it without the `WITH (metric = ...)` clause; duckdb 2.0.0 records it
-  with the clause. So an index created under duckdb before 2.0 (measured: 1.4.3, the real stores' version,
-  and 1.5.6; 1.0 to 1.3 untested) comes back as an L2 index under its old name, whichever duckdb runs the
+  with the clause. So an index created under duckdb before 2.0 (seen directly under 1.5.6, and in the real stores,
+  whose recorded SQL has no metric; the duckdb that made their indexes is not recorded, and 1.0 to
+  1.4 were not tested as index creators) comes back as an L2 index under its old name, whichever duckdb runs the
   upgrade. A pine copy upgraded under duckdb 2.0.0 lost the metric exactly as under 1.5.6, and grew
   to the same 52.7 MB. Only indexes created under duckdb 2.0 survive: this is why the regression test,
   whose fixture creates its indexes under whatever duckdb is installed, passed on CI (duckdb 2.0.0)

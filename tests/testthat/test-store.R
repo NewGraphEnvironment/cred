@@ -286,9 +286,9 @@ test_that("a read-only connect and search leave a pre-0.4.0 store as it was", {
 
 test_that("a read-write connect warns before ragnar upgrades a pre-0.4.0 store, and only then", {
   path <- local_pre040_store()
-  # The real pre-0.4.0 stores we checked had their indexes made under duckdb
-  # 1.4.3, whose record lacks the metric; this fixture's are made under the
-  # installed duckdb.
+  # The real pre-0.4.0 stores checked record their indexes without the metric,
+  # as duckdb 1.5.x does; this fixture's are made under the installed duckdb,
+  # and duckdb 2.0 records the metric.
   recorded_metric <- .crd_test_index_sql_has_metric(path)
   expect_warning(
     store <- suppressMessages(crd_store_connect(path, verify = FALSE, read_only = FALSE, check_model = FALSE)),

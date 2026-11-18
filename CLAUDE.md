@@ -353,8 +353,8 @@ Shipped: [#22](https://github.com/NewGraphEnvironment/cred/issues/22) ragnar ret
   store, but ragnar 0.4.0 **upgrades a pre-0.4.0 store in place on any read-write connect**, even
   one that writes nothing: three columns added to `documents`, the foreign key dropped, the file
   about 1.85x larger, the md5 changed, and the HNSW indexes recreated from the SQL duckdb recorded
-  at creation, which **lacks the metric for an index made under duckdb before 2.0** (measured on 1.4.3
-  and 1.5.6, which covers every real pre-0.4.0 store we checked; one built under duckdb 2.0 would keep it), so cosine queries scan until `ragnar_store_build_index()`. ragnar 0.3.x cannot ingest into an
+  at creation, which **lacks the metric when duckdb before 2.0 made the index** (seen in 1.5.6's record and in the
+  real pre-0.4.0 stores' records; duckdb 2.0 records it, so an index made under 2.0 keeps it), so cosine queries scan until `ragnar_store_build_index()`. ragnar 0.3.x cannot ingest into an
   upgraded store. So `crd_store_connect(read_only = FALSE)` warns first
   (`cred_store_upgrade`), `crd_store_update()` (which rebuilds the index on every copy it keeps, a record-only update included)
   says so in its help, and the manifest records `ragnar_version` (stamped into the store's own

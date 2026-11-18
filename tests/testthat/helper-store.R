@@ -389,7 +389,10 @@ local_pre040_store <- function(env = parent.frame(), n_docs = 3L) {
 
 # Take a store written by ragnar >= 0.4.0 back to the older schema, in place.
 # Also drops cred's ragnar stamp, which no store of that age carries.
-.crd_test_to_pre040 <- function(path) {
+# `metric = FALSE` makes the HNSW indexes without their metric, the state an
+# index made under duckdb before 2.0 is in once ragnar 0.4.0's upgrade has
+# rebuilt it, whatever duckdb is installed.
+.crd_test_to_pre040 <- function(path, metric = TRUE) {
   con <- DBI::dbConnect(duckdb::duckdb(), path)
   on.exit(DBI::dbDisconnect(con, shutdown = TRUE))
   DBI::dbExecute(con, "INSTALL vss; LOAD vss")
@@ -423,8 +426,9 @@ local_pre040_store <- function(env = parent.frame(), n_docs = 3L) {
   # created the index (.crd_test_index_sql_has_metric()).
   DBI::dbExecute(con, "SET hnsw_enable_experimental_persistence = true")
   for (m in c(cosine = "cosine", ip = "ip", l2sq = "l2sq")) {
+    with <- if (metric) sprintf(" WITH (metric = '%s')", m) else ""
     DBI::dbExecute(con, sprintf(
-      "CREATE INDEX store_hnsw_%s_index ON embeddings USING HNSW (embedding) WITH (metric = '%s')", m, m
+      "CREATE INDEX store_hnsw_%s_index ON embeddings USING HNSW (embedding)%s", m, with
     ))
   }
   DBI::dbExecute(con, "CHECKPOINT")
