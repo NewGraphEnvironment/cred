@@ -2961,7 +2961,7 @@ crd_store_update <- function(store_path,
             } else {
               paste0("this session's ragnar ", session, ", which may not be the one that built it")
             },
-            ". Rebuilding or updating the store with crd_store_build() or crd_store_update() stamps it.",
+            ". A rebuild with crd_store_build(), or a crd_store_update() that changes the store, stamps it.",
             call. = FALSE)
   }
 
