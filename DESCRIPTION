@@ -23,15 +23,14 @@ Suggests:
     DT,
     duckdb,
     knitr,
-    ragnar,
+    ragnar (>= 0.4.0),
     rbbt,
     rmarkdown,
     shiny,
     testthat (>= 3.2.0),
     withr
 Remotes:
-    paleolimbot/rbbt,
-    tidyverse/ragnar
+    paleolimbot/rbbt
 Config/DOI: 10.5281/zenodo.23254040
 Config/testthat/edition: 3
 VignetteBuilder: knitr

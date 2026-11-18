@@ -96,6 +96,35 @@ test_that(".crd_need names every missing package and how to install it", {
   expect_false(grepl("stats", sub(".*pak::pak", "", msg), fixed = TRUE))
 })
 
+test_that(".crd_need refuses a ragnar older than the supported floor, naming both versions", {
+  skip_if_not_installed("ragnar")
+  # A literal below the floor, not one computed from .crd_ragnar_min: lowering
+  # the constant must turn this test red (#43).
+  local_mocked_bindings(.crd_ragnar_version = function() package_version("0.3.1"))
+  err <- expect_error(.crd_need(c("ragnar", "DBI")), class = "cred_ragnar_too_old")
+  msg <- conditionMessage(err)
+  expect_match(msg, "0.3.1", fixed = TRUE)
+  expect_match(msg, "0.4.0", fixed = TRUE)
+  expect_match(msg, "pak::pak('ragnar')", fixed = TRUE)
+})
+
+test_that(".crd_need passes a ragnar at or above the floor, and never checks it unasked", {
+  skip_if_not_installed("ragnar")
+  local_mocked_bindings(.crd_ragnar_version = function() package_version("0.4.0"))
+  expect_null(.crd_need("ragnar"))
+
+  # The floor applies only where ragnar is required: crd_store_push() needs
+  # DBI and duckdb alone, and must work on a machine with an old ragnar.
+  local_mocked_bindings(.crd_ragnar_version = function() stop("must not be read"))
+  expect_null(.crd_need(c("DBI", "duckdb")))
+})
+
+test_that(".crd_ragnar_version reads the loaded namespace, not the DESCRIPTION on disk", {
+  skip_if_not_installed("ragnar")
+  expect_identical(.crd_ragnar_version(), package_version(getNamespaceVersion("ragnar")))
+  expect_identical(.crd_ragnar_min, "0.4.0")
+})
+
 test_that("crd_store_connect(verify = FALSE) refuses to invent a missing store", {
   skip_if_not_installed("ragnar")
   skip_if_not_installed("duckdb")

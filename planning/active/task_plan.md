@@ -63,19 +63,19 @@ What exploration found (ragnar 0.4.0 source and NEWS, read from the `v0.4.0` tag
 
 ## Phase 2: Pin the supported ragnar
 
-- [ ] `DESCRIPTION`: remove `tidyverse/ragnar` from `Remotes:`, change `ragnar` to
+- [x] `DESCRIPTION`: remove `tidyverse/ragnar` from `Remotes:`, change `ragnar` to
       `ragnar (>= 0.4.0)` in `Suggests`.
-- [ ] Test first: calling a store function when the installed ragnar is older than the floor is
+- [x] Test first: calling a store function when the installed ragnar is older than the floor is
       refused with a message giving both versions. The test mocks a cred-side version-reader seam
       (review G8) and hard-codes a version below the floor (AC1).
-- [ ] Give `.crd_need()` (`R/store.R:13`) an optional minimum version and use it for ragnar
+- [x] Give `.crd_need()` (`R/store.R:13`) an optional minimum version and use it for ragnar
       wherever the store functions guard it. Read the version with `getNamespaceVersion()` after
       `requireNamespace()`, not `packageVersion()` (G8). Keep a single constant holding the floor.
-- [ ] Remove the 0.3.0 `error =` branch from `.crd_store_ingest()` and rewrite its roxygen. Say that
+- [x] Remove the 0.3.0 `error =` branch from `.crd_store_ingest()` and rewrite its roxygen. Say that
       0.4.0's path muffles every worker error that carries a path, and that each one surfaces in the
       report's skipped list (G7). Keep the `cred_ingest_skip` class, which `prepare` and its tests
       use. Rewrite the comment on the crashed-worker test (`test-store-build.R` near 363).
-- [ ] Raise the `skip_if_not_installed("ragnar", "0.3.0")` guards in `helper-store.R`,
+- [x] Raise the `skip_if_not_installed("ragnar", "0.3.0")` guards in `helper-store.R`,
       `test-store-build.R` and `test-store-update.R` (G1) to `"0.4.0"`.
 
 ## Phase 3: Record ragnar_version in the manifest, stamped in the store

@@ -77,7 +77,7 @@ covered <- function(chunks) {
 }
 
 test_that("prepare is self-contained, so a mirai worker can run it without cred", {
-  skip_if_not_installed("ragnar", "0.3.0")
+  skip_if_not_installed("ragnar", "0.4.0")
   prepare <- .crd_ingest_prepare(.crd_test_embed_limited(5000L), .crd_test_log())
 
   # A closure whose environment chains to the cred namespace is serialised as a
@@ -90,7 +90,7 @@ test_that("prepare is self-contained, so a mirai worker can run it without cred"
 })
 
 test_that("prepare embeds every chunk when the model takes them all", {
-  skip_if_not_installed("ragnar", "0.3.0")
+  skip_if_not_installed("ragnar", "0.4.0")
   log <- .crd_test_log()
   path <- .crd_test_doc(.crd_test_prose(1200L))
   prepare <- .crd_ingest_prepare(.crd_test_embed_limited(5000L), log,
@@ -105,7 +105,7 @@ test_that("prepare embeds every chunk when the model takes them all", {
 })
 
 test_that("prepare reads with pdftools when the markdown reader fails, and says so", {
-  skip_if_not_installed("ragnar", "0.3.0")
+  skip_if_not_installed("ragnar", "0.4.0")
   log <- .crd_test_log()
   pdf <- system.file("extdata", "storage", "TOYPDF1", "salmon_habitat.pdf", package = "cred")
   expect_true(nzchar(pdf))
@@ -125,7 +125,7 @@ test_that("prepare reads with pdftools when the markdown reader fails, and says 
 })
 
 test_that("prepare splits a chunk the model refuses until each part embeds", {
-  skip_if_not_installed("ragnar", "0.3.0")
+  skip_if_not_installed("ragnar", "0.4.0")
   log <- .crd_test_log()
   # A glyph run inside prose, as the dot-plot figure sat inside ESL's text.
   text <- paste(.crd_test_prose(200L), "\n\n", strrep("•", 1500L), "\n\n",
@@ -153,7 +153,7 @@ test_that("prepare splits a chunk the model refuses until each part embeds", {
 })
 
 test_that("each document's notes go to a file of their own", {
-  skip_if_not_installed("ragnar", "0.3.0")
+  skip_if_not_installed("ragnar", "0.4.0")
   # Parallel workers appending to one shared file splice each other's lines
   # once a document's notes pass 4 KB (more than one write()).
   dir <- .crd_test_log()
@@ -170,7 +170,7 @@ test_that("each document's notes go to a file of their own", {
 })
 
 test_that("prepare keeps a range once when halves of neighbouring chunks coincide", {
-  skip_if_not_installed("ragnar", "0.3.0")
+  skip_if_not_installed("ragnar", "0.4.0")
   skip_if_not_installed("duckdb")
   log <- .crd_test_log()
   # A glyph run several chunks long: markdown_chunk() finds no boundary to snap
@@ -191,7 +191,7 @@ test_that("prepare keeps a range once when halves of neighbouring chunks coincid
 })
 
 test_that("prepare drops and names a part the model still refuses at the floor", {
-  skip_if_not_installed("ragnar", "0.3.0")
+  skip_if_not_installed("ragnar", "0.4.0")
   log <- .crd_test_log()
   text <- paste(.crd_test_prose(300L), "\n\n\u2603\n\n", .crd_test_prose(300L, seed = 2L))
   path <- .crd_test_doc(text)
@@ -219,7 +219,7 @@ test_that("prepare drops and names a part the model still refuses at the floor",
 })
 
 test_that("prepare leaves the chunks unembedded on a failure that is not the input's", {
-  skip_if_not_installed("ragnar", "0.3.0")
+  skip_if_not_installed("ragnar", "0.4.0")
   log <- .crd_test_log()
   path <- .crd_test_doc(.crd_test_prose(600L))
   # Connection refused: Ollama is down, which no split can fix. ragnar then
@@ -238,7 +238,7 @@ test_that("prepare leaves the chunks unembedded on a failure that is not the inp
 })
 
 test_that("prepare retries a busy server itself, as ragnar's workers do not", {
-  skip_if_not_installed("ragnar", "0.3.0")
+  skip_if_not_installed("ragnar", "0.4.0")
   # ragnar sets this in every worker; without a retry there, a 429 or 503 hands
   # the chunks back unsplit to a main-process embed that meets the 400.
   withr::local_options(ragnar.embed.req_retry = FALSE)
@@ -254,7 +254,7 @@ test_that("prepare retries a busy server itself, as ragnar's workers do not", {
 })
 
 test_that("prepare does not split for a 400 that is not about the context length", {
-  skip_if_not_installed("ragnar", "0.3.0")
+  skip_if_not_installed("ragnar", "0.4.0")
   log <- .crd_test_log()
   path <- .crd_test_doc(.crd_test_prose(600L))
   # A malformed request or another provider's refusal: splitting every chunk
@@ -269,7 +269,7 @@ test_that("prepare does not split for a 400 that is not about the context length
 })
 
 test_that("prepare reports no split when it hands the chunks back unsplit", {
-  skip_if_not_installed("ragnar", "0.3.0")
+  skip_if_not_installed("ragnar", "0.4.0")
   log <- .crd_test_log()
   # A refused glyph run first, then, more than ten chunks on, a chunk the
   # service fails on: the split happened in a batch whose result is discarded.
@@ -298,7 +298,7 @@ test_that("prepare reports no split when it hands the chunks back unsplit", {
 })
 
 test_that("prepare skips, with its own class and a note, a document no reader can read", {
-  skip_if_not_installed("ragnar", "0.3.0")
+  skip_if_not_installed("ragnar", "0.4.0")
   log <- .crd_test_log()
   bad <- withr::local_tempfile(fileext = ".pdf")
   writeLines("not a pdf", bad)
@@ -314,7 +314,7 @@ test_that("prepare skips, with its own class and a note, a document no reader ca
 })
 
 test_that("prepare skips a document with no text rather than storing an empty one", {
-  skip_if_not_installed("ragnar", "0.3.0")
+  skip_if_not_installed("ragnar", "0.4.0")
   log <- .crd_test_log()
   path <- .crd_test_doc("   ")
   prepare <- .crd_ingest_prepare(.crd_test_embed_limited(5000L), log,
@@ -333,7 +333,7 @@ local_build_store <- function(embed, env = parent.frame()) {
 }
 
 test_that("an ingest finishes past an unreadable document and names it", {
-  skip_if_not_installed("ragnar", "0.3.0")
+  skip_if_not_installed("ragnar", "0.4.0")
   skip_if_not_installed("duckdb")
   skip_if_not_installed("mirai")
   dir <- withr::local_tempdir()
@@ -356,15 +356,15 @@ test_that("an ingest finishes past an unreadable document and names it", {
   expect_setequal(docs, good)
 })
 
-test_that("an ingest takes ragnar's ragnar_ingest_worker_error warnings too", {
-  skip_if_not_installed("ragnar", "0.3.0")
+test_that("an ingest names a worker that crashed without leaving a note", {
+  skip_if_not_installed("ragnar", "0.4.0")
   skip_if_not_installed("duckdb")
   skip_if_not_installed("rlang")
-  # ragnar's development version (0.3.1.9000, what `Remotes: tidyverse/ragnar`
-  # installs) reports a failed worker as this warning, with a `path` field and
-  # without the worker's own class, so the cred_ingest_skip handler never sees
-  # it. Raised here exactly as ragnar raises it, so the branch is covered
-  # whichever ragnar is installed; CI's R CMD check runs the real one.
+  # ragnar (>= 0.4.0) reports a failed worker as a ragnar_ingest_worker_error
+  # warning with a `path` field. The test above reaches it through real mirai
+  # workers; this one raises it as ragnar does, to reach the one case a real
+  # worker cannot be made to produce on demand: a worker that died before
+  # `prepare` left a note, so ragnar's own message is the only reason there is.
   dir <- withr::local_tempdir()
   good <- .crd_test_doc(.crd_test_prose(800L), dir)
   bad <- file.path(dir, "unreadable.pdf")
@@ -398,7 +398,7 @@ test_that("an ingest takes ragnar's ragnar_ingest_worker_error warnings too", {
 })
 
 test_that("an ingest finishes past a chunk the model refuses whole", {
-  skip_if_not_installed("ragnar", "0.3.0")
+  skip_if_not_installed("ragnar", "0.4.0")
   skip_if_not_installed("duckdb")
   skip_if_not_installed("mirai")
   dir <- withr::local_tempdir()
@@ -427,7 +427,7 @@ test_that("ragnar's progress output is off unless asked for", {
 })
 
 test_that("an ingest still fails whole when the embedding service is down", {
-  skip_if_not_installed("ragnar", "0.3.0")
+  skip_if_not_installed("ragnar", "0.4.0")
   skip_if_not_installed("duckdb")
   skip_if_not_installed("mirai")
   dir <- withr::local_tempdir()
@@ -493,7 +493,7 @@ local_build_mocks <- function(ingest, env = parent.frame()) {
 no_notes <- function() tibble::tibble(origin = character(), kind = character(), detail = character())
 
 test_that("crd_store_build() names a skipped PDF by key and returns only what it ingested", {
-  skip_if_not_installed("ragnar", "0.3.0")
+  skip_if_not_installed("ragnar", "0.4.0")
   skip_if_not_installed("duckdb")
   ingest <- function(paths) {
     list(
@@ -534,7 +534,7 @@ test_that("crd_store_build() names a skipped PDF by key and returns only what it
 })
 
 test_that("crd_store_build() keeps the store when it cannot write the source record", {
-  skip_if_not_installed("ragnar", "0.3.0")
+  skip_if_not_installed("ragnar", "0.4.0")
   skip_if_not_installed("duckdb")
   ingest <- function(paths) {
     list(ingested = paths, skipped = tibble::tibble(origin = character(), reason = character()),
@@ -550,7 +550,7 @@ test_that("crd_store_build() keeps the store when it cannot write the source rec
 })
 
 test_that("crd_store_build() stops and leaves no store when no PDF could be ingested", {
-  skip_if_not_installed("ragnar", "0.3.0")
+  skip_if_not_installed("ragnar", "0.4.0")
   skip_if_not_installed("duckdb")
   ingest <- function(paths) {
     list(

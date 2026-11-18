@@ -64,11 +64,10 @@
 # `tempdir()`. That is deliberate: these tests cover the retrieval frame, not
 # Zotero lookup.
 local_ragnar_store <- function() {
-  # A version floor, not decoration: the fixture uses v2-only API
-  # (`MarkdownDocument`, `markdown_chunk`, `version = 2`) and DESCRIPTION carries
-  # an unpinned `Remotes: tidyverse/ragnar`, so an older install would ERROR
+  # A version floor, not decoration: cred supports ragnar >= 0.4.0 (#43), and
+  # the store functions refuse an older one, so an older install would ERROR
   # every test here rather than skip them.
-  skip_if_not_installed("ragnar", "0.3.0")
+  skip_if_not_installed("ragnar", "0.4.0")
   skip_if_not_installed("duckdb")
 
   if (!is.null(.crd_store_cache$store)) return(.crd_store_cache$store)
@@ -246,7 +245,7 @@ local_ragnar_store_failing <- function(reason = c("connection", "model",
 .crd_named_cache <- new.env(parent = emptyenv())
 
 local_ragnar_store_named <- function() {
-  skip_if_not_installed("ragnar", "0.3.0")
+  skip_if_not_installed("ragnar", "0.4.0")
   skip_if_not_installed("duckdb")
   if (!is.null(.crd_named_cache$store)) return(.crd_named_cache$store)
 

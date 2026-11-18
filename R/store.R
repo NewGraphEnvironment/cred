@@ -7,6 +7,12 @@
 #' so that users who only run the audit workflow do not pay for a DuckDB
 #' install.
 #'
+#' Where `ragnar` is required, it must also be at least [.crd_ragnar_min]:
+#' cred is tested against that release, and older ones report a failed ingest
+#' worker differently and cannot ingest into a store ragnar 0.4.0 has upgraded
+#' (`research/ragnar-versions.md`). An older ragnar is refused with a
+#' `cred_ragnar_too_old` error naming both versions.
+#'
 #' @param pkg `character` vector of package names.
 #' @return `NULL`, invisibly. Called for its side effect of erroring.
 #' @noRd
@@ -17,7 +23,38 @@
          "\n  Install with: pak::pak(c(", paste0("'", missing, "'", collapse = ", "), "))",
          call. = FALSE)
   }
+  if ("ragnar" %in% pkg) {
+    have <- .crd_ragnar_version()
+    if (have < .crd_ragnar_min) {
+      rlang::abort(
+        paste0(
+          "cred needs ragnar >= ", .crd_ragnar_min, "; ragnar ", have, " is loaded.\n",
+          "  Install with: pak::pak('ragnar'), then restart R."
+        ),
+        class = "cred_ragnar_too_old"
+      )
+    }
+  }
   invisible(NULL)
+}
+
+#' The oldest ragnar cred supports
+#'
+#' One constant for the check in [.crd_need()] and its message, and the same
+#' floor as `Suggests: ragnar (>= ...)` in `DESCRIPTION` (#43).
+#' @noRd
+.crd_ragnar_min <- "0.4.0"
+
+#' The ragnar this session is running
+#'
+#' The loaded namespace's version, not `packageVersion()`, which reads the
+#' `DESCRIPTION` on disk: after an upgrade on disk, a session that already
+#' loaded the old ragnar is still running the old code. A seam, so tests can
+#' stand in an older version.
+#' @return A `package_version`.
+#' @noRd
+.crd_ragnar_version <- function() {
+  package_version(getNamespaceVersion("ragnar"))
 }
 
 #' Resolve the evidence-store source location
@@ -1865,22 +1902,18 @@ crd_search <- function(store, query, top_k = 5L,
 #' with the store's own `@embed` so no chunk can be embedded by a different
 #' model than the store records.
 #'
-#' How a document that failed in a worker comes back depends on ragnar's
-#' version, and both are handled, because `Remotes: tidyverse/ragnar` installs
-#' the development version while a released one may be what is installed:
+#' ragnar (>= 0.4.0) reports a document that failed in a worker as a
+#' `ragnar_ingest_worker_error` warning with a `path` field; the worker's own
+#' condition class does not survive. Every such warning that carries a path is
+#' muffled and kept by `path`, whatever failed, so a failure shows up as an
+#' entry in `skipped` (and the build's "Skipped" warning) rather than as
+#' ragnar's warning. The reason is `prepare`'s note where it left one
+#' (`cred_ingest_skip`, a fallback that also failed) and ragnar's message where
+#' it did not (a worker that crashed). The `documents` table, not the
+#' conditions, decides what was ingested.
 #'
-#' - **ragnar 0.3.0** re-raises the worker's error with `warning(cond)` but
-#'   keeps its class, so it reaches `error` calling handlers, never `warning`
-#'   ones, and `muffleWarning` is the restart `warning()` set up for it. Only
-#'   `cred_ingest_skip` is muffled; its reason is already in the notes. Any
-#'   other worker failure prints as ragnar raised it.
-#' - **ragnar 0.3.1.9000** raises a `ragnar_ingest_worker_error` warning with
-#'   a `path` field, and the worker's own class does not survive. Each is
-#'   muffled and kept by `path`: `prepare`'s note gives the reason where it
-#'   left one, and ragnar's message where it did not (a worker that crashed).
-#'
-#' Either way the `documents` table, not the conditions, decides what was
-#' ingested.
+#' Releases before 0.4.0 re-raised the worker's error with its class instead,
+#' which needed a second handler; cred no longer supports them (#43).
 #'
 #' @param store A `DuckDBRagnarStore` open for writing.
 #' @param paths `character` document paths.
@@ -1901,11 +1934,6 @@ crd_search <- function(store, query, top_k = 5L,
   worker_errors <- character()
   withCallingHandlers(
     ragnar::ragnar_store_ingest(store, paths, prepare = prepare, progress = progress),
-    error = function(e) {
-      if (inherits(e, "cred_ingest_skip") && !is.null(findRestart("muffleWarning"))) {
-        invokeRestart("muffleWarning")
-      }
-    },
     ragnar_ingest_worker_error = function(w) {
       if (is.character(w$path) && length(w$path) == 1L && !is.na(w$path)) {
         worker_errors[[w$path]] <<- conditionMessage(w)

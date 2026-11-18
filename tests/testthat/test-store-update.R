@@ -69,7 +69,7 @@ test_that("the source record refuses ids and md5s that do not pair up", {
 })
 
 test_that("a store carrying the source record still connects, searches, indexes and describes", {
-  skip_if_not_installed("ragnar", "0.3.0")
+  skip_if_not_installed("ragnar", "0.4.0")
   skip_if_not_installed("duckdb")
   src <- as.character(local_ragnar_store()@location)
   copy <- withr::local_tempfile(fileext = ".duckdb")
@@ -102,7 +102,7 @@ test_that("a store carrying the source record still connects, searches, indexes 
 # so their origin ids are the ones a real library gives.
 
 local_update_world <- function(env = parent.frame()) {
-  skip_if_not_installed("ragnar", "0.3.0")
+  skip_if_not_installed("ragnar", "0.4.0")
   skip_if_not_installed("duckdb")
   skip_if_not_installed("mirai")
   world <- new.env()

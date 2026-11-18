@@ -12,3 +12,8 @@
 - Phase 1 done: scratch libraries for ragnar 0.3.0, 0.3.0.9000, 0.3.1 and 0.4.0; the
   4 x 4 x ro/rw matrix (`data-raw/ragnar_store_compat.R`); probes on two real stores. ragnar 0.4.0
   installed in the main (user) library. Verdict: `research/ragnar-versions.md`.
+- Phase 2 done: `ragnar (>= 0.4.0)` in Suggests, Remote dropped; `.crd_need()` refuses an older
+  ragnar (`cred_ragnar_too_old`) through `.crd_ragnar_version()`; the 0.3.0 handler branch removed.
+  test-store.R 57 pass, test-store-build.R 80 pass. Mutations: lowering the floor constant and
+  removing the check each fail one test (patching both the namespace and `package:cred`, since
+  `load_all()` attaches copies the tests resolve against).
