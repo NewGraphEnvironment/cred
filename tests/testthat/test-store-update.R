@@ -522,7 +522,7 @@ test_that("an update whose only new file cannot be read leaves a pre-0.4.0 store
 
 test_that("an update that changes a pre-0.4.0 store upgrades it, and it holds and scores as a fresh build", {
   world <- local_update_world()
-  # Indexes without a metric, as an index made under duckdb before 2.0 leaves
+  # Indexes without a metric, as an index made under an older duckdb (1.5.6 measured) leaves
   # the upgrade, so the rebuild is observable under any duckdb.
   path <- .crd_test_to_pre040(build(world, c("keyA", "keyB", "keyC")), metric = FALSE)
   expect_false(.crd_test_cosine_indexed(path))
@@ -555,8 +555,8 @@ test_that("an update that only records a pre-0.4.0 store's files rebuilds the in
   # A store built before cred kept a source record, and before ragnar 0.4.0:
   # its first update with nothing changed in Zotero ingests and drops nothing,
   # but still writes the record, so it keeps the copy ragnar upgraded on open.
-  # Its indexes are made without a metric, as an index made under duckdb before
-  # 2.0 comes out of the upgrade: under duckdb 2.0 a fixture with metrics keeps
+  # Its indexes are made without a metric, as an index made under an older duckdb
+  # (1.5.6 measured) comes out of the upgrade: under duckdb 2.0 a fixture with metrics keeps
   # them, and the rebuild under test could be deleted with this still green.
   world <- local_update_world()
   path <- .crd_test_to_pre040(build(world, c("keyA", "keyB")), metric = FALSE)

@@ -441,8 +441,8 @@
 #' connects to it read-write, whether or not anything is then written: the
 #' file grows (about 1.85x on two real stores), its md5 no longer matches the
 #' manifest, so the next verified connect downloads it again, and, where its
-#' HNSW indexes were created by duckdb before 2.0 (as in every such store
-#' measured), its cosine and inner-product indexes go unused until the index is
+#' HNSW indexes were created by an older duckdb (1.5.6 measured, and every real
+#' such store checked), its cosine and inner-product indexes go unused until the index is
 #' rebuilt (`research/ragnar-versions.md`). The schema is read through a read-only
 #' connection closed before ragnar opens the file, since once ragnar's connect
 #' returns the upgrade is already done (#43).
@@ -2652,7 +2652,7 @@ crd_store_update <- function(store_path,
   }
   # A copy kept with nothing ingested or dropped (only the record changed) has
   # had no index rebuild, and ragnar 0.4.0 may have upgraded it on open, which
-  # recreates HNSW indexes made by duckdb before 2.0 without their metric. Every kept copy leaves
+  # recreates HNSW indexes made by an older duckdb (1.5.6 measured) without their metric. Every kept copy leaves
   # with a rebuilt index (#43).
   if (length(to_ingest) == 0L && length(dropped) == 0L) {
     ragnar::ragnar_store_build_index(store)

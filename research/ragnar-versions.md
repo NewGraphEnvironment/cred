@@ -42,7 +42,7 @@ Two stores built by ragnar 0.3.x with `nomic-embed-text` were copied and opened 
   before it. HNSW recall loss would show here rather than on toy stores, and none did.
 - **The upgrade leaves only the L2 HNSW index usable on every store measured.** `upgrade_v2_store()`
   recreates the indexes from `duckdb_indexes().sql`, the SQL duckdb recorded when each index was
-  created. duckdb 1.5.x records it without the `WITH (metric = ...)` clause; duckdb 2.0.0 records it
+  created. duckdb 1.5.6 records it without the `WITH (metric = ...)` clause; duckdb 2.0.0 records it
   with the clause. So an index created under duckdb before 2.0 (seen directly under 1.5.6, and in the real stores,
   whose recorded SQL has no metric; the duckdb that made their indexes is not recorded, and 1.0 to
   1.4 were not tested as index creators) comes back as an L2 index under its old name, whichever duckdb runs the
