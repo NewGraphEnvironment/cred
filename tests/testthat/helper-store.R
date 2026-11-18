@@ -383,16 +383,29 @@ local_pre040_store <- function(env = parent.frame(), n_docs = 3L) {
     ragnar::ragnar_store_insert(store, ragnar::markdown_chunk(doc))
   }
   ragnar::ragnar_store_build_index(store)
-  con <- store@con
-  hnsw <- DBI::dbGetQuery(con, "SELECT sql FROM duckdb_indexes()
-                                WHERE table_name = 'embeddings' AND sql ILIKE '%USING HNSW%'")$sql
+  DBI::dbDisconnect(store@con, shutdown = TRUE)
+  .crd_test_to_pre040(path)
+}
+
+# Take a store written by ragnar >= 0.4.0 back to the older schema, in place.
+# Also drops cred's ragnar stamp, which no store of that age carries.
+.crd_test_to_pre040 <- function(path) {
+  con <- DBI::dbConnect(duckdb::duckdb(), path)
+  on.exit(DBI::dbDisconnect(con, shutdown = TRUE))
+  DBI::dbExecute(con, "INSTALL vss; LOAD vss")
   emb_type <- DBI::dbGetQuery(con, "SELECT data_type FROM information_schema.columns
                                     WHERE table_name = 'embeddings' AND column_name = 'embedding'")$data_type
+  DBI::dbExecute(con, "DROP TABLE IF EXISTS cred_ragnar")
   for (col in c("last_modified", "content_hash", "ingested_at")) {
     DBI::dbExecute(con, paste("ALTER TABLE documents DROP COLUMN", col))
   }
+  # Through a key-less copy, never by renaming a table that holds the foreign
+  # key: duckdb keeps the referencing table's old name on `documents`, and the
+  # next delete from `documents` looks for a table that no longer exists.
+  DBI::dbExecute(con, "CREATE TEMP TABLE embeddings_rows AS SELECT * FROM embeddings")
+  DBI::dbExecute(con, "DROP TABLE embeddings")
   DBI::dbExecute(con, paste0(
-    "CREATE TABLE embeddings_old (
+    "CREATE TABLE embeddings (
       doc_id INTEGER NOT NULL,
       FOREIGN KEY (doc_id) REFERENCES documents (doc_id),
       chunk_id INTEGER DEFAULT nextval('chunk_id_seq'),
@@ -402,14 +415,19 @@ local_pre040_store <- function(env = parent.frame(), n_docs = 3L) {
       context VARCHAR,
       embedding ", emb_type, ")"
   ))
-  DBI::dbExecute(con, "INSERT INTO embeddings_old SELECT * FROM embeddings")
-  DBI::dbExecute(con, "DROP TABLE embeddings")
-  DBI::dbExecute(con, "ALTER TABLE embeddings_old RENAME TO embeddings")
+  DBI::dbExecute(con, "INSERT INTO embeddings SELECT * FROM embeddings_rows")
+  DBI::dbExecute(con, "DROP TABLE embeddings_rows")
+  # With their metrics, as ragnar_store_build_index() creates them. Not from
+  # duckdb_indexes().sql, which omits the metric (the defect in ragnar 0.4.0's
+  # own upgrade that .crd_test_cosine_indexed() looks for).
   DBI::dbExecute(con, "SET hnsw_enable_experimental_persistence = true")
-  for (q in hnsw) DBI::dbExecute(con, q)
+  for (m in c(cosine = "cosine", ip = "ip", l2sq = "l2sq")) {
+    DBI::dbExecute(con, sprintf(
+      "CREATE INDEX store_hnsw_%s_index ON embeddings USING HNSW (embedding) WITH (metric = '%s')", m, m
+    ))
+  }
   DBI::dbExecute(con, "CHECKPOINT")
-  DBI::dbDisconnect(con, shutdown = TRUE)
-  path
+  invisible(path)
 }
 
 # What a store's schema says about which ragnar wrote it, read without ragnar
@@ -424,4 +442,20 @@ local_pre040_store <- function(env = parent.frame(), n_docs = 3L) {
     hnsw = DBI::dbGetQuery(con, "SELECT COUNT(*) AS n FROM duckdb_indexes()
                                  WHERE table_name = 'embeddings' AND sql ILIKE '%USING HNSW%'")$n
   )
+}
+
+# Whether a cosine top-k on the store can use an HNSW index. ragnar 0.4.0's
+# upgrade recreates the indexes without their metric, leaving only L2 usable
+# until the index is rebuilt. Asked with a constant vector: an index is never
+# used for an ORDER BY against a subquery.
+.crd_test_cosine_indexed <- function(path) {
+  con <- DBI::dbConnect(duckdb::duckdb(), path, read_only = TRUE)
+  on.exit(DBI::dbDisconnect(con, shutdown = TRUE))
+  DBI::dbExecute(con, "INSTALL vss; LOAD vss")
+  width <- DBI::dbGetQuery(con, "SELECT embedding_size FROM metadata")$embedding_size[1]
+  v <- paste0("[", paste(rep("0.25", width), collapse = ","), "]::FLOAT[", width, "]")
+  plan <- DBI::dbGetQuery(con, paste0(
+    "EXPLAIN SELECT chunk_id FROM embeddings ORDER BY array_cosine_distance(embedding, ", v, ") LIMIT 3"
+  ))
+  any(grepl("HNSW", unlist(plan)))
 }

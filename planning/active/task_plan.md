@@ -90,13 +90,13 @@ What exploration found (ragnar 0.4.0 source and NEWS, read from the `v0.4.0` tag
 
 ## Phase 4: Act on Phase 1's verdict (compatible for 0.4.0; no format refusal)
 
-- [ ] Document in `?crd_store_update` that under 0.4.0 an update that changes something also upgrades
+- [x] Document in `?crd_store_update` that under 0.4.0 an update that changes something also upgrades
       a pre-0.4.0 store (new columns, foreign key dropped, file about 1.85x larger), and that an
       update that changes nothing leaves it as it was (review B1).
-- [ ] B2: `.crd_store_open()` peeks the schema read-only through DBI, disconnecting before ragnar
+- [x] B2: `.crd_store_open()` peeks the schema read-only through DBI, disconnecting before ragnar
       opens the file, and gives a classed warning when `read_only = FALSE` would upgrade it, then
       opens. Document it in `?crd_store_connect`.
-- [ ] Regression tests on a hand-built pre-0.4.0 fixture (review G6: `embeddings` recreated with
+- [x] Regression tests on a hand-built pre-0.4.0 fixture (review G6: `embeddings` recreated with
       0.3.0's foreign key verbatim, all three new columns absent, a premise test, never cached).
       Cases (AC2): (1) read-only connect plus `crd_search()` leaves the md5 unchanged and the schema
       old; (2) an update with nothing to do leaves the file byte-identical; (3) an update whose only

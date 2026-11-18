@@ -413,6 +413,7 @@
 #' @noRd
 .crd_store_open <- function(local_path, read_only, entry = NULL, name = NULL,
                             check_model = TRUE) {
+  if (!read_only) .crd_warn_upgrade(local_path, name)
   store <- ragnar::ragnar_store_connect(local_path, read_only = read_only)
   if (!isTRUE(check_model)) return(store)
 
@@ -432,6 +433,45 @@
   .crd_check_store_embedding(store, entry = entry, name = name)
   ok <- TRUE
   store
+}
+
+#' Say so before ragnar upgrades a store it is about to open read-write
+#'
+#' ragnar (>= 0.4.0) upgrades a store written in the older schema the moment it
+#' connects to it read-write, whether or not anything is then written: the
+#' file grows (about 1.85x on two real stores), its md5 no longer matches the
+#' manifest, so the next verified connect downloads it again, and its cosine
+#' and inner-product HNSW indexes go unused until the index is rebuilt
+#' (`research/ragnar-versions.md`). The schema is read through a read-only
+#' connection closed before ragnar opens the file, since once ragnar's connect
+#' returns the upgrade is already done (#43).
+#'
+#' @param local_path `character(1)` path to the `.duckdb` store.
+#' @param name `character(1)` store name, for the message, or `NULL`.
+#' @return `NULL`, invisibly. Warns with class `cred_store_upgrade`.
+#' @noRd
+.crd_warn_upgrade <- function(local_path, name = NULL) {
+  peek <- function() {
+    con <- DBI::dbConnect(duckdb::duckdb(), local_path, read_only = TRUE)
+    on.exit(DBI::dbDisconnect(con, shutdown = TRUE))
+    .crd_store_schema(con)
+  }
+  # A file that cannot be read this way is left for ragnar's connect to report.
+  schema <- tryCatch(peek(), error = function(e) NA_character_)
+  if (identical(schema, "pre-0.4.0")) {
+    label <- if (is.null(name)) basename(local_path) else name
+    rlang::warn(
+      paste0(
+        "Opening ", label, " read-write lets ragnar upgrade it in place to the schema ragnar ",
+        "0.4.0 writes, whether or not anything is written. The file grows, no longer matches ",
+        "the manifest's md5 (so the next verified connect downloads it again), and its cosine ",
+        "and inner-product HNSW indexes go unused until ragnar::ragnar_store_build_index(). ",
+        "Open it read-only unless you mean to write to it."
+      ),
+      class = "cred_store_upgrade"
+    )
+  }
+  invisible(NULL)
 }
 
 #' Connect to a ragnar evidence store, pulling and verifying it if needed
@@ -491,6 +531,11 @@
 #'   Default `"data/rag"`. Ignored when `store` is itself a path.
 #' @param profile `character(1)` AWS profile. Default `AWS_PROFILE`.
 #' @param read_only `logical(1)` open the store read-only. Default `TRUE`.
+#'   `FALSE` on a store written before ragnar 0.4.0 lets ragnar upgrade it in
+#'   place, even if nothing is then written: the file grows, stops matching the
+#'   manifest's md5, and loses the use of its cosine and inner-product indexes
+#'   until the index is rebuilt. cred warns (class `cred_store_upgrade`) before
+#'   opening such a store read-write.
 #' @param verify `logical(1)` check the local MD5 against the manifest.
 #'   Default `TRUE`. `FALSE` opens a local store without contacting `source` —
 #'   the only supported way to work without the bucket. It does **not** by
@@ -2387,6 +2432,15 @@ crd_store_build <- function(store_path,
 #' ingest nothing, drop nothing and record nothing new, the store is not
 #' written at all, so a new PDF that cannot be read does not rewrite it.
 #' Close any connection to the store before updating it.
+#'
+#' **A store written before ragnar 0.4.0.** An update that changes it also
+#' upgrades it to the schema ragnar 0.4.0 writes, because ragnar upgrades a
+#' store as it opens it for writing: `documents` gains three columns, and the
+#' file grows (about 1.85x on two real stores). The update rebuilds the index,
+#' so search works as on a fresh build. An update that changes nothing leaves
+#' the store, and its schema, as they were. Once upgraded, a store cannot be
+#' ingested into by ragnar 0.3.x, so anyone sharing it needs cred and ragnar
+#' current.
 #'
 #' **After an update.** The store's md5 no longer matches the manifest, so
 #' [crd_store_connect()] would replace it with the copy the manifest

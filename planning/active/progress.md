@@ -25,3 +25,9 @@
   their metric, so cosine and inner-product queries lose the index until
   `ragnar_store_build_index()`. Recorded in research and findings, with an upstream draft (not
   posted).
+- Phase 4 done: `.crd_warn_upgrade()` warns (`cred_store_upgrade`) before a read-write open of a
+  pre-0.4.0 store; `?crd_store_connect` and `?crd_store_update` say what the upgrade does. AC2's
+  five cases tested on the hand-built fixture (store 69, update 110, push 82 pass); removing the
+  warning fails its test. Two fixture defects found and fixed on the way: indexes recreated from
+  `duckdb_indexes().sql` had no metric, and renaming a table that holds a foreign key leaves
+  duckdb's reverse reference on the old name.

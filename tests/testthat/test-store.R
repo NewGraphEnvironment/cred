@@ -261,3 +261,45 @@ test_that(".crd_aws shell-quotes its arguments", {
   expect_length(out, 1L)
   expect_identical(out, payload)
 })
+
+# ---- a store written before ragnar 0.4.0 (#43) -----------------------------
+
+test_that("the pre-0.4.0 fixture is in the old schema, with the old indexes", {
+  path <- local_pre040_store()
+  got <- .crd_test_schema(path)
+  expect_false(got$content_hash)
+  expect_identical(got$fk, 1)
+  expect_identical(got$hnsw, 3)
+  expect_true(.crd_test_cosine_indexed(path))
+})
+
+test_that("a read-only connect and search leave a pre-0.4.0 store as it was", {
+  path <- local_pre040_store()
+  before <- tools::md5sum(path)
+  store <- expect_no_warning(suppressMessages(crd_store_connect(path, verify = FALSE, check_model = FALSE)))
+  hits <- crd_search(store, .crd_test_query(), top_k = 3L)
+  DBI::dbDisconnect(store@con, shutdown = TRUE)
+  expect_gt(nrow(hits), 0L)
+  expect_identical(tools::md5sum(path), before)
+  expect_false(.crd_test_schema(path)$content_hash)
+})
+
+test_that("a read-write connect warns before ragnar upgrades a pre-0.4.0 store, and only then", {
+  path <- local_pre040_store()
+  expect_warning(
+    store <- suppressMessages(crd_store_connect(path, verify = FALSE, read_only = FALSE, check_model = FALSE)),
+    class = "cred_store_upgrade"
+  )
+  DBI::dbDisconnect(store@con, shutdown = TRUE)
+  # The warning describes what ragnar then did. The second assertion pins a
+  # ragnar 0.4.0 defect the warning names: if it goes red, ragnar's upgrade now
+  # keeps the index metrics, and the index clause comes out of the warning.
+  expect_true(.crd_test_schema(path)$content_hash)
+  expect_false(.crd_test_cosine_indexed(path))
+
+  # Already upgraded: nothing left to warn about.
+  store <- expect_no_warning(suppressMessages(
+    crd_store_connect(path, verify = FALSE, read_only = FALSE, check_model = FALSE)
+  ))
+  DBI::dbDisconnect(store@con, shutdown = TRUE)
+})
