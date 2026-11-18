@@ -36,3 +36,17 @@
   "development"; measured claims that name their release (store.R near 425 and 878, CLAUDE.md
   page and fallback bullets) kept as they are. NEWS under `# cred (development version)`, which
   /gh-pr-merge promotes. `devtools::document()` rewrote three man pages; lintr 0.
+- `/code-check branch`, three rounds (reviewer files `review-round1..3.md`):
+  | Round | Findings | Fixed | Accepted | Inside previous fix? |
+  |---|---|---|---|---|
+  | 1 | 2 (record-only update kept an upgraded copy without an index rebuild; CLAUDE.md bullet below the sync marker) | 2 | 0 | n/a |
+  | 2 | 2 (fallback credited a pre-0.4.0 store to a 0.4.0 session; research put the hash skip before `prepare`) | 2 | 0 | n |
+  | 3 | 2 (round 2's fix checked one direction only; a stamp test lacked a duckdb skip) | 2 | 0 | **y** |
+  Ended on enumeration: `.crd_store_describe()` over every stamp x schema x session combination
+  (12 cases, a table-driven test that fails against round 2's version), and `crd_store_update()`'s
+  kept-copy paths: the three rebuild branches (`to_ingest > 0` via ragnar's `finish_ingest()`,
+  checked in 0.4.0's source; `dropped > 0`; neither) cover every kept copy.
+- Upstream: the HNSW metric draft is fork issue NewGraphEnvironment/ragnar#3 (`upstream-draft`,
+  `upstream-held`); nothing sent. Follow-ups filed: cred#49 (progress), #50 (compaction),
+  #51 (`ingest_summary`).
+- Final run on 4b296eb: devtools::test() 965 pass, 0 fail, 2 skips (officer docx, pre-existing); R CMD check 0 errors, the 3 pre-existing WARNINGs, and a NOTE for an unreachable time server; lintr 0.

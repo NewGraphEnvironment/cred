@@ -120,25 +120,25 @@ What exploration found (ragnar 0.4.0 source and NEWS, read from the `v0.4.0` tag
 - [ ] After the tagged release, comment on knowledge#223 that cred supports ragnar 0.4.0, and that
       anyone on cred 0.7.0 or older must update before the first upgraded or rebuilt store is
       pushed (O2, A4).
-- [ ] File a follow-up cred issue: 0.4.0's NEWS says ingest "now prints document origins
+- [x] (#49) File a follow-up cred issue: 0.4.0's NEWS says ingest "now prints document origins
       literally in progress messages". Check whether that is the fix that lets cred turn
       `progress` back on.
-- [ ] File a follow-up cred issue: compact a store after an upgrading update (G4; probe in
+- [x] (#50) File a follow-up cred issue: compact a store after an upgrading update (G4; probe in
       `findings.md`).
 - [ ] Show the owner the upstream draft (findings.md, "HNSW metrics lost"): ragnar 0.4.0's upgrade
       drops the HNSW metrics. Fork issue first; nothing is posted without the owner's word.
-- [ ] File a follow-up cred issue: use 0.4.0's `ingest_summary` in place of the `worker_errors`
+- [x] (#51) File a follow-up cred issue: use 0.4.0's `ingest_summary` in place of the `worker_errors`
       bookkeeping (S1).
 
 ## Validation
 
-- [ ] Tests pass under ragnar 0.4.0 (`devtools::test()`), with no store-test skips caused by the
+- [x] Tests pass under ragnar 0.4.0 (`devtools::test()`), with no store-test skips caused by the
       ragnar version.
-- [ ] Mutation check: lower the floor constant, or remove the version check, and the floor test
+- [x] Mutation check: lower the floor constant, or remove the version check, and the floor test
       fails; remove B2's peek and its test fails.
-- [ ] `lintr::lint_package()` clean; `devtools::document()`; `devtools::check()` locally.
+- [x] `lintr::lint_package()` clean; `devtools::document()`; `devtools::check()` locally.
 - [ ] CI on the PR installs ragnar 0.4.0 from CRAN (confirmed in the setup log) and passes.
-- [ ] `/code-check branch` clean.
+- [x] `/code-check branch` clean.
 - [ ] PR body says the call-time refusal is what meets the issue's "refused with a message naming the
       version gap" for an old ragnar (AC3).
 - [ ] PWF checkboxes match landed work; `/planning-archive`.
