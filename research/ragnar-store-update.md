@@ -19,10 +19,12 @@ decides what to hand ragnar, and hands it only origins the store does not hold.
 
 - ragnar exports no delete. A document is two deletes by `doc_id`: `embeddings`, then `documents`;
   the `chunks` view joins them.
-- **0.3.1's schema has `embeddings.doc_id ... REFERENCES documents(doc_id)`, and duckdb refuses the
-  parent delete in the transaction that deleted the children** (`Violates foreign key constraint
-  because key "doc_id: 1" is still referenced`). Two autocommit statements work. 0.3.1.9000 dropped
-  the key, so a transactional delete passes there and CI (which installs it) cannot catch the defect.
+- **A store built before ragnar 0.4.0 has `embeddings.doc_id ... REFERENCES documents(doc_id)`, and
+  duckdb refuses the parent delete in the transaction that deleted the children** (`Violates foreign
+  key constraint because key "doc_id: 1" is still referenced`). Two autocommit statements work.
+  ragnar 0.4.0 drops the key when it opens such a store read-write, so under cred's 0.4.0 floor the
+  update's copy has no key by the time it deletes. The two statements stay because they are correct
+  either way (`research/ragnar-versions.md`, 2026-11-18).
 - `embeddings` carries HNSW indexes, so deletes go through a connection with `vss` loaded
   (`ragnar_store_connect()` loads it).
 

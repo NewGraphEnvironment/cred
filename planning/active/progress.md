@@ -6,3 +6,9 @@
 - Created branch `43-ragnar-s-development-branch-changes-inge` off origin/main
 - Scaffolded PWF baseline from issue #43 with approved phases
 - Next: start Phase 1
+- Plan review (Plan agent, spawned 16:16Z) delivered; findings and verdicts in `review-plan.md`,
+  folded into `task_plan.md`. Owner answered A0 (stamp `ragnar_version` in the store) and B2 (warn,
+  then open).
+- Phase 1 done: scratch libraries for ragnar 0.3.0, 0.3.0.9000, 0.3.1 and 0.4.0; the
+  4 x 4 x ro/rw matrix (`data-raw/ragnar_store_compat.R`); probes on two real stores. ragnar 0.4.0
+  installed in the main (user) library. Verdict: `research/ragnar-versions.md`.

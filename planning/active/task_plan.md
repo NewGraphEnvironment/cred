@@ -35,20 +35,29 @@ What exploration found (ragnar 0.4.0 source and NEWS, read from the `v0.4.0` tag
 - **The manifest always records `ragnar_version`**, next to `embedding_model`, in every entry
   `crd_store_push()` writes. `.crd_manifest_merge()` keeps older entries as they are.
 
+- **After the plan review (owner, 2026-11-18):** `ragnar_version` is **stamped into the store** at
+  build and update, in a cred-owned table. `crd_store_push()` reads it from there and also records
+  the store's format. An unstamped store falls back to the session's version with a warning, or null
+  when ragnar is not installed (review A0). `crd_store_connect(read_only = FALSE)` on an old-format
+  store **warns, then opens**: the schema is peeked read-only first, and the warning is classed
+  (review B2).
+
 ## Phase 1: Measure store compatibility (before any code change, on main's code)
 
-- [ ] Set up scratch libraries for ragnar 0.3.0 (CRAN archive), 0.3.1 (tag) and 0.4.0 (CRAN), each
-      reached through `R_LIBS`, so mirai workers load the same version. Upgrade the main library's
-      ragnar to 0.4.0, which the floor in Phase 2 requires for local tests.
-- [ ] Write `data-raw/ragnar_store_compat.R`. It builds a store with each ragnar using the offline
-      embedder pattern from `tests/testthat/helper-store.R`, on documents long enough to produce
-      several chunks. It then opens each store under each other version: read-only connect,
-      `ragnar_retrieve()` (hybrid) and BM25, an ingest of one new document, and cred's
-      two-statement delete. It records the schema before and after (`documents` columns, the
-      foreign key, the HNSW indexes) and the md5 after a read-only open.
-- [ ] Check both directions explicitly: pre-0.4.0 store → 0.4.0, read-only and read-write (the
-      upgrade). Then 0.4.0-built or upgraded store → 0.3.x, read-only and ingest.
-- [ ] Record the verdict in a new `research/ragnar-versions.md` (header naming the script and the
+- [x] Set up scratch libraries for ragnar 0.3.0 (CRAN archive), 0.3.1 (CRAN archive), the
+      0.3.0.9000 snapshot this machine had, and 0.4.0 (CRAN), each reached through `R_LIBS`, so
+      mirai workers load the same version. Upgrade the main library's ragnar to 0.4.0, which the
+      floor in Phase 2 requires for local tests.
+- [x] Write `data-raw/ragnar_store_compat.R`: builds an offline store with each ragnar, opens a copy
+      of each under every ragnar, read-only and read-write, and records schema, retrieval, insert,
+      ingest, both delete styles, index rebuild, md5 and a read-only reopen.
+- [x] Check both directions explicitly. Result: every pair reads. 0.4.0 upgrades an old store on a
+      read-write open and can write to it. 0.3.x cannot ingest into a 0.4.0-format store.
+- [x] (review A1-A3, G4) Probe two real old-format stores under 0.4.0: the stored embedder runs
+      against live Ollama, retrieval is unchanged after an upgrade, the first read-write open grows
+      the file about 1.85x and changes the md5 (0.3.x left both unchanged), and
+      `COPY FROM DATABASE` compacts it back with its HNSW indexes.
+- [x] Record the verdict in a new `research/ragnar-versions.md` (header naming the script and the
       versions used) and add a row to `research/README.md`. Also revise the foreign-key paragraph
       in `research/ragnar-store-update.md`: the key is gone once 0.4.0 has upgraded a store.
 
@@ -57,64 +66,77 @@ What exploration found (ragnar 0.4.0 source and NEWS, read from the `v0.4.0` tag
 - [ ] `DESCRIPTION`: remove `tidyverse/ragnar` from `Remotes:`, change `ragnar` to
       `ragnar (>= 0.4.0)` in `Suggests`.
 - [ ] Test first: calling a store function when the installed ragnar is older than the floor is
-      refused with a message giving both versions (mock `utils::packageVersion` or the version
-      reader).
+      refused with a message giving both versions. The test mocks a cred-side version-reader seam
+      (review G8) and hard-codes a version below the floor (AC1).
 - [ ] Give `.crd_need()` (`R/store.R:13`) an optional minimum version and use it for ragnar
-      wherever the store functions guard it. Keep a single constant holding the floor, so the
-      check and the message cannot disagree with each other.
-- [ ] Remove the 0.3.0 `error =` branch from `.crd_store_ingest()` and rewrite its roxygen. The
-      worker-error tests now go through 0.4.0's `ragnar_ingest_worker_error` path only.
-- [ ] Raise the `skip_if_not_installed("ragnar", "0.3.0")` guards in `helper-store.R` and
-      `test-store-build.R` to `"0.4.0"`.
+      wherever the store functions guard it. Read the version with `getNamespaceVersion()` after
+      `requireNamespace()`, not `packageVersion()` (G8). Keep a single constant holding the floor.
+- [ ] Remove the 0.3.0 `error =` branch from `.crd_store_ingest()` and rewrite its roxygen. Say that
+      0.4.0's path muffles every worker error that carries a path, and that each one surfaces in the
+      report's skipped list (G7). Keep the `cred_ingest_skip` class, which `prepare` and its tests
+      use. Rewrite the comment on the crashed-worker test (`test-store-build.R` near 363).
+- [ ] Raise the `skip_if_not_installed("ragnar", "0.3.0")` guards in `helper-store.R`,
+      `test-store-build.R` and `test-store-update.R` (G1) to `"0.4.0"`.
 
-## Phase 3: Record ragnar_version in the manifest
+## Phase 3: Record ragnar_version in the manifest, stamped in the store
 
-- [ ] Test first: `.crd_store_describe()` returns `ragnar_version` (the ragnar installed in the
-      session that describes the store for push). A merge keeps an older entry that lacks the
-      field exactly as it was.
-- [ ] Add the field in `.crd_store_describe()` (`R/store.R:2752`), and document it in
-      `crd_store_push()`'s description of a manifest entry. Its docs say it is the ragnar of the
-      pushing session; when `crd_store_build()` and the push run in one session, that is the
-      ragnar that built the store.
+- [ ] Test first: a store built by `crd_store_build()` carries the stamp, and an update refreshes it;
+      `.crd_store_describe()` returns `ragnar_version` from the stamp and `store_format` from the
+      schema; an unstamped store falls back to the session's ragnar with a warning, and to NA with no
+      error when ragnar is absent; a merge keeps an older entry that lacks the fields exactly as it
+      was.
+- [ ] Implement the stamp (a cred-owned table, written beside `cred_sources`), the read in
+      `.crd_store_describe()` (`R/store.R:2752`), and document both fields in `crd_store_push()`.
 
-## Phase 4: Act on Phase 1's verdict
+## Phase 4: Act on Phase 1's verdict (compatible for 0.4.0; no format refusal)
 
-- [ ] **If the versions are compatible both ways:** no refusal. Document in
-      `?crd_store_connect` and `?crd_store_update` that 0.4.0 upgrades a pre-0.4.0 store's schema
-      on a read-write open, which is why an update's result has a new md5 even when only the
-      upgrade changed.
-- [ ] **If a direction is broken:** `crd_store_connect()` refuses that store, with a message that
-      gives the store's format (the presence of `content_hash`) and the installed ragnar version,
-      and a test covers the refusal. (Under the 0.4.0 floor, the direction that matters is a
-      pre-0.4.0 store opened by 0.4.0.)
-- [ ] Add a regression test for whichever behaviour is measured: build a store with the
-      pre-0.4.0 schema (created by hand, offline), open it with 0.4.0 through
-      `crd_store_connect()` and `crd_store_update()`, and assert the outcome.
+- [ ] Document in `?crd_store_update` that under 0.4.0 an update that changes something also upgrades
+      a pre-0.4.0 store (new columns, foreign key dropped, file about 1.85x larger), and that an
+      update that changes nothing leaves it as it was (review B1).
+- [ ] B2: `.crd_store_open()` peeks the schema read-only through DBI, disconnecting before ragnar
+      opens the file, and gives a classed warning when `read_only = FALSE` would upgrade it, then
+      opens. Document it in `?crd_store_connect`.
+- [ ] Regression tests on a hand-built pre-0.4.0 fixture (review G6: `embeddings` recreated with
+      0.3.0's foreign key verbatim, all three new columns absent, a premise test, never cached).
+      Cases (AC2): (1) read-only connect plus `crd_search()` leaves the md5 unchanged and the schema
+      old; (2) an update with nothing to do leaves the file byte-identical; (3) an update whose only
+      new file cannot be read discards the copy and the store stays old; (4) an update with a real
+      change gives an upgraded store with `cred_sources` intact, no orphans, BM25 scores equal to a
+      fresh build, and working hybrid retrieval; (5) the B2 behaviour.
 
 ## Phase 5: Docs
 
 - [ ] `CLAUDE.md`: rewrite the ragnar-version paragraph under "One unreadable PDF…" (CI and users
-      both run CRAN 0.4.0, one handler) and the 0.3.1 foreign-key note under "An update chooses…".
-      Then grep the sentence `Remotes: tidyverse/ragnar` and every "0.3.1.9000" claim across
-      `R/`, tests, `research/` and `CLAUDE.md`.
-- [ ] `NEWS.md` entry: supported ragnar, the call-time refusal, the manifest field, and the
-      measured store behaviour.
+      both run CRAN 0.4.0, one handler), the 0.3.1 foreign-key note under "An update chooses…"
+      (keep the two statements, with the new rationale, G3), and the `progress` note. Then grep
+      `0\.3\.[01]`, "development" and `Remotes: tidyverse/ragnar` across `R/`, tests, `research/`
+      and `CLAUDE.md` (G2).
+- [ ] `NEWS.md` entry: supported ragnar, the call-time refusal, the manifest field, the measured store
+      behaviour, and the warning that cred 0.7.0 or older with ragnar 0.3.x cannot ingest into a
+      store once it has been upgraded or rebuilt under 0.4.0 (A4).
 
 ## Owed at the end (reported, done after merge)
 
-- [ ] Comment on knowledge#223 that cred now supports ragnar 0.4.0.
+- [ ] After the tagged release, comment on knowledge#223 that cred supports ragnar 0.4.0, and that
+      anyone on cred 0.7.0 or older must update before the first upgraded or rebuilt store is
+      pushed (O2, A4).
 - [ ] File a follow-up cred issue: 0.4.0's NEWS says ingest "now prints document origins
       literally in progress messages". Check whether that is the fix that lets cred turn
       `progress` back on.
+- [ ] File a follow-up cred issue: compact a store after an upgrading update (G4; probe in
+      `findings.md`).
+- [ ] File a follow-up cred issue: use 0.4.0's `ingest_summary` in place of the `worker_errors`
+      bookkeeping (S1).
 
 ## Validation
 
 - [ ] Tests pass under ragnar 0.4.0 (`devtools::test()`), with no store-test skips caused by the
       ragnar version.
-- [ ] Mutation check: put the 0.3.0 handler branch back, and lower the floor constant, and the new
-      tests fail.
+- [ ] Mutation check: lower the floor constant, or remove the version check, and the floor test
+      fails; remove B2's peek and its test fails.
 - [ ] `lintr::lint_package()` clean; `devtools::document()`; `devtools::check()` locally.
 - [ ] CI on the PR installs ragnar 0.4.0 from CRAN (confirmed in the setup log) and passes.
 - [ ] `/code-check branch` clean.
+- [ ] PR body says the call-time refusal is what meets the issue's "refused with a message naming the
+      version gap" for an old ragnar (AC3).
 - [ ] PWF checkboxes match landed work; `/planning-archive`.
-
