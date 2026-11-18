@@ -286,8 +286,9 @@ test_that("a read-only connect and search leave a pre-0.4.0 store as it was", {
 
 test_that("a read-write connect warns before ragnar upgrades a pre-0.4.0 store, and only then", {
   path <- local_pre040_store()
-  # A real pre-0.4.0 store's indexes were made under duckdb 1.5.x, whose record
-  # lacks the metric; this fixture's are made under the installed duckdb.
+  # The real pre-0.4.0 stores we checked had their indexes made under duckdb
+  # 1.4.3, whose record lacks the metric; this fixture's are made under the
+  # installed duckdb.
   recorded_metric <- .crd_test_index_sql_has_metric(path)
   expect_warning(
     store <- suppressMessages(crd_store_connect(path, verify = FALSE, read_only = FALSE, check_model = FALSE)),
@@ -296,7 +297,7 @@ test_that("a read-write connect warns before ragnar upgrades a pre-0.4.0 store, 
   DBI::dbDisconnect(store@con, shutdown = TRUE)
   # The warning describes what ragnar then did. The second assertion pins the
   # ragnar 0.4.0 defect the warning names, where the fixture can reach it
-  # (indexes recorded without their metric, as in every real old store): if it
+  # (indexes recorded without their metric, as in the real old stores checked): if it
   # goes red there, ragnar's upgrade now keeps the metric, and the index clause
   # comes out of the warning.
   expect_true(.crd_test_schema(path)$content_hash)
