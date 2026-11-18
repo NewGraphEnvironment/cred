@@ -2941,21 +2941,21 @@ crd_store_update <- function(store_path,
   # The ragnar that last wrote the store, from its own stamp. A store built
   # before stamps existed falls back to this session's ragnar, loudly, as the
   # model does above -- except where the schema shows the session's ragnar
-  # cannot have written it: only a ragnar before 0.4.0 leaves a store in the
-  # older schema, so a newer session would be recorded against a store it did
-  # not build.
+  # cannot have written it, in either direction: only a ragnar before 0.4.0
+  # leaves a store in the older schema, and only 0.4.0 or later writes the
+  # newer one. A push needs no ragnar floor, so either session can reach this.
   store_schema <- .crd_store_schema(con)
   ragnar_version <- .crd_ragnar_stamp_read(con)
   if (is.na(ragnar_version)) {
     session <- .crd_ragnar_session_version()
-    too_new <- identical(store_schema, "pre-0.4.0") && !is.na(session) &&
-      package_version(session) >= "0.4.0"
-    ragnar_version <- if (too_new) NA_character_ else session
+    contradicts <- !is.na(session) && !is.na(store_schema) &&
+      (identical(store_schema, "pre-0.4.0") != (package_version(session) < "0.4.0"))
+    ragnar_version <- if (contradicts) NA_character_ else session
     warning(basename(store_path), " records no ragnar version (built before cred stamped one) ",
             "-- recording ",
-            if (too_new) {
-              paste0("none: its schema shows a ragnar older than 0.4.0 wrote it, not this session's ",
-                     session)
+            if (contradicts) {
+              paste0("none: its schema (", store_schema, ") cannot have been written by this ",
+                     "session's ragnar ", session)
             } else if (is.na(session)) {
               "none, since ragnar is not installed here"
             } else {
@@ -3115,7 +3115,8 @@ crd_store_update <- function(store_path,
 #' ragnar 0.3.x cannot ingest into an upgraded one). A store built before the
 #' stamp existed is recorded with this session's ragnar, with a warning saying
 #' so, or with none where ragnar is not installed or where the store's schema
-#' shows an older ragnar wrote it.
+#' rules out the session's ragnar (only a ragnar before 0.4.0 writes the older
+#' schema, and only 0.4.0 or later the newer one).
 #'
 #' Building the store is [crd_store_build()]; reading it back is
 #' [crd_store_connect()]. Bucket policy, IAM and retention are infrastructure
