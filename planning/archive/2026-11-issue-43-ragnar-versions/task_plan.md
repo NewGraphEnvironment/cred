@@ -139,6 +139,6 @@ What exploration found (ragnar 0.4.0 source and NEWS, read from the `v0.4.0` tag
 - [x] `lintr::lint_package()` clean; `devtools::document()`; `devtools::check()` locally.
 - [ ] CI on the PR installs ragnar 0.4.0 from CRAN (confirmed in the setup log) and passes.
 - [x] `/code-check branch` clean.
-- [ ] PR body says the call-time refusal is what meets the issue's "refused with a message naming the
+- [x] PR body says the call-time refusal is what meets the issue's "refused with a message naming the
       version gap" for an old ragnar (AC3).
-- [ ] PWF checkboxes match landed work; `/planning-archive`.
+- [x] PWF checkboxes match landed work; `/planning-archive`.
