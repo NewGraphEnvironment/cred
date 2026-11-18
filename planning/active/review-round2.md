@@ -1,0 +1,26 @@
+# Code-check round 2: branch #43 (HEAD a73005c)
+
+## Checklist read
+
+- **code-check-r.md**: read 13 in full: "A `data-raw/` script must load the source tree…", "Tests that silently do not run", "Reproducibility", "A database driver's value is not a base R type…", "Under `R CMD check`, tests run from a temp dir…", "Two repos pinning the same remote at different tags…", "`package_version()` errors on a pre-release version string", "`data.frame()` recycles a scalar against a zero-length column", "A `pkg::` call in a test passes `devtools::test()`…", "`system2(stdout = TRUE)` warns on a non-zero exit…", "duckdb refuses a parent delete in the transaction that deleted its children", "A `function(...)` mock hides arguments…", "`tryCatch()` nests its handlers…". 109 not read.
+- **code-check-shell.md**: none read in full (the diff has no shell; the data-raw script's `system2`/`shQuote` use is covered by the R and mechanism sections). 72 not read.
+- **code-check-spatial.md**: none read (no spatial code). All not read.
+- **code-check.md**: read the prose of all 14 H3s under `## Mechanisms` (table rows skipped). 24 other headings not read.
+
+## What was checked
+
+- Read all of `branch2.diff` and `round1fix.diff`, and in `R/store.R` the whole of `.crd_need`, `.crd_ragnar_version`, `.crd_store_open`, `.crd_warn_upgrade`, `crd_store_connect`, `.crd_store_ingest`, the stamp/schema helpers, `crd_store_build`, `crd_store_update`, `.crd_store_describe` and push's manifest writer.
+- Read ragnar 0.4.0's installed `ragnar_store_ingest`, `do_ingest_remote_work`, `prepare_ingest_paths` and `upgrade_v2_store`. `finish_ingest()` calls `ragnar_store_build_index()` on every path out, including when every document failed. So together with the round-1 fix, every copy `crd_store_update()` keeps has its index rebuilt: ingest, dropped-only and record-only. Worker failures in 0.4.0 always come back as `rlang::warn(class = "ragnar_ingest_worker_error", path =)`, so dropping the 0.3.0 `error =` handler loses nothing.
+- **Restored the round-1 defect in a detached worktree** (removed the record-only `ragnar_store_build_index()`, `load_all()`, `NOT_CRAN=true`): "an update that only records a pre-0.4.0 store's files rebuilds the index the upgrade broke" went red (failed 1, error FALSE), and the other 30 stayed green. The guard fires.
+- HEAD in a worktree: test-store.R 28, test-store-push.R 46, test-store-update.R 31, test-store-build.R 21 tests. No failures, no errors, no skips (ragnar 0.4.0, duckdb 1.5.6).
+- Checked whether a store written by the development ragnar that `Remotes:` used to install (0.3.1.9000 at `06f7c3e`) could hold some of the three new columns and so break 0.4.0's upgrade, which tests only `content_hash`. Its `R/store-v2.R` creates all three, so `.crd_store_schema()` reads such a store as `"0.4.0"` and no upgrade runs. No issue.
+- NA serialization: push writes the manifest with `na = "null"`, so an `NA` `ragnar_version` or `store_schema` lands as JSON `null`.
+
+## Findings
+
+- **[severity: fragile]** R/store.R:2944-2953 (`.crd_store_describe`): the fallback to the session's ragnar records a version the file's own schema shows to be wrong. A store in the pre-0.4.0 schema can only have been written by ragnar < 0.4.0, because 0.4.0 creates stores in the new schema and upgrades an old one on any read-write open. Every such store is unstamped. A pusher on ragnar >= 0.4.0 therefore writes `ragnar_version: "0.4.0"` beside `store_schema: "pre-0.4.0"` into the shared manifest, and the warning says only that it "may not be" the builder. Measured: `.crd_store_describe(local_pre040_store())` returns `ragnar_version "0.4.0"`, `store_schema "pre-0.4.0"`. Today the stores that reach this fallback are mostly the existing real ones, which are all pre-0.4.0, so the manifest's first ragnar values for them would be wrong, and a manifest value outlives the push. The owner chose to fall back to the session in general. This finding is only the case where the code can already tell the value is false: when the schema is `"pre-0.4.0"` and the session's ragnar is >= 0.4.0, record NA (or say plainly that it is not the builder).
+  - **Rule:** code-check.md "A guard that fails toward pass" ; code-check.md "Written data outlives the fix"
+- **[severity: fragile]** research/ragnar-store-update.md:15: "0.3.1.9000 and 0.4.0 skip by mtime or a hash of the prepared Markdown before `prepare`". In 0.4.0 only the mtime skip happens before `prepare` (`prepare_ingest_paths()`). The content-hash comparison is in `do_ingest_remote_work()`, after `prepare(path)` returns (`content_hash <- rlang::hash(as.character(chunks@document))`), and for cred that is after cred's `prepare` has already embedded. The file's conclusion still holds, and the corrected fact supports it. But read as written, the sentence suggests ragnar's hash skip could spare cred an embed, which is the opposite of the section's point. CLAUDE.md:331 makes the same claim without "before `prepare`" and is accurate.
+  - **Rule:** code-check.md "A guard's scope, escape hatches, and remedies"
+
+No bug-severity issue found. The round-1 fix is complete: no kept copy leaves `crd_store_update()` without an index rebuild, and its test fails without it.

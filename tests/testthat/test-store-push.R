@@ -536,10 +536,18 @@ test_that(".crd_store_describe falls back to the session's ragnar, loudly, for a
   expect_identical(got$entry$ragnar_version, NA_character_)
 })
 
-test_that(".crd_store_describe reads a pre-0.4.0 schema as such", {
+test_that(".crd_store_describe reads a pre-0.4.0 schema as such, and never credits it to a newer ragnar", {
   path <- local_pre040_store()
-  entry <- suppressWarnings(.crd_store_describe(path))
+  said <- character()
+  entry <- withCallingHandlers(.crd_store_describe(path), warning = function(w) {
+    said <<- c(said, conditionMessage(w))
+    invokeRestart("muffleWarning")
+  })
   expect_identical(entry$store_schema, "pre-0.4.0")
+  # Only a ragnar before 0.4.0 leaves a store in this schema, so the session's
+  # 0.4.0 is known not to have built it: no version beats a wrong one.
+  expect_identical(entry$ragnar_version, NA_character_)
+  expect_true(any(grepl("older than 0.4.0", said)))
 })
 
 test_that(".crd_manifest_merge keeps an entry written before the ragnar fields exactly as it was", {

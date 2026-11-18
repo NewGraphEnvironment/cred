@@ -2940,14 +2940,27 @@ crd_store_update <- function(store_path,
 
   # The ragnar that last wrote the store, from its own stamp. A store built
   # before stamps existed falls back to this session's ragnar, loudly, as the
-  # model does above.
+  # model does above -- except where the schema shows the session's ragnar
+  # cannot have written it: only a ragnar before 0.4.0 leaves a store in the
+  # older schema, so a newer session would be recorded against a store it did
+  # not build.
+  store_schema <- .crd_store_schema(con)
   ragnar_version <- .crd_ragnar_stamp_read(con)
   if (is.na(ragnar_version)) {
-    ragnar_version <- .crd_ragnar_session_version()
+    session <- .crd_ragnar_session_version()
+    too_new <- identical(store_schema, "pre-0.4.0") && !is.na(session) &&
+      package_version(session) >= "0.4.0"
+    ragnar_version <- if (too_new) NA_character_ else session
     warning(basename(store_path), " records no ragnar version (built before cred stamped one) ",
             "-- recording ",
-            if (is.na(ragnar_version)) "none, since ragnar is not installed here" else
-              paste0("this session's ragnar ", ragnar_version, ", which may not be the one that built it"),
+            if (too_new) {
+              paste0("none: its schema shows a ragnar older than 0.4.0 wrote it, not this session's ",
+                     session)
+            } else if (is.na(session)) {
+              "none, since ragnar is not installed here"
+            } else {
+              paste0("this session's ragnar ", session, ", which may not be the one that built it")
+            },
             ". Rebuilding or updating the store with crd_store_build() or crd_store_update() stamps it.",
             call. = FALSE)
   }
@@ -2960,7 +2973,7 @@ crd_store_update <- function(store_path,
     embedding_size  = size,
     embedding_model = model,
     ragnar_version  = ragnar_version,
-    store_schema    = .crd_store_schema(con),
+    store_schema    = store_schema,
     store_name      = label,
     bytes           = unname(file.size(store_path)),
     md5             = tolower(unname(tools::md5sum(store_path))),
@@ -3101,7 +3114,8 @@ crd_store_update <- function(store_path,
 #' 0.4.0 upgrades an older store's schema when it opens it read-write, and
 #' ragnar 0.3.x cannot ingest into an upgraded one). A store built before the
 #' stamp existed is recorded with this session's ragnar, with a warning saying
-#' so, or with none where ragnar is not installed.
+#' so, or with none where ragnar is not installed or where the store's schema
+#' shows an older ragnar wrote it.
 #'
 #' Building the store is [crd_store_build()]; reading it back is
 #' [crd_store_connect()]. Bucket policy, IAM and retention are infrastructure

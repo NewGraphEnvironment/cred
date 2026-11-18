@@ -19,7 +19,8 @@ every local test failed in CI.
 * The manifest entry `crd_store_push()` writes now records `ragnar_version`, the ragnar that last
   built or updated the store, which `crd_store_build()` and `crd_store_update()` stamp into the
   store, and `store_schema` (`"0.4.0"` or `"pre-0.4.0"`). A store built before the stamp is
-  recorded with the pushing session's ragnar, with a warning.
+  recorded with the pushing session's ragnar, with a warning, unless its schema shows an older
+  ragnar wrote it; then no version is recorded.
 
 # cred 0.7.0
 

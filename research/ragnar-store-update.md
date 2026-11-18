@@ -12,7 +12,7 @@
 (`.crd_ingest_prepare()`) reads, chunks **and embeds** inside `prepare` itself, so an existing origin is
 converted and embedded in full before `ragnar_store_update_v2()` anti-joins its chunks and returns.
 On 0.3.1 that anti-join is also a no-op when every new chunk already exists (a PDF that lost pages
-keeps its old text); 0.3.1.9000 and 0.4.0 skip by mtime or a hash of the prepared Markdown before `prepare`. So cred
+keeps its old text); 0.3.1.9000 and 0.4.0 skip by mtime before `prepare`, and compare a hash of the prepared Markdown only after `prepare` has returned. So cred
 decides what to hand ragnar, and hands it only origins the store does not hold.
 
 ## Deleting a document

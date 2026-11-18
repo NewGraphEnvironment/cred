@@ -82,7 +82,8 @@ write into the store) and \code{store_schema} (\code{"0.4.0"} or \code{"pre-0.4.
 0.4.0 upgrades an older store's schema when it opens it read-write, and
 ragnar 0.3.x cannot ingest into an upgraded one). A store built before the
 stamp existed is recorded with this session's ragnar, with a warning saying
-so, or with none where ragnar is not installed.
+so, or with none where ragnar is not installed or where the store's schema
+shows an older ragnar wrote it.
 
 Building the store is \code{\link[=crd_store_build]{crd_store_build()}}; reading it back is
 \code{\link[=crd_store_connect]{crd_store_connect()}}. Bucket policy, IAM and retention are infrastructure
