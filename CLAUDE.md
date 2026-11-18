@@ -316,21 +316,19 @@ Shipped: [#22](https://github.com/NewGraphEnvironment/cred/issues/22) ragnar ret
   parented on `baseenv()`, and its `embed` is the store's own `@embed`, which ragnar has already
   re-parented to `baseenv()`. The structure test (`topenv()` is `baseenv()`) is the guard. The
   end-to-end test cannot be: under `R CMD check` the workers load the code under test anyway.
-  How a failed document comes back depends on ragnar's version, and `Remotes: tidyverse/ragnar`
-  means CI runs the development one while a machine may have 0.3.0. **0.3.0** re-raises it as
-  `warning(cond)` **with its error class kept**, so it reaches `error =` calling handlers, never
-  `warning =` ones, and is muffled by its own class, `cred_ingest_skip`. **0.3.1.9000** raises
-  a `ragnar_ingest_worker_error` warning with a `path` field and drops the worker's class, so
-  a handler written against one release passes its tests and fails the other's. Both are
-  handled, and the `documents` table, not the conditions, decides what was ingested. Test a
-  change here against both: install the development ragnar into a scratch library and run the
-  tests with `R_LIBS` pointing at it, so the mirai workers load it too.
+  ragnar (>= 0.4.0) reports a failed document as a `ragnar_ingest_worker_error` warning with a
+  `path` field and drops the worker's own class; `.crd_store_ingest()` muffles each one and
+  keeps it by path, and the `documents` table, not the conditions, decides what was ingested.
+  Releases before 0.4.0 re-raised the worker's error with its class kept, which needed a second
+  handler that the 0.4.0 floor retired (#43). When ragnar changes again, test against both
+  releases: install the other one into a scratch library and run the tests with `R_LIBS`
+  pointing at it, so the mirai workers load it too.
 - **An update chooses what ragnar reads; ragnar's own skip saves nothing here.**
   `ragnar_store_update_v2()` skips an unchanged document only at the database step, after
   `prepare` has run, and cred's `prepare` reads **and embeds** in the worker. So
   `crd_store_update()` hands ragnar only origins it does not hold: a replaced document is
   deleted first, then read again as new. That also keeps ragnar's version-specific skip rules
-  (0.3.1.9000 skips by mtime) out of the decision. A changed file is seen by the md5 cred
+  (0.4.0 skips by mtime or a hash of the prepared Markdown) out of the decision. A changed file is seen by the md5 cred
   records in its own `cred_sources` table, keyed by origin id: the `storage/<KEY>/<file>` tail
   of an origin, read from the path text (a stored origin carries another machine's prefix),
   else the whole path. An entry missing from the record is recorded as the file is now, and
@@ -341,15 +339,33 @@ Shipped: [#22](https://github.com/NewGraphEnvironment/cred/issues/22) ragnar ret
   **The update is all-or-nothing because it works on a copy**, renamed over the store only when
   finished: ragnar commits each document alone and builds the index once at the end, so an
   in-place update that stopped would leave an index out of step with its documents. Deletes are
-  two statements, never one transaction: ragnar 0.3.1's schema has a foreign key from
-  `embeddings` to `documents`, and duckdb refuses the parent delete in the transaction that
-  deleted the children (the development ragnar dropped the key, so CI cannot catch a
-  transactional delete). An update whose result changes nothing (nothing ingested or dropped,
+  two statements, never one transaction: a store written before ragnar 0.4.0 has a foreign key
+  from `embeddings` to `documents`, and duckdb refuses the parent delete in the transaction that
+  deleted the children. Under the 0.4.0 floor the copy is upgraded (key dropped) before the
+  deletes run, so no test can tell a transactional delete apart; the two statements stay
+  because they are correct under either schema. An update whose result changes nothing (nothing ingested or dropped,
   record unchanged) discards the copy, so a permanently unreadable PDF does not rewrite the
   store, and its md5, on every run.
 
 <!-- BEGIN SOUL CONVENTIONS — DO NOT EDIT BELOW THIS LINE -->
 
+
+- **cred supports CRAN ragnar >= 0.4.0, and a store written before it is upgraded silently.**
+  `Suggests: ragnar (>= 0.4.0)`, no `Remotes:` entry, and `.crd_need()` refuses an older loaded
+  ragnar (`cred_ragnar_too_old`), so CI and users run the same release. Every ragnar reads every
+  store, but ragnar 0.4.0 **upgrades a pre-0.4.0 store in place on any read-write connect**, even
+  one that writes nothing: three columns added to `documents`, the foreign key dropped, the file
+  about 1.85x larger, the md5 changed, and the HNSW indexes recreated **without their metric**,
+  so cosine queries scan until `ragnar_store_build_index()`. ragnar 0.3.x cannot ingest into an
+  upgraded store. So `crd_store_connect(read_only = FALSE)` warns first
+  (`cred_store_upgrade`), `crd_store_update()` (which always rebuilds the index when it writes)
+  says so in its help, and the manifest records `ragnar_version` (stamped into the store's own
+  `cred_ragnar` table by build and update, never the pusher's session unless the store has no
+  stamp) and `store_schema` read from the file. A pre-0.4.0 test store is built by hand
+  (`local_pre040_store()`): its indexes need their metrics written out, and its `embeddings`
+  must be created under its final name, because duckdb keeps a renamed table's old name in the
+  foreign key's reverse reference. [#43](https://github.com/NewGraphEnvironment/cred/issues/43),
+  `research/ragnar-versions.md`.
 
 # Agent Operating Rules
 

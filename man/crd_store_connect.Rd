@@ -26,7 +26,12 @@ Default \code{"data/rag"}. Ignored when \code{store} is itself a path.}
 
 \item{profile}{\code{character(1)} AWS profile. Default \code{AWS_PROFILE}.}
 
-\item{read_only}{\code{logical(1)} open the store read-only. Default \code{TRUE}.}
+\item{read_only}{\code{logical(1)} open the store read-only. Default \code{TRUE}.
+\code{FALSE} on a store written before ragnar 0.4.0 lets ragnar upgrade it in
+place, even if nothing is then written: the file grows, stops matching the
+manifest's md5, and loses the use of its cosine and inner-product indexes
+until the index is rebuilt. cred warns (class \code{cred_store_upgrade}) before
+opening such a store read-write.}
 
 \item{verify}{\code{logical(1)} check the local MD5 against the manifest.
 Default \code{TRUE}. \code{FALSE} opens a local store without contacting \code{source} —

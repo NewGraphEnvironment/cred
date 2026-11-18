@@ -1,3 +1,26 @@
+# cred (development version)
+
+cred now supports one ragnar: the CRAN release, 0.4.0 or later
+([#43](https://github.com/NewGraphEnvironment/cred/issues/43)). It had installed ragnar's
+development branch, so CI tested a different ragnar from the one users had, and a fix that passed
+every local test failed in CI.
+
+* `ragnar (>= 0.4.0)` replaces the development branch. The store functions refuse an older ragnar
+  with a message giving both versions; update it with `pak::pak("ragnar")` and restart R.
+* Every ragnar can read every store, but ragnar 0.4.0 upgrades a store written by an older ragnar
+  as soon as it opens it read-write, even if nothing is then written. The file grows (about 1.85x on
+  two real stores), its md5 no longer matches the manifest, and its cosine and inner-product
+  indexes go unused until the index is rebuilt. `crd_store_connect(read_only = FALSE)` now warns
+  before opening such a store. `crd_store_update()` upgrades a store only when it changes it, and
+  rebuilds the index, so search on the result works as on a fresh build.
+* **Update cred everywhere a shared store is used.** Once a store has been upgraded, or rebuilt
+  under ragnar 0.4.0, cred 0.7.0 or older with ragnar 0.3.x cannot ingest into it
+  (`crd_store_update()` fails); reading still works.
+* The manifest entry `crd_store_push()` writes now records `ragnar_version`, the ragnar that last
+  built or updated the store, which `crd_store_build()` and `crd_store_update()` stamp into the
+  store, and `store_schema` (`"0.4.0"` or `"pre-0.4.0"`). A store built before the stamp is
+  recorded with the pushing session's ragnar, with a warning.
+
 # cred 0.7.0
 
 `crd_store_update()` brings a built evidence store up to date with Zotero without rebuilding it

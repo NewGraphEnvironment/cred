@@ -31,3 +31,8 @@
   warning fails its test. Two fixture defects found and fixed on the way: indexes recreated from
   `duckdb_indexes().sql` had no metric, and renaming a table that holds a foreign key leaves
   duckdb's reverse reference on the old name.
+- Phase 5 done: CLAUDE.md (ingest handler paragraph, update skip and delete rationale, a new
+  ragnar-version bullet), store.R delete comment, research notes swept for `0\.3\.[01]` and
+  "development"; measured claims that name their release (store.R near 425 and 878, CLAUDE.md
+  page and fallback bullets) kept as they are. NEWS under `# cred (development version)`, which
+  /gh-pr-merge promotes. `devtools::document()` rewrote three man pages; lintr 0.

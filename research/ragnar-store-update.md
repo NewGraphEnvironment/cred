@@ -1,6 +1,6 @@
 # Changing a built ragnar store: what an update relies on
 
-**Verified:** 2026-10-31 · **Issues:** #44 · **Produced by:** ragnar 0.3.1 and 0.3.1.9000 internals
+**Verified:** 2026-10-31, deletes and skip rules revised for ragnar 0.4.0 on 2026-11-18 · **Issues:** #44, #43 · **Produced by:** ragnar 0.3.1 and 0.3.1.9000 internals
 (`ragnar_store_ingest`, `prepare_ingest_paths`, `do_ingest_remote_work`, `ragnar_store_update_v2`,
 `ragnar_store_create_v2`), duckdb 1.5.2 on macOS, and `tests/testthat/test-store-update.R`. Run record:
 `planning/archive/2026-10-issue-44-store-update/`.
@@ -12,7 +12,7 @@
 (`.crd_ingest_prepare()`) reads, chunks **and embeds** inside `prepare` itself, so an existing origin is
 converted and embedded in full before `ragnar_store_update_v2()` anti-joins its chunks and returns.
 On 0.3.1 that anti-join is also a no-op when every new chunk already exists (a PDF that lost pages
-keeps its old text); 0.3.1.9000 adds a text check and skips by mtime before `prepare`. So cred
+keeps its old text); 0.3.1.9000 and 0.4.0 skip by mtime or a hash of the prepared Markdown before `prepare`. So cred
 decides what to hand ragnar, and hands it only origins the store does not hold.
 
 ## Deleting a document

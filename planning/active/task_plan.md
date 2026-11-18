@@ -106,12 +106,12 @@ What exploration found (ragnar 0.4.0 source and NEWS, read from the `v0.4.0` tag
 
 ## Phase 5: Docs
 
-- [ ] `CLAUDE.md`: rewrite the ragnar-version paragraph under "One unreadable PDF…" (CI and users
+- [x] `CLAUDE.md`: rewrite the ragnar-version paragraph under "One unreadable PDF…" (CI and users
       both run CRAN 0.4.0, one handler), the 0.3.1 foreign-key note under "An update chooses…"
       (keep the two statements, with the new rationale, G3), and the `progress` note. Then grep
       `0\.3\.[01]`, "development" and `Remotes: tidyverse/ragnar` across `R/`, tests, `research/`
       and `CLAUDE.md` (G2).
-- [ ] `NEWS.md` entry: supported ragnar, the call-time refusal, the manifest field, the measured store
+- [x] `NEWS.md` entry: supported ragnar, the call-time refusal, the manifest field, the measured store
       behaviour, and the warning that cred 0.7.0 or older with ragnar 0.3.x cannot ingest into a
       store once it has been upgraded or rebuilt under 0.4.0 (A4).
 

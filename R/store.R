@@ -7,7 +7,7 @@
 #' so that users who only run the audit workflow do not pay for a DuckDB
 #' install.
 #'
-#' Where `ragnar` is required, it must also be at least [.crd_ragnar_min]:
+#' Where `ragnar` is required, it must also be at least `.crd_ragnar_min`:
 #' cred is tested against that release, and older ones report a failed ingest
 #' worker differently and cannot ingest into a store ragnar 0.4.0 has upgraded
 #' (`research/ragnar-versions.md`). An older ragnar is refused with a
@@ -40,7 +40,7 @@
 
 #' The oldest ragnar cred supports
 #'
-#' One constant for the check in [.crd_need()] and its message, and the same
+#' One constant for the check in `.crd_need()` and its message, and the same
 #' floor as `Suggests: ragnar (>= ...)` in `DESCRIPTION` (#43).
 #' @noRd
 .crd_ragnar_min <- "0.4.0"
@@ -2613,11 +2613,13 @@ crd_store_update <- function(store_path,
   # holds would be updated in place or skipped by ragnar's rules, not cred's,
   # and a skipped replacement would leave the old text standing.
   #
-  # Two statements, not one transaction: under ragnar 0.3.1 `embeddings` holds
-  # a foreign key on `documents`, and duckdb checks it against rows as they
-  # were when the transaction began, so a document cannot go in the
-  # transaction that deleted its embeddings. The copy is what makes the update
-  # all-or-nothing.
+  # Two statements, not one transaction: in a store written before ragnar
+  # 0.4.0 `embeddings` holds a foreign key on `documents`, and duckdb checks it
+  # against rows as they were when the transaction began, so a document cannot
+  # go in the transaction that deleted its embeddings. ragnar 0.4.0 drops the
+  # key as it opens the copy, so one transaction would work today; two
+  # statements are correct under either schema. The copy is what makes the
+  # update all-or-nothing.
   if (length(dropped) > 0L) {
     DBI::dbExecute(store@con, "DELETE FROM embeddings WHERE doc_id = ?", params = list(dropped))
     DBI::dbExecute(store@con, "DELETE FROM documents WHERE doc_id = ?", params = list(dropped))
