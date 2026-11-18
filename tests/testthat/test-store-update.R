@@ -547,3 +547,20 @@ test_that("an update that changes a pre-0.4.0 store upgrades it, and it holds an
   on.exit(DBI::dbDisconnect(store@con, shutdown = TRUE), add = TRUE)
   expect_gt(nrow(crd_search(store, "culvert salmon", method = "hybrid", top_k = 3L)), 0L)
 })
+
+test_that("an update that only records a pre-0.4.0 store's files rebuilds the index the upgrade broke", {
+  # A store built before cred kept a source record, and before ragnar 0.4.0:
+  # its first update with nothing changed in Zotero ingests and drops nothing,
+  # but still writes the record, so it keeps the copy ragnar upgraded on open.
+  world <- local_update_world()
+  path <- .crd_test_to_pre040(build(world, c("keyA", "keyB")))
+  con <- DBI::dbConnect(duckdb::duckdb(), path)
+  DBI::dbExecute(con, "DROP TABLE cred_sources")
+  DBI::dbDisconnect(con, shutdown = TRUE)
+  expect_true(.crd_test_cosine_indexed(path))
+
+  res <- update(path, c("keyA", "keyB"))
+  expect_match(res$msgs, "added: 0 | replaced: 0 | removed: 0", fixed = TRUE)
+  expect_true(.crd_test_schema(path)$content_hash)
+  expect_true(.crd_test_cosine_indexed(path))
+})

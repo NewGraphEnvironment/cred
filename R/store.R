@@ -2649,6 +2649,13 @@ crd_store_update <- function(store_path,
     message("Store is current: ", store_path, " | kept: ", nrow(docs))
     return(current())
   }
+  # A copy kept with nothing ingested or dropped (only the record changed) has
+  # had no index rebuild, and ragnar 0.4.0 may have upgraded it on open, which
+  # recreates its HNSW indexes without their metric. Every kept copy leaves
+  # with a rebuilt index (#43).
+  if (length(to_ingest) == 0L && length(dropped) == 0L) {
+    ragnar::ragnar_store_build_index(store)
+  }
   .crd_sources_write(store@con, final$origin_id, final$md5)
   .crd_ragnar_stamp_write(store@con)
 

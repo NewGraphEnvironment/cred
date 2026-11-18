@@ -347,9 +347,6 @@ Shipped: [#22](https://github.com/NewGraphEnvironment/cred/issues/22) ragnar ret
   record unchanged) discards the copy, so a permanently unreadable PDF does not rewrite the
   store, and its md5, on every run.
 
-<!-- BEGIN SOUL CONVENTIONS — DO NOT EDIT BELOW THIS LINE -->
-
-
 - **cred supports CRAN ragnar >= 0.4.0, and a store written before it is upgraded silently.**
   `Suggests: ragnar (>= 0.4.0)`, no `Remotes:` entry, and `.crd_need()` refuses an older loaded
   ragnar (`cred_ragnar_too_old`), so CI and users run the same release. Every ragnar reads every
@@ -358,7 +355,7 @@ Shipped: [#22](https://github.com/NewGraphEnvironment/cred/issues/22) ragnar ret
   about 1.85x larger, the md5 changed, and the HNSW indexes recreated **without their metric**,
   so cosine queries scan until `ragnar_store_build_index()`. ragnar 0.3.x cannot ingest into an
   upgraded store. So `crd_store_connect(read_only = FALSE)` warns first
-  (`cred_store_upgrade`), `crd_store_update()` (which always rebuilds the index when it writes)
+  (`cred_store_upgrade`), `crd_store_update()` (which rebuilds the index on every copy it keeps, a record-only update included)
   says so in its help, and the manifest records `ragnar_version` (stamped into the store's own
   `cred_ragnar` table by build and update, never the pusher's session unless the store has no
   stamp) and `store_schema` read from the file. A pre-0.4.0 test store is built by hand
@@ -366,6 +363,9 @@ Shipped: [#22](https://github.com/NewGraphEnvironment/cred/issues/22) ragnar ret
   must be created under its final name, because duckdb keeps a renamed table's old name in the
   foreign key's reverse reference. [#43](https://github.com/NewGraphEnvironment/cred/issues/43),
   `research/ragnar-versions.md`.
+
+<!-- BEGIN SOUL CONVENTIONS — DO NOT EDIT BELOW THIS LINE -->
+
 
 # Agent Operating Rules
 
