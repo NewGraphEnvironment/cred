@@ -1,6 +1,6 @@
 # Changelog
 
-## cred (development version)
+## cred 0.8.0
 
 cred now supports one ragnar: the CRAN release, 0.4.0 or later
 ([\#43](https://github.com/NewGraphEnvironment/cred/issues/43)). It had
