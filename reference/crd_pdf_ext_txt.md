@@ -1,7 +1,7 @@
 # Extract text from a PDF as a tidy tibble
 
 Wraps
-[`pdftools::pdf_text()`](https://docs.ropensci.org/pdftools//reference/pdftools.html)
+[`pdftools::pdf_text()`](https://docs.ropensci.org/pdftools/reference/pdftools.html)
 and returns one row per page.
 
 ## Usage

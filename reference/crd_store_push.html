@@ -137,6 +137,16 @@ pulls of that store fail until the push is re-run. Both failure messages say
 so. Removing the window entirely means content-addressed keys
 (<code>&lt;name&gt;-&lt;md5&gt;.duckdb</code>), which is a change to the shared bucket layout and
 belongs with the infrastructure rather than here.</p>
+<p>Each entry describes the store from the file itself: its counts, its
+embedding size and model, <code>ragnar_version</code> (the ragnar that last built or
+updated it, from the stamp <code><a href="crd_store_build.html">crd_store_build()</a></code> and <code><a href="crd_store_update.html">crd_store_update()</a></code>
+write into the store) and <code>store_schema</code> (<code>"0.4.0"</code> or <code>"pre-0.4.0"</code>: ragnar
+0.4.0 upgrades an older store's schema when it opens it read-write, and
+ragnar 0.3.x cannot ingest into an upgraded one). A store built before the
+stamp existed is recorded with this session's ragnar, with a warning saying
+so, or with none where ragnar is not installed or where the store's schema
+rules out the session's ragnar (only a ragnar before 0.4.0 writes the older
+schema, and only 0.4.0 or later the newer one).</p>
 <p>Building the store is <code><a href="crd_store_build.html">crd_store_build()</a></code>; reading it back is
 <code><a href="crd_store_connect.html">crd_store_connect()</a></code>. Bucket policy, IAM and retention are infrastructure
 concerns and deliberately live outside this package.</p>

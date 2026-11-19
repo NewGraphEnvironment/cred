@@ -86,7 +86,12 @@ Default <code>"data/rag"</code>. Ignored when <code>store</code> is itself a pat
 
 
 <dt id="arg-read-only">read_only<a class="anchor" aria-label="anchor" href="#arg-read-only"></a></dt>
-<dd><p><code>logical(1)</code> open the store read-only. Default <code>TRUE</code>.</p></dd>
+<dd><p><code>logical(1)</code> open the store read-only. Default <code>TRUE</code>.
+<code>FALSE</code> on a store written before ragnar 0.4.0 lets ragnar upgrade it in
+place, even if nothing is then written: the file grows, stops matching the
+manifest's md5, and can lose the use of its cosine and inner-product
+indexes until the index is rebuilt. cred warns (class <code>cred_store_upgrade</code>) before
+opening such a store read-write.</p></dd>
 
 
 <dt id="arg-verify">verify<a class="anchor" aria-label="anchor" href="#arg-verify"></a></dt>

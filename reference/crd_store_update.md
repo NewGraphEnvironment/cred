@@ -101,6 +101,15 @@ would ingest nothing, drop nothing and record nothing new, the store is
 not written at all, so a new PDF that cannot be read does not rewrite
 it. Close any connection to the store before updating it.
 
+**A store written before ragnar 0.4.0.** An update that changes it also
+upgrades it to the schema ragnar 0.4.0 writes, because ragnar upgrades a
+store as it opens it for writing: `documents` gains three columns, and
+the file grows (about 1.85x on two real stores). The update rebuilds the
+index, so search works as on a fresh build. An update that changes
+nothing leaves the store, and its schema, as they were. Once upgraded, a
+store cannot be ingested into by ragnar 0.3.x, so anyone sharing it
+needs cred and ragnar current.
+
 **After an update.** The store's md5 no longer matches the manifest, so
 [`crd_store_connect()`](https://newgraphenvironment.github.io/cred/reference/crd_store_connect.md)
 would replace it with the copy the manifest describes. Push it with

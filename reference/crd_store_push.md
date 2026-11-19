@@ -98,6 +98,21 @@ messages say so. Removing the window entirely means content-addressed
 keys (`<name>-<md5>.duckdb`), which is a change to the shared bucket
 layout and belongs with the infrastructure rather than here.
 
+Each entry describes the store from the file itself: its counts, its
+embedding size and model, `ragnar_version` (the ragnar that last built
+or updated it, from the stamp
+[`crd_store_build()`](https://newgraphenvironment.github.io/cred/reference/crd_store_build.md)
+and
+[`crd_store_update()`](https://newgraphenvironment.github.io/cred/reference/crd_store_update.md)
+write into the store) and `store_schema` (`"0.4.0"` or `"pre-0.4.0"`:
+ragnar 0.4.0 upgrades an older store's schema when it opens it
+read-write, and ragnar 0.3.x cannot ingest into an upgraded one). A
+store built before the stamp existed is recorded with this session's
+ragnar, with a warning saying so, or with none where ragnar is not
+installed or where the store's schema rules out the session's ragnar
+(only a ragnar before 0.4.0 writes the older schema, and only 0.4.0 or
+later the newer one).
+
 Building the store is
 [`crd_store_build()`](https://newgraphenvironment.github.io/cred/reference/crd_store_build.md);
 reading it back is

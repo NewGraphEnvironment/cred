@@ -42,7 +42,12 @@ crd_store_connect(
 
 - read_only:
 
-  `logical(1)` open the store read-only. Default `TRUE`.
+  `logical(1)` open the store read-only. Default `TRUE`. `FALSE` on a
+  store written before ragnar 0.4.0 lets ragnar upgrade it in place,
+  even if nothing is then written: the file grows, stops matching the
+  manifest's md5, and can lose the use of its cosine and inner-product
+  indexes until the index is rebuilt. cred warns (class
+  `cred_store_upgrade`) before opening such a store read-write.
 
 - verify:
 

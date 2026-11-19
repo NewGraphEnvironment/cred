@@ -130,7 +130,7 @@ more than one collection is an error listing each, with its <code>parent/child</
 path. A collection's subcollections are not included.</p>
 <p><strong>What cannot be read or embedded.</strong> One PDF that cannot be read or
 embedded does not cost the build. A PDF that markitdown cannot read, such as one whose text carries a NUL byte, is
-read with <code><a href="https://docs.ropensci.org/pdftools//reference/pdftools.html" class="external-link">pdftools::pdf_text()</a></code> instead, without markdown headings. A PDF
+read with <code><a href="https://docs.ropensci.org/pdftools/reference/pdftools.html" class="external-link">pdftools::pdf_text()</a></code> instead, without markdown headings. A PDF
 neither can read is skipped, and a warning names it and why. A chunk the
 embedding model refuses whole, such as a long run of figure glyphs, is
 split until each part embeds; a part still refused at 64 characters is

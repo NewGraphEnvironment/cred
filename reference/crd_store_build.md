@@ -100,7 +100,7 @@ matches more than one collection is an error listing each, with its
 **What cannot be read or embedded.** One PDF that cannot be read or
 embedded does not cost the build. A PDF that markitdown cannot read,
 such as one whose text carries a NUL byte, is read with
-[`pdftools::pdf_text()`](https://docs.ropensci.org/pdftools//reference/pdftools.html)
+[`pdftools::pdf_text()`](https://docs.ropensci.org/pdftools/reference/pdftools.html)
 instead, without markdown headings. A PDF neither can read is skipped,
 and a warning names it and why. A chunk the embedding model refuses
 whole, such as a long run of figure glyphs, is split until each part

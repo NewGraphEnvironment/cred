@@ -36,6 +36,16 @@
     </div>
 
     <div class="section level2">
+<h2 class="pkg-version" data-toc-text="development version" id="cred-development-version">cred (development version)<a class="anchor" aria-label="anchor" href="#cred-development-version"></a></h2>
+<p>cred now supports one ragnar: the CRAN release, 0.4.0 or later (<a href="https://github.com/NewGraphEnvironment/cred/issues/43" class="external-link">#43</a>). It had installed ragnar’s development branch, so CI tested a different ragnar from the one users had, and a fix that passed every local test failed in CI.</p>
+<ul><li>
+<code>ragnar (&gt;= 0.4.0)</code> replaces the development branch. The store functions refuse an older ragnar with a message giving both versions; update it with <code>pak::pak("ragnar")</code> and restart R.</li>
+<li>Every ragnar can read every store, but ragnar 0.4.0 upgrades a store written by an older ragnar as soon as it opens it read-write, even if nothing is then written. The file grows (about 1.85x on two real stores), its md5 no longer matches the manifest, and its cosine and inner-product indexes can go unused until the index is rebuilt. <code>crd_store_connect(read_only = FALSE)</code> now warns before opening such a store. <code><a href="../reference/crd_store_update.html">crd_store_update()</a></code> upgrades a store only when it changes it, and rebuilds the index, so search on the result works as on a fresh build.</li>
+<li>
+<strong>Update cred everywhere a shared store is used.</strong> Once a store has been upgraded, or rebuilt under ragnar 0.4.0, cred 0.7.0 or older with ragnar 0.3.x cannot ingest into it (<code><a href="../reference/crd_store_update.html">crd_store_update()</a></code> fails); reading still works.</li>
+<li>The manifest entry <code><a href="../reference/crd_store_push.html">crd_store_push()</a></code> writes now records <code>ragnar_version</code>, the ragnar that last built or updated the store, which <code><a href="../reference/crd_store_build.html">crd_store_build()</a></code> and <code><a href="../reference/crd_store_update.html">crd_store_update()</a></code> stamp into the store, and <code>store_schema</code> (<code>"0.4.0"</code> or <code>"pre-0.4.0"</code>). A store built before the stamp is recorded with the pushing session’s ragnar, with a warning, unless its schema rules that ragnar out; then no version is recorded.</li>
+</ul></div>
+    <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.7.0" id="cred-070">cred 0.7.0<a class="anchor" aria-label="anchor" href="#cred-070"></a></h2>
 <p><code><a href="../reference/crd_store_update.html">crd_store_update()</a></code> brings a built evidence store up to date with Zotero without rebuilding it (<a href="https://github.com/NewGraphEnvironment/cred/issues/44" class="external-link">#44</a>). Adding one paper to a 263-document store had cost a 26-minute rebuild; the update reads and embeds only the PDFs that are new or changed, and removes the documents whose source no longer resolves.</p>
 <ul><li>Sources resolve exactly as in <code><a href="../reference/crd_store_build.html">crd_store_build()</a></code>, and documents are matched by their Zotero <code>storage/&lt;key&gt;/&lt;file&gt;</code>, so a store built on a machine whose Zotero lives elsewhere updates cleanly.</li>
