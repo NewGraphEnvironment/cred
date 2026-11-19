@@ -64,11 +64,10 @@
 # `tempdir()`. That is deliberate: these tests cover the retrieval frame, not
 # Zotero lookup.
 local_ragnar_store <- function() {
-  # A version floor, not decoration: the fixture uses v2-only API
-  # (`MarkdownDocument`, `markdown_chunk`, `version = 2`) and DESCRIPTION carries
-  # an unpinned `Remotes: tidyverse/ragnar`, so an older install would ERROR
+  # A version floor, not decoration: cred supports ragnar >= 0.4.0 (#43), and
+  # the store functions refuse an older one, so an older install would ERROR
   # every test here rather than skip them.
-  skip_if_not_installed("ragnar", "0.3.0")
+  skip_if_not_installed("ragnar", "0.4.0")
   skip_if_not_installed("duckdb")
 
   if (!is.null(.crd_store_cache$store)) return(.crd_store_cache$store)
@@ -246,7 +245,7 @@ local_ragnar_store_failing <- function(reason = c("connection", "model",
 .crd_named_cache <- new.env(parent = emptyenv())
 
 local_ragnar_store_named <- function() {
-  skip_if_not_installed("ragnar", "0.3.0")
+  skip_if_not_installed("ragnar", "0.4.0")
   skip_if_not_installed("duckdb")
   if (!is.null(.crd_named_cache$store)) return(.crd_named_cache$store)
 
@@ -356,4 +355,124 @@ local_reset_fallback_warnings <- function(store, env = parent.frame()) {
   vocab <- c("culvert", "barrier", "fish", "passage", "stream", "salmon", "habitat",
              "riparian", "bankfull", "width", "beaver", "wetland", "coho", "channel")
   withr::with_seed(seed, paste(sample(vocab, n, replace = TRUE), collapse = " "))
+}
+
+# --- A store in the schema ragnar wrote before 0.4.0 (#43) -----------------
+#
+# ragnar 0.4.0 upgrades such a store in place on a read-write connect (columns
+# added to `documents`, the foreign key from `embeddings` dropped), and cred's
+# floor means no ragnar that writes the old schema is installed. So the fixture
+# is built with the installed ragnar and taken back to the old schema by hand:
+# the three columns dropped (all three: the upgrade tests for `content_hash`
+# alone and then adds every one, so a fixture keeping any of them fails the
+# upgrade), `embeddings` recreated with ragnar 0.3.0's statement verbatim,
+# foreign key included, and the HNSW indexes recreated from their own SQL.
+#
+# Never cached or shared: one read-write open upgrades it for every later
+# reader. Each call returns a fresh file.
+local_pre040_store <- function(env = parent.frame(), n_docs = 3L) {
+  skip_if_not_installed("ragnar", "0.4.0")
+  skip_if_not_installed("duckdb")
+  path <- withr::local_tempfile(fileext = ".duckdb", .local_envir = env)
+  store <- ragnar::ragnar_store_create(path, embed = .crd_test_embed, version = 2)
+  for (i in seq_len(n_docs)) {
+    doc <- ragnar::MarkdownDocument(
+      paste(.crd_test_prose(800L, i), sprintf("zzzold%02d", i)),
+      origin = file.path(tempdir(), "storage", sprintf("OLDKEY%02d", i), "doc.pdf")
+    )
+    ragnar::ragnar_store_insert(store, ragnar::markdown_chunk(doc))
+  }
+  ragnar::ragnar_store_build_index(store)
+  DBI::dbDisconnect(store@con, shutdown = TRUE)
+  .crd_test_to_pre040(path)
+}
+
+# Take a store written by ragnar >= 0.4.0 back to the older schema, in place.
+# Also drops cred's ragnar stamp, which no store of that age carries.
+# `metric = FALSE` makes the HNSW indexes without their metric, the state an
+# index made under an older duckdb (1.5.6 measured) is in once ragnar 0.4.0's upgrade has
+# rebuilt it, whatever duckdb is installed.
+.crd_test_to_pre040 <- function(path, metric = TRUE) {
+  con <- DBI::dbConnect(duckdb::duckdb(), path)
+  on.exit(DBI::dbDisconnect(con, shutdown = TRUE))
+  DBI::dbExecute(con, "INSTALL vss; LOAD vss")
+  emb_type <- DBI::dbGetQuery(con, "SELECT data_type FROM information_schema.columns
+                                    WHERE table_name = 'embeddings' AND column_name = 'embedding'")$data_type
+  DBI::dbExecute(con, "DROP TABLE IF EXISTS cred_ragnar")
+  for (col in c("last_modified", "content_hash", "ingested_at")) {
+    DBI::dbExecute(con, paste("ALTER TABLE documents DROP COLUMN", col))
+  }
+  # Through a key-less copy, never by renaming a table that holds the foreign
+  # key: duckdb keeps the referencing table's old name on `documents`, and the
+  # next delete from `documents` looks for a table that no longer exists.
+  DBI::dbExecute(con, "CREATE TEMP TABLE embeddings_rows AS SELECT * FROM embeddings")
+  DBI::dbExecute(con, "DROP TABLE embeddings")
+  DBI::dbExecute(con, paste0(
+    "CREATE TABLE embeddings (
+      doc_id INTEGER NOT NULL,
+      FOREIGN KEY (doc_id) REFERENCES documents (doc_id),
+      chunk_id INTEGER DEFAULT nextval('chunk_id_seq'),
+      start INTEGER,
+      \"end\" INTEGER,
+      PRIMARY KEY (doc_id, start, \"end\"),
+      context VARCHAR,
+      embedding ", emb_type, ")"
+  ))
+  DBI::dbExecute(con, "INSERT INTO embeddings SELECT * FROM embeddings_rows")
+  DBI::dbExecute(con, "DROP TABLE embeddings_rows")
+  # With their metrics, as ragnar_store_build_index() creates them. duckdb 1.5.6
+  # records an index's SQL without the metric and duckdb 2.0 with it, so what
+  # ragnar 0.4.0's upgrade rebuilds from that record depends on the duckdb that
+  # created the index (.crd_test_index_sql_has_metric()).
+  DBI::dbExecute(con, "SET hnsw_enable_experimental_persistence = true")
+  for (m in c(cosine = "cosine", ip = "ip", l2sq = "l2sq")) {
+    with <- if (metric) sprintf(" WITH (metric = '%s')", m) else ""
+    DBI::dbExecute(con, sprintf(
+      "CREATE INDEX store_hnsw_%s_index ON embeddings USING HNSW (embedding)%s", m, with
+    ))
+  }
+  DBI::dbExecute(con, "CHECKPOINT")
+  invisible(path)
+}
+
+# What a store's schema says about which ragnar wrote it, read without ragnar
+# (whose read-write connect would change the answer).
+.crd_test_schema <- function(path) {
+  con <- DBI::dbConnect(duckdb::duckdb(), path, read_only = TRUE)
+  on.exit(DBI::dbDisconnect(con, shutdown = TRUE))
+  list(
+    content_hash = "content_hash" %in% DBI::dbListFields(con, "documents"),
+    fk = DBI::dbGetQuery(con, "SELECT COUNT(*) AS n FROM duckdb_constraints()
+                               WHERE table_name = 'embeddings' AND constraint_type = 'FOREIGN KEY'")$n,
+    hnsw = DBI::dbGetQuery(con, "SELECT COUNT(*) AS n FROM duckdb_indexes()
+                                 WHERE table_name = 'embeddings' AND sql ILIKE '%USING HNSW%'")$n
+  )
+}
+
+# Whether a cosine top-k on the store can use an HNSW index. ragnar 0.4.0's
+# upgrade recreates the indexes from the SQL duckdb recorded for them, which
+# under an older duckdb (1.5.6 measured) lacks the metric, leaving only L2 usable until the
+# index is rebuilt. Asked with a constant vector: an index is never
+# used for an ORDER BY against a subquery.
+.crd_test_cosine_indexed <- function(path) {
+  con <- DBI::dbConnect(duckdb::duckdb(), path, read_only = TRUE)
+  on.exit(DBI::dbDisconnect(con, shutdown = TRUE))
+  DBI::dbExecute(con, "INSTALL vss; LOAD vss")
+  width <- DBI::dbGetQuery(con, "SELECT embedding_size FROM metadata")$embedding_size[1]
+  v <- paste0("[", paste(rep("0.25", width), collapse = ","), "]::FLOAT[", width, "]")
+  plan <- DBI::dbGetQuery(con, paste0(
+    "EXPLAIN SELECT chunk_id FROM embeddings ORDER BY array_cosine_distance(embedding, ", v, ") LIMIT 3"
+  ))
+  any(grepl("HNSW", unlist(plan)))
+}
+
+# Whether the SQL duckdb recorded for the store's cosine index names its metric:
+# duckdb 2.0 records it, duckdb 1.5.6 does not. ragnar 0.4.0's upgrade rebuilds
+# the index from this record.
+.crd_test_index_sql_has_metric <- function(path) {
+  con <- DBI::dbConnect(duckdb::duckdb(), path, read_only = TRUE)
+  on.exit(DBI::dbDisconnect(con, shutdown = TRUE))
+  sql <- DBI::dbGetQuery(con, "SELECT sql FROM duckdb_indexes()
+                               WHERE table_name = 'embeddings' AND index_name = 'store_hnsw_cosine_index'")$sql
+  length(sql) == 1L && grepl("metric", sql, fixed = TRUE)
 }

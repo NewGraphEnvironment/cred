@@ -96,6 +96,35 @@ test_that(".crd_need names every missing package and how to install it", {
   expect_false(grepl("stats", sub(".*pak::pak", "", msg), fixed = TRUE))
 })
 
+test_that(".crd_need refuses a ragnar older than the supported floor, naming both versions", {
+  skip_if_not_installed("ragnar")
+  # A literal below the floor, not one computed from .crd_ragnar_min: lowering
+  # the constant must turn this test red (#43).
+  local_mocked_bindings(.crd_ragnar_version = function() package_version("0.3.1"))
+  err <- expect_error(.crd_need(c("ragnar", "DBI")), class = "cred_ragnar_too_old")
+  msg <- conditionMessage(err)
+  expect_match(msg, "0.3.1", fixed = TRUE)
+  expect_match(msg, "0.4.0", fixed = TRUE)
+  expect_match(msg, "pak::pak('ragnar')", fixed = TRUE)
+})
+
+test_that(".crd_need passes a ragnar at or above the floor, and never checks it unasked", {
+  skip_if_not_installed("ragnar")
+  local_mocked_bindings(.crd_ragnar_version = function() package_version("0.4.0"))
+  expect_null(.crd_need("ragnar"))
+
+  # The floor applies only where ragnar is required: crd_store_push() needs
+  # DBI and duckdb alone, and must work on a machine with an old ragnar.
+  local_mocked_bindings(.crd_ragnar_version = function() stop("must not be read"))
+  expect_null(.crd_need(c("DBI", "duckdb")))
+})
+
+test_that(".crd_ragnar_version reads the loaded namespace, not the DESCRIPTION on disk", {
+  skip_if_not_installed("ragnar")
+  expect_identical(.crd_ragnar_version(), package_version(getNamespaceVersion("ragnar")))
+  expect_identical(.crd_ragnar_min, "0.4.0")
+})
+
 test_that("crd_store_connect(verify = FALSE) refuses to invent a missing store", {
   skip_if_not_installed("ragnar")
   skip_if_not_installed("duckdb")
@@ -231,4 +260,52 @@ test_that(".crd_aws shell-quotes its arguments", {
   # ("first", "INJECTED"). Quoted, it echoes one literal argument.
   expect_length(out, 1L)
   expect_identical(out, payload)
+})
+
+# ---- a store written before ragnar 0.4.0 (#43) -----------------------------
+
+test_that("the pre-0.4.0 fixture is in the old schema, with the old indexes", {
+  path <- local_pre040_store()
+  got <- .crd_test_schema(path)
+  expect_false(got$content_hash)
+  expect_identical(got$fk, 1)
+  expect_identical(got$hnsw, 3)
+  expect_true(.crd_test_cosine_indexed(path))
+})
+
+test_that("a read-only connect and search leave a pre-0.4.0 store as it was", {
+  path <- local_pre040_store()
+  before <- tools::md5sum(path)
+  store <- expect_no_warning(suppressMessages(crd_store_connect(path, verify = FALSE, check_model = FALSE)))
+  hits <- crd_search(store, .crd_test_query(), top_k = 3L)
+  DBI::dbDisconnect(store@con, shutdown = TRUE)
+  expect_gt(nrow(hits), 0L)
+  expect_identical(tools::md5sum(path), before)
+  expect_false(.crd_test_schema(path)$content_hash)
+})
+
+test_that("a read-write connect warns before ragnar upgrades a pre-0.4.0 store, and only then", {
+  path <- local_pre040_store()
+  # The real pre-0.4.0 stores checked record their indexes without the metric,
+  # as duckdb 1.5.6 does; this fixture's are made under the installed duckdb,
+  # and duckdb 2.0 records the metric.
+  recorded_metric <- .crd_test_index_sql_has_metric(path)
+  expect_warning(
+    store <- suppressMessages(crd_store_connect(path, verify = FALSE, read_only = FALSE, check_model = FALSE)),
+    class = "cred_store_upgrade"
+  )
+  DBI::dbDisconnect(store@con, shutdown = TRUE)
+  # The warning describes what ragnar then did. The second assertion pins the
+  # ragnar 0.4.0 defect the warning names, where the fixture can reach it
+  # (indexes recorded without their metric, as in the real old stores checked): if it
+  # goes red there, ragnar's upgrade now keeps the metric, and the index clause
+  # comes out of the warning.
+  expect_true(.crd_test_schema(path)$content_hash)
+  expect_identical(.crd_test_cosine_indexed(path), recorded_metric)
+
+  # Already upgraded: nothing left to warn about.
+  store <- expect_no_warning(suppressMessages(
+    crd_store_connect(path, verify = FALSE, read_only = FALSE, check_model = FALSE)
+  ))
+  DBI::dbDisconnect(store@con, shutdown = TRUE)
 })

@@ -75,6 +75,17 @@ so. Removing the window entirely means content-addressed keys
 (\verb{<name>-<md5>.duckdb}), which is a change to the shared bucket layout and
 belongs with the infrastructure rather than here.
 
+Each entry describes the store from the file itself: its counts, its
+embedding size and model, \code{ragnar_version} (the ragnar that last built or
+updated it, from the stamp \code{\link[=crd_store_build]{crd_store_build()}} and \code{\link[=crd_store_update]{crd_store_update()}}
+write into the store) and \code{store_schema} (\code{"0.4.0"} or \code{"pre-0.4.0"}: ragnar
+0.4.0 upgrades an older store's schema when it opens it read-write, and
+ragnar 0.3.x cannot ingest into an upgraded one). A store built before the
+stamp existed is recorded with this session's ragnar, with a warning saying
+so, or with none where ragnar is not installed or where the store's schema
+rules out the session's ragnar (only a ragnar before 0.4.0 writes the older
+schema, and only 0.4.0 or later the newer one).
+
 Building the store is \code{\link[=crd_store_build]{crd_store_build()}}; reading it back is
 \code{\link[=crd_store_connect]{crd_store_connect()}}. Bucket policy, IAM and retention are infrastructure
 concerns and deliberately live outside this package.

@@ -472,3 +472,111 @@ test_that(".crd_s3_put refuses to drop a requested precondition", {
     "Refusing to fall back"
   )
 })
+
+# ---- which ragnar wrote a store, and in which schema (#43) ----------------
+
+local_stamped_store <- function(stamp = TRUE, env = parent.frame()) {
+  skip_if_not_installed("ragnar", "0.4.0")
+  skip_if_not_installed("duckdb")
+  path <- withr::local_tempfile(fileext = ".duckdb", .local_envir = env)
+  store <- ragnar::ragnar_store_create(path, embed = .crd_test_embed, version = 2)
+  doc <- ragnar::MarkdownDocument(.crd_test_prose(400L), origin = "/x/storage/STAMPKEY/doc.pdf")
+  ragnar::ragnar_store_insert(store, ragnar::markdown_chunk(doc))
+  if (stamp) .crd_ragnar_stamp_write(store@con)
+  DBI::dbDisconnect(store@con, shutdown = TRUE)
+  path
+}
+
+test_that("the ragnar stamp reads NA on a store that has none, and what was written on one that does", {
+  skip_if_not_installed("duckdb")
+  con <- DBI::dbConnect(duckdb::duckdb(), withr::local_tempfile(fileext = ".duckdb"))
+  on.exit(DBI::dbDisconnect(con, shutdown = TRUE))
+  expect_identical(.crd_ragnar_stamp_read(con), NA_character_)
+  local_mocked_bindings(.crd_ragnar_version = function() package_version("9.8.7"))
+  .crd_ragnar_stamp_write(con)
+  .crd_ragnar_stamp_write(con)
+  expect_identical(.crd_ragnar_stamp_read(con), "9.8.7")
+  expect_identical(DBI::dbGetQuery(con, "SELECT COUNT(*) AS n FROM cred_ragnar")$n, 1)
+})
+
+test_that(".crd_store_describe records the store's own ragnar stamp and schema, not the session's", {
+  path <- local_stamped_store()
+  # The session moving on after the build must not change what the entry says.
+  local_mocked_bindings(.crd_ragnar_version = function() package_version("9.9.9"))
+  # The offline embedder names no model, so the model fallback warns; the
+  # ragnar fallback must not.
+  said <- character()
+  entry <- withCallingHandlers(.crd_store_describe(path), warning = function(w) {
+    said <<- c(said, conditionMessage(w))
+    invokeRestart("muffleWarning")
+  })
+  expect_false(any(grepl("ragnar", said)))
+  expect_identical(entry$ragnar_version, as.character(getNamespaceVersion("ragnar")))
+  expect_identical(entry$store_schema, "0.4.0")
+})
+
+test_that(".crd_store_describe falls back to the session's ragnar, loudly, for an unstamped store", {
+  path <- local_stamped_store(stamp = FALSE)
+  describe <- function() {
+    said <- character()
+    entry <- withCallingHandlers(.crd_store_describe(path), warning = function(w) {
+      said <<- c(said, conditionMessage(w))
+      invokeRestart("muffleWarning")
+    })
+    list(entry = entry, said = said)
+  }
+  local_mocked_bindings(.crd_ragnar_session_version = function() "9.9.9")
+  got <- describe()
+  expect_true(any(grepl("records no ragnar version", got$said)))
+  expect_identical(got$entry$ragnar_version, "9.9.9")
+
+  # A push needs only DBI and duckdb, so a machine without ragnar still pushes.
+  local_mocked_bindings(.crd_ragnar_session_version = function() NA_character_)
+  got <- describe()
+  expect_true(any(grepl("records no ragnar version.*not installed", got$said)))
+  expect_identical(got$entry$ragnar_version, NA_character_)
+})
+
+test_that(".crd_store_describe reads a pre-0.4.0 schema as such, and never credits it to a newer ragnar", {
+  path <- local_pre040_store()
+  said <- character()
+  entry <- withCallingHandlers(.crd_store_describe(path), warning = function(w) {
+    said <<- c(said, conditionMessage(w))
+    invokeRestart("muffleWarning")
+  })
+  expect_identical(entry$store_schema, "pre-0.4.0")
+  # Only a ragnar before 0.4.0 leaves a store in this schema, so the session's
+  # 0.4.0 is known not to have built it: no version beats a wrong one.
+  expect_identical(entry$ragnar_version, NA_character_)
+  expect_true(any(grepl("cannot have been written", said)))
+})
+
+test_that(".crd_store_describe records, for every stamp, schema and session, only a version the store allows", {
+  # The whole table, not the cases a fixture happens to reach: a fix for one
+  # direction of the schema check once left the other recording a version the
+  # schema rules out (#43, code-check round 3).
+  stores <- list(`0.4.0` = local_stamped_store(stamp = FALSE),
+                 `pre-0.4.0` = local_pre040_store(),
+                 stamped = local_stamped_store())
+  stamp <- as.character(getNamespaceVersion("ragnar"))
+  cases <- expand.grid(store = names(stores), session = c(NA, "0.3.1", "0.4.0", "9.9.9"),
+                       stringsAsFactors = FALSE)
+  cases$want <- with(cases, ifelse(
+    store == "stamped", stamp,
+    ifelse(is.na(session), NA_character_,
+           ifelse((store == "pre-0.4.0") == (session == "0.3.1"), session, NA_character_))
+  ))
+  for (i in seq_len(nrow(cases))) {
+    session <- cases$session[i]
+    local_mocked_bindings(.crd_ragnar_session_version = function() session)
+    got <- suppressWarnings(.crd_store_describe(stores[[cases$store[i]]]))$ragnar_version
+    expect_identical(got, cases$want[i], label = paste(cases$store[i], "store, session", session))
+  }
+})
+
+test_that(".crd_manifest_merge keeps an entry written before the ragnar fields exactly as it was", {
+  old <- list(stores = list(alpha = list(md5 = "a", embedding_model = "m")))
+  new <- .crd_manifest_merge(old, "beta", list(md5 = "b", ragnar_version = "0.4.0", store_schema = "0.4.0"))
+  expect_identical(new$stores$alpha, old$stores$alpha)
+  expect_identical(new$stores$beta$ragnar_version, "0.4.0")
+})

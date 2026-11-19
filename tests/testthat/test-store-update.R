@@ -69,7 +69,7 @@ test_that("the source record refuses ids and md5s that do not pair up", {
 })
 
 test_that("a store carrying the source record still connects, searches, indexes and describes", {
-  skip_if_not_installed("ragnar", "0.3.0")
+  skip_if_not_installed("ragnar", "0.4.0")
   skip_if_not_installed("duckdb")
   src <- as.character(local_ragnar_store()@location)
   copy <- withr::local_tempfile(fileext = ".duckdb")
@@ -102,7 +102,7 @@ test_that("a store carrying the source record still connects, searches, indexes 
 # so their origin ids are the ones a real library gives.
 
 local_update_world <- function(env = parent.frame()) {
-  skip_if_not_installed("ragnar", "0.3.0")
+  skip_if_not_installed("ragnar", "0.4.0")
   skip_if_not_installed("duckdb")
   skip_if_not_installed("mirai")
   world <- new.env()
@@ -200,6 +200,24 @@ test_that("an update holds what a fresh build from the same arguments holds", {
   expect_gt(bm25_hits(path, "zzzonlykeyC"), 0L)
   expect_identical(bm25_hits(path, "zzzonlykeyA"), 0L)
   expect_false(any(grepl("[.]updating-", list.files(world$root))))
+})
+
+test_that("a build stamps the ragnar that wrote the store, and an update that changes it restamps it", {
+  world <- local_update_world()
+  path <- build(world, c("keyA", "keyB"))
+  stamp <- function() {
+    con <- DBI::dbConnect(duckdb::duckdb(), path, read_only = TRUE)
+    on.exit(DBI::dbDisconnect(con, shutdown = TRUE))
+    .crd_ragnar_stamp_read(con)
+  }
+  expect_identical(stamp(), as.character(getNamespaceVersion("ragnar")))
+
+  local_mocked_bindings(.crd_ragnar_version = function() package_version("9.9.9"))
+  update(path, c("keyA", "keyB"))
+  # Nothing changed, so the store, stamp included, is the one the build wrote.
+  expect_identical(stamp(), as.character(getNamespaceVersion("ragnar")))
+  update(path, c("keyA", "keyB", "keyC"))
+  expect_identical(stamp(), "9.9.9")
 })
 
 test_that("an update ingests a changed file again, and an unchanged one never", {
@@ -477,4 +495,78 @@ test_that("the update probes its embedder once, and never through connect's chec
   local_mocked_bindings(.crd_check_store_embedding = function(...) stop("connect's check was called"))
   res <- update(path, c("keyA", "keyB"))
   expect_match(res$msgs, "added: 1", fixed = TRUE)
+})
+
+# --- a store written before ragnar 0.4.0 (#43) -----------------------------
+
+test_that("an update with nothing to do leaves a pre-0.4.0 store byte-identical and un-upgraded", {
+  world <- local_update_world()
+  path <- .crd_test_to_pre040(build(world, c("keyA", "keyB")))
+  before <- tools::md5sum(path)
+  res <- update(path, c("keyA", "keyB"))
+  expect_match(res$msgs, "Store is current", fixed = TRUE)
+  expect_identical(tools::md5sum(path), before)
+  expect_false(.crd_test_schema(path)$content_hash)
+})
+
+test_that("an update whose only new file cannot be read leaves a pre-0.4.0 store as it was", {
+  world <- local_update_world()
+  path <- .crd_test_to_pre040(build(world, c("keyA", "keyB")))
+  before <- tools::md5sum(path)
+  writeLines(character(), world$paths["keyC"])
+  expect_warning(res <- update(path, c("keyA", "keyB", "keyC")), "Skipped 1 PDF")
+  expect_match(res$msgs, "Store is current", fixed = TRUE)
+  expect_identical(tools::md5sum(path), before)
+  expect_false(.crd_test_schema(path)$content_hash)
+})
+
+test_that("an update that changes a pre-0.4.0 store upgrades it, and it holds and scores as a fresh build", {
+  world <- local_update_world()
+  # Indexes without a metric, as an index made under an older duckdb (1.5.6 measured) leaves
+  # the upgrade, so the rebuild is observable under any duckdb.
+  path <- .crd_test_to_pre040(build(world, c("keyA", "keyB", "keyC")), metric = FALSE)
+  expect_false(.crd_test_cosine_indexed(path))
+  res <- update(path, c("keyA", "keyC"))
+  expect_match(res$msgs, "removed: 1", fixed = TRUE)
+  fresh <- build(world, c("keyA", "keyC"), name = "fresh.duckdb")
+
+  # cred_sources, documents and embeddings as a build leaves them; no orphans.
+  expect_identical(contents(path), contents(fresh))
+  got <- .crd_test_schema(path)
+  expect_true(got$content_hash)
+  expect_identical(got$fk, 0)
+  expect_identical(got$hnsw, 3)
+  # The update's index rebuild restores the cosine index.
+  expect_true(.crd_test_cosine_indexed(path))
+
+  scores <- function(p) {
+    store <- ragnar::ragnar_store_connect(p, read_only = TRUE)
+    on.exit(DBI::dbDisconnect(store@con, shutdown = TRUE))
+    res <- ragnar::ragnar_retrieve_bm25(store, "culvert salmon", top_k = 50L)
+    sort(round(.crd_flat(res$metric_value, "numeric"), 8))
+  }
+  expect_identical(scores(path), scores(fresh))
+  store <- suppressMessages(crd_store_connect(path, verify = FALSE))
+  on.exit(DBI::dbDisconnect(store@con, shutdown = TRUE), add = TRUE)
+  expect_gt(nrow(crd_search(store, "culvert salmon", method = "hybrid", top_k = 3L)), 0L)
+})
+
+test_that("an update that only records a pre-0.4.0 store's files rebuilds the index the upgrade broke", {
+  # A store built before cred kept a source record, and before ragnar 0.4.0:
+  # its first update with nothing changed in Zotero ingests and drops nothing,
+  # but still writes the record, so it keeps the copy ragnar upgraded on open.
+  # Its indexes are made without a metric, as an index made under an older duckdb
+  # (1.5.6 measured) comes out of the upgrade: under duckdb 2.0 a fixture with metrics keeps
+  # them, and the rebuild under test could be deleted with this still green.
+  world <- local_update_world()
+  path <- .crd_test_to_pre040(build(world, c("keyA", "keyB")), metric = FALSE)
+  con <- DBI::dbConnect(duckdb::duckdb(), path)
+  DBI::dbExecute(con, "DROP TABLE cred_sources")
+  DBI::dbDisconnect(con, shutdown = TRUE)
+  expect_false(.crd_test_cosine_indexed(path))
+
+  res <- update(path, c("keyA", "keyB"))
+  expect_match(res$msgs, "added: 0 | replaced: 0 | removed: 0", fixed = TRUE)
+  expect_true(.crd_test_schema(path)$content_hash)
+  expect_true(.crd_test_cosine_indexed(path))
 })

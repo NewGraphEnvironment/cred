@@ -1,6 +1,6 @@
 # Changing a built ragnar store: what an update relies on
 
-**Verified:** 2026-10-31 · **Issues:** #44 · **Produced by:** ragnar 0.3.1 and 0.3.1.9000 internals
+**Verified:** 2026-10-31, deletes and skip rules revised for ragnar 0.4.0 on 2026-11-18 · **Issues:** #44, #43 · **Produced by:** ragnar 0.3.1 and 0.3.1.9000 internals
 (`ragnar_store_ingest`, `prepare_ingest_paths`, `do_ingest_remote_work`, `ragnar_store_update_v2`,
 `ragnar_store_create_v2`), duckdb 1.5.2 on macOS, and `tests/testthat/test-store-update.R`. Run record:
 `planning/archive/2026-10-issue-44-store-update/`.
@@ -12,17 +12,19 @@
 (`.crd_ingest_prepare()`) reads, chunks **and embeds** inside `prepare` itself, so an existing origin is
 converted and embedded in full before `ragnar_store_update_v2()` anti-joins its chunks and returns.
 On 0.3.1 that anti-join is also a no-op when every new chunk already exists (a PDF that lost pages
-keeps its old text); 0.3.1.9000 adds a text check and skips by mtime before `prepare`. So cred
+keeps its old text); 0.3.1.9000 and 0.4.0 skip by mtime before `prepare`, and compare a hash of the prepared Markdown only after `prepare` has returned. So cred
 decides what to hand ragnar, and hands it only origins the store does not hold.
 
 ## Deleting a document
 
 - ragnar exports no delete. A document is two deletes by `doc_id`: `embeddings`, then `documents`;
   the `chunks` view joins them.
-- **0.3.1's schema has `embeddings.doc_id ... REFERENCES documents(doc_id)`, and duckdb refuses the
-  parent delete in the transaction that deleted the children** (`Violates foreign key constraint
-  because key "doc_id: 1" is still referenced`). Two autocommit statements work. 0.3.1.9000 dropped
-  the key, so a transactional delete passes there and CI (which installs it) cannot catch the defect.
+- **A store built before ragnar 0.4.0 has `embeddings.doc_id ... REFERENCES documents(doc_id)`, and
+  duckdb refuses the parent delete in the transaction that deleted the children** (`Violates foreign
+  key constraint because key "doc_id: 1" is still referenced`). Two autocommit statements work.
+  ragnar 0.4.0 drops the key when it opens such a store read-write, so under cred's 0.4.0 floor the
+  update's copy has no key by the time it deletes. The two statements stay because they are correct
+  either way (`research/ragnar-versions.md`, 2026-11-18).
 - `embeddings` carries HNSW indexes, so deletes go through a connection with `vss` loaded
   (`ragnar_store_connect()` loads it).
 

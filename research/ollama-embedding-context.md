@@ -42,12 +42,12 @@ sends 10 inputs per request, so one refused input fails the whole request.
 ## Where ragnar's ingest turns one bad input into a lost build
 
 - `prepare` runs in mirai workers. A worker's *read* error comes back as an error value. ragnar
-  0.3.0 re-raises it with `warning(cond)` but keeps the error class, so it reaches `error =`
-  calling handlers and never `warning =` ones. The development version (0.3.1.9000 at
-  `06f7c3e`, which `Remotes: tidyverse/ragnar` installs) instead raises a
-  `ragnar_ingest_worker_error` warning with a `path` field, and the worker's own class is lost.
-  Either way the document is skipped.
-- A worker's *embed* error is swallowed (`tryCatch(..., error = function(e) NULL)`). The chunks
+  0.4.0 raises a `ragnar_ingest_worker_error` warning for it, with a `path` field, and the
+  worker's own class is lost; ragnar 0.3.0 re-raised it with `warning(cond)` keeping the error
+  class, so it reached `error =` calling handlers and never `warning =` ones. Either way the
+  document is skipped. (cred supports 0.4.0 and later since #43.)
+- A worker's *embed* error is swallowed (`tryCatch(..., error = function(e) NULL)`, still so in
+  0.4.0's `R/ingest.R`). The chunks
   return unembedded, and `ragnar_store_update_v2()` embeds them again in the main process with
   no handler. One refused chunk therefore ends `ragnar_store_ingest()`.
 - If `prepare` returns chunks that already have an `embedding` column, both embeds are skipped.

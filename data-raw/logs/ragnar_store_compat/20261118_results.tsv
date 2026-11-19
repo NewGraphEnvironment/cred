@@ -1,0 +1,409 @@
+builder	opener	mode	check	value
+v0.3.0	-	build	ragnar	0.3.0
+v0.3.0	-	build	schema	documents=[doc_id,origin,text] fk=1 hnsw=3
+v0.3.0.9000	-	build	ragnar	0.3.0.9000
+v0.3.0.9000	-	build	schema	documents=[doc_id,origin,text] fk=1 hnsw=3
+v0.3.1	-	build	ragnar	0.3.1
+v0.3.1	-	build	schema	documents=[doc_id,origin,text] fk=1 hnsw=3
+v0.4.0	-	build	ragnar	0.4.0
+v0.4.0	-	build	schema	documents=[doc_id,origin,text,last_modified,content_hash,ingested_at] fk=0 hnsw=3
+v0.3.0	v0.3.0	ro	ragnar	0.3.0
+v0.3.0	v0.3.0	ro	connect	ok
+v0.3.0	v0.3.0	ro	schema_after_connect	documents=[doc_id,origin,text] fk=1 hnsw=3
+v0.3.0	v0.3.0	ro	embed_width	16
+v0.3.0	v0.3.0	ro	retrieve_hybrid_rows	6
+v0.3.0	v0.3.0	ro	retrieve_bm25_rows	5
+v0.3.0	v0.3.0	ro	cred_sources_rows	1
+v0.3.0	v0.3.0	ro	md5_unchanged	TRUE
+v0.3.0	v0.3.0	rw	ragnar	0.3.0
+v0.3.0	v0.3.0	rw	connect	ok
+v0.3.0	v0.3.0	rw	schema_after_connect	documents=[doc_id,origin,text] fk=1 hnsw=3
+v0.3.0	v0.3.0	rw	embed_width	16
+v0.3.0	v0.3.0	rw	retrieve_hybrid_rows	6
+v0.3.0	v0.3.0	rw	retrieve_bm25_rows	5
+v0.3.0	v0.3.0	rw	cred_sources_rows	1
+v0.3.0	v0.3.0	rw	insert	ok
+v0.3.0	v0.3.0	rw	ingest	ok
+v0.3.0	v0.3.0	rw	delete_two_statements	ok
+v0.3.0	v0.3.0	rw	delete_one_transaction	ERROR: Constraint Error: Violates foreign key constraint because key "doc_id: 2" is still referenced by a foreign key in a different table. If this is an unexpected constraint violation, please refer to our foreign key limitations in the documentation ℹ Context: rapi_execute ℹ Error type: CONSTRAINT
+v0.3.0	v0.3.0	rw	build_index	ok
+v0.3.0	v0.3.0	rw	retrieve_hybrid_after	6
+v0.3.0	v0.3.0	rw	schema_after_writes	documents=[doc_id,origin,text] fk=1 hnsw=3
+v0.3.0	v0.3.0	rw	documents_after	7
+v0.3.0	v0.3.0	rw	md5_unchanged	FALSE
+v0.3.0	v0.3.0	rw	reopen_ro	6
+v0.3.0	v0.3.0.9000	ro	ragnar	0.3.0.9000
+v0.3.0	v0.3.0.9000	ro	connect	ok
+v0.3.0	v0.3.0.9000	ro	schema_after_connect	documents=[doc_id,origin,text] fk=1 hnsw=3
+v0.3.0	v0.3.0.9000	ro	embed_width	16
+v0.3.0	v0.3.0.9000	ro	retrieve_hybrid_rows	6
+v0.3.0	v0.3.0.9000	ro	retrieve_bm25_rows	5
+v0.3.0	v0.3.0.9000	ro	cred_sources_rows	1
+v0.3.0	v0.3.0.9000	ro	md5_unchanged	TRUE
+v0.3.0	v0.3.0.9000	rw	ragnar	0.3.0.9000
+v0.3.0	v0.3.0.9000	rw	connect	ok
+v0.3.0	v0.3.0.9000	rw	schema_after_connect	documents=[doc_id,origin,text] fk=1 hnsw=3
+v0.3.0	v0.3.0.9000	rw	embed_width	16
+v0.3.0	v0.3.0.9000	rw	retrieve_hybrid_rows	6
+v0.3.0	v0.3.0.9000	rw	retrieve_bm25_rows	5
+v0.3.0	v0.3.0.9000	rw	cred_sources_rows	1
+v0.3.0	v0.3.0.9000	rw	insert	ok
+v0.3.0	v0.3.0.9000	rw	ingest	ok
+v0.3.0	v0.3.0.9000	rw	delete_two_statements	ok
+v0.3.0	v0.3.0.9000	rw	delete_one_transaction	ERROR: Constraint Error: Violates foreign key constraint because key "doc_id: 2" is still referenced by a foreign key in a different table. If this is an unexpected constraint violation, please refer to our foreign key limitations in the documentation ℹ Context: rapi_execute ℹ Error type: CONSTRAINT
+v0.3.0	v0.3.0.9000	rw	build_index	ok
+v0.3.0	v0.3.0.9000	rw	retrieve_hybrid_after	6
+v0.3.0	v0.3.0.9000	rw	schema_after_writes	documents=[doc_id,origin,text] fk=1 hnsw=3
+v0.3.0	v0.3.0.9000	rw	documents_after	7
+v0.3.0	v0.3.0.9000	rw	md5_unchanged	FALSE
+v0.3.0	v0.3.0.9000	rw	reopen_ro	6
+v0.3.0	v0.3.1	ro	ragnar	0.3.1
+v0.3.0	v0.3.1	ro	connect	ok
+v0.3.0	v0.3.1	ro	schema_after_connect	documents=[doc_id,origin,text] fk=1 hnsw=3
+v0.3.0	v0.3.1	ro	embed_width	16
+v0.3.0	v0.3.1	ro	retrieve_hybrid_rows	6
+v0.3.0	v0.3.1	ro	retrieve_bm25_rows	5
+v0.3.0	v0.3.1	ro	cred_sources_rows	1
+v0.3.0	v0.3.1	ro	md5_unchanged	TRUE
+v0.3.0	v0.3.1	rw	ragnar	0.3.1
+v0.3.0	v0.3.1	rw	connect	ok
+v0.3.0	v0.3.1	rw	schema_after_connect	documents=[doc_id,origin,text] fk=1 hnsw=3
+v0.3.0	v0.3.1	rw	embed_width	16
+v0.3.0	v0.3.1	rw	retrieve_hybrid_rows	6
+v0.3.0	v0.3.1	rw	retrieve_bm25_rows	5
+v0.3.0	v0.3.1	rw	cred_sources_rows	1
+v0.3.0	v0.3.1	rw	insert	ok
+v0.3.0	v0.3.1	rw	ingest	ok
+v0.3.0	v0.3.1	rw	delete_two_statements	ok
+v0.3.0	v0.3.1	rw	delete_one_transaction	ERROR: Constraint Error: Violates foreign key constraint because key "doc_id: 2" is still referenced by a foreign key in a different table. If this is an unexpected constraint violation, please refer to our foreign key limitations in the documentation ℹ Context: rapi_execute ℹ Error type: CONSTRAINT
+v0.3.0	v0.3.1	rw	build_index	ok
+v0.3.0	v0.3.1	rw	retrieve_hybrid_after	6
+v0.3.0	v0.3.1	rw	schema_after_writes	documents=[doc_id,origin,text] fk=1 hnsw=3
+v0.3.0	v0.3.1	rw	documents_after	7
+v0.3.0	v0.3.1	rw	md5_unchanged	FALSE
+v0.3.0	v0.3.1	rw	reopen_ro	6
+v0.3.0	v0.4.0	ro	ragnar	0.4.0
+v0.3.0	v0.4.0	ro	connect	ok
+v0.3.0	v0.4.0	ro	schema_after_connect	documents=[doc_id,origin,text] fk=1 hnsw=3
+v0.3.0	v0.4.0	ro	embed_width	16
+v0.3.0	v0.4.0	ro	retrieve_hybrid_rows	6
+v0.3.0	v0.4.0	ro	retrieve_bm25_rows	5
+v0.3.0	v0.4.0	ro	cred_sources_rows	1
+v0.3.0	v0.4.0	ro	md5_unchanged	TRUE
+v0.3.0	v0.4.0	rw	ragnar	0.4.0
+v0.3.0	v0.4.0	rw	connect	ok
+v0.3.0	v0.4.0	rw	schema_after_connect	documents=[doc_id,origin,text,last_modified,content_hash,ingested_at] fk=0 hnsw=3
+v0.3.0	v0.4.0	rw	embed_width	16
+v0.3.0	v0.4.0	rw	retrieve_hybrid_rows	6
+v0.3.0	v0.4.0	rw	retrieve_bm25_rows	5
+v0.3.0	v0.4.0	rw	cred_sources_rows	1
+v0.3.0	v0.4.0	rw	insert	ok
+v0.3.0	v0.4.0	rw	ingest	ok
+v0.3.0	v0.4.0	rw	delete_two_statements	ok
+v0.3.0	v0.4.0	rw	delete_one_transaction	ok
+v0.3.0	v0.4.0	rw	build_index	ok
+v0.3.0	v0.4.0	rw	retrieve_hybrid_after	5
+v0.3.0	v0.4.0	rw	schema_after_writes	documents=[doc_id,origin,text,last_modified,content_hash,ingested_at] fk=0 hnsw=3
+v0.3.0	v0.4.0	rw	documents_after	6
+v0.3.0	v0.4.0	rw	md5_unchanged	FALSE
+v0.3.0	v0.4.0	rw	reopen_ro	5
+v0.3.0.9000	v0.3.0	ro	ragnar	0.3.0
+v0.3.0.9000	v0.3.0	ro	connect	ok
+v0.3.0.9000	v0.3.0	ro	schema_after_connect	documents=[doc_id,origin,text] fk=1 hnsw=3
+v0.3.0.9000	v0.3.0	ro	embed_width	16
+v0.3.0.9000	v0.3.0	ro	retrieve_hybrid_rows	6
+v0.3.0.9000	v0.3.0	ro	retrieve_bm25_rows	5
+v0.3.0.9000	v0.3.0	ro	cred_sources_rows	1
+v0.3.0.9000	v0.3.0	ro	md5_unchanged	TRUE
+v0.3.0.9000	v0.3.0	rw	ragnar	0.3.0
+v0.3.0.9000	v0.3.0	rw	connect	ok
+v0.3.0.9000	v0.3.0	rw	schema_after_connect	documents=[doc_id,origin,text] fk=1 hnsw=3
+v0.3.0.9000	v0.3.0	rw	embed_width	16
+v0.3.0.9000	v0.3.0	rw	retrieve_hybrid_rows	6
+v0.3.0.9000	v0.3.0	rw	retrieve_bm25_rows	5
+v0.3.0.9000	v0.3.0	rw	cred_sources_rows	1
+v0.3.0.9000	v0.3.0	rw	insert	ok
+v0.3.0.9000	v0.3.0	rw	ingest	ok
+v0.3.0.9000	v0.3.0	rw	delete_two_statements	ok
+v0.3.0.9000	v0.3.0	rw	delete_one_transaction	ERROR: Constraint Error: Violates foreign key constraint because key "doc_id: 2" is still referenced by a foreign key in a different table. If this is an unexpected constraint violation, please refer to our foreign key limitations in the documentation ℹ Context: rapi_execute ℹ Error type: CONSTRAINT
+v0.3.0.9000	v0.3.0	rw	build_index	ok
+v0.3.0.9000	v0.3.0	rw	retrieve_hybrid_after	6
+v0.3.0.9000	v0.3.0	rw	schema_after_writes	documents=[doc_id,origin,text] fk=1 hnsw=3
+v0.3.0.9000	v0.3.0	rw	documents_after	7
+v0.3.0.9000	v0.3.0	rw	md5_unchanged	FALSE
+v0.3.0.9000	v0.3.0	rw	reopen_ro	6
+v0.3.0.9000	v0.3.0.9000	ro	ragnar	0.3.0.9000
+v0.3.0.9000	v0.3.0.9000	ro	connect	ok
+v0.3.0.9000	v0.3.0.9000	ro	schema_after_connect	documents=[doc_id,origin,text] fk=1 hnsw=3
+v0.3.0.9000	v0.3.0.9000	ro	embed_width	16
+v0.3.0.9000	v0.3.0.9000	ro	retrieve_hybrid_rows	6
+v0.3.0.9000	v0.3.0.9000	ro	retrieve_bm25_rows	5
+v0.3.0.9000	v0.3.0.9000	ro	cred_sources_rows	1
+v0.3.0.9000	v0.3.0.9000	ro	md5_unchanged	TRUE
+v0.3.0.9000	v0.3.0.9000	rw	ragnar	0.3.0.9000
+v0.3.0.9000	v0.3.0.9000	rw	connect	ok
+v0.3.0.9000	v0.3.0.9000	rw	schema_after_connect	documents=[doc_id,origin,text] fk=1 hnsw=3
+v0.3.0.9000	v0.3.0.9000	rw	embed_width	16
+v0.3.0.9000	v0.3.0.9000	rw	retrieve_hybrid_rows	6
+v0.3.0.9000	v0.3.0.9000	rw	retrieve_bm25_rows	5
+v0.3.0.9000	v0.3.0.9000	rw	cred_sources_rows	1
+v0.3.0.9000	v0.3.0.9000	rw	insert	ok
+v0.3.0.9000	v0.3.0.9000	rw	ingest	ok
+v0.3.0.9000	v0.3.0.9000	rw	delete_two_statements	ok
+v0.3.0.9000	v0.3.0.9000	rw	delete_one_transaction	ERROR: Constraint Error: Violates foreign key constraint because key "doc_id: 2" is still referenced by a foreign key in a different table. If this is an unexpected constraint violation, please refer to our foreign key limitations in the documentation ℹ Context: rapi_execute ℹ Error type: CONSTRAINT
+v0.3.0.9000	v0.3.0.9000	rw	build_index	ok
+v0.3.0.9000	v0.3.0.9000	rw	retrieve_hybrid_after	6
+v0.3.0.9000	v0.3.0.9000	rw	schema_after_writes	documents=[doc_id,origin,text] fk=1 hnsw=3
+v0.3.0.9000	v0.3.0.9000	rw	documents_after	7
+v0.3.0.9000	v0.3.0.9000	rw	md5_unchanged	FALSE
+v0.3.0.9000	v0.3.0.9000	rw	reopen_ro	6
+v0.3.0.9000	v0.3.1	ro	ragnar	0.3.1
+v0.3.0.9000	v0.3.1	ro	connect	ok
+v0.3.0.9000	v0.3.1	ro	schema_after_connect	documents=[doc_id,origin,text] fk=1 hnsw=3
+v0.3.0.9000	v0.3.1	ro	embed_width	16
+v0.3.0.9000	v0.3.1	ro	retrieve_hybrid_rows	6
+v0.3.0.9000	v0.3.1	ro	retrieve_bm25_rows	5
+v0.3.0.9000	v0.3.1	ro	cred_sources_rows	1
+v0.3.0.9000	v0.3.1	ro	md5_unchanged	TRUE
+v0.3.0.9000	v0.3.1	rw	ragnar	0.3.1
+v0.3.0.9000	v0.3.1	rw	connect	ok
+v0.3.0.9000	v0.3.1	rw	schema_after_connect	documents=[doc_id,origin,text] fk=1 hnsw=3
+v0.3.0.9000	v0.3.1	rw	embed_width	16
+v0.3.0.9000	v0.3.1	rw	retrieve_hybrid_rows	6
+v0.3.0.9000	v0.3.1	rw	retrieve_bm25_rows	5
+v0.3.0.9000	v0.3.1	rw	cred_sources_rows	1
+v0.3.0.9000	v0.3.1	rw	insert	ok
+v0.3.0.9000	v0.3.1	rw	ingest	ok
+v0.3.0.9000	v0.3.1	rw	delete_two_statements	ok
+v0.3.0.9000	v0.3.1	rw	delete_one_transaction	ERROR: Constraint Error: Violates foreign key constraint because key "doc_id: 2" is still referenced by a foreign key in a different table. If this is an unexpected constraint violation, please refer to our foreign key limitations in the documentation ℹ Context: rapi_execute ℹ Error type: CONSTRAINT
+v0.3.0.9000	v0.3.1	rw	build_index	ok
+v0.3.0.9000	v0.3.1	rw	retrieve_hybrid_after	6
+v0.3.0.9000	v0.3.1	rw	schema_after_writes	documents=[doc_id,origin,text] fk=1 hnsw=3
+v0.3.0.9000	v0.3.1	rw	documents_after	7
+v0.3.0.9000	v0.3.1	rw	md5_unchanged	FALSE
+v0.3.0.9000	v0.3.1	rw	reopen_ro	6
+v0.3.0.9000	v0.4.0	ro	ragnar	0.4.0
+v0.3.0.9000	v0.4.0	ro	connect	ok
+v0.3.0.9000	v0.4.0	ro	schema_after_connect	documents=[doc_id,origin,text] fk=1 hnsw=3
+v0.3.0.9000	v0.4.0	ro	embed_width	16
+v0.3.0.9000	v0.4.0	ro	retrieve_hybrid_rows	6
+v0.3.0.9000	v0.4.0	ro	retrieve_bm25_rows	5
+v0.3.0.9000	v0.4.0	ro	cred_sources_rows	1
+v0.3.0.9000	v0.4.0	ro	md5_unchanged	TRUE
+v0.3.0.9000	v0.4.0	rw	ragnar	0.4.0
+v0.3.0.9000	v0.4.0	rw	connect	ok
+v0.3.0.9000	v0.4.0	rw	schema_after_connect	documents=[doc_id,origin,text,last_modified,content_hash,ingested_at] fk=0 hnsw=3
+v0.3.0.9000	v0.4.0	rw	embed_width	16
+v0.3.0.9000	v0.4.0	rw	retrieve_hybrid_rows	6
+v0.3.0.9000	v0.4.0	rw	retrieve_bm25_rows	5
+v0.3.0.9000	v0.4.0	rw	cred_sources_rows	1
+v0.3.0.9000	v0.4.0	rw	insert	ok
+v0.3.0.9000	v0.4.0	rw	ingest	ok
+v0.3.0.9000	v0.4.0	rw	delete_two_statements	ok
+v0.3.0.9000	v0.4.0	rw	delete_one_transaction	ok
+v0.3.0.9000	v0.4.0	rw	build_index	ok
+v0.3.0.9000	v0.4.0	rw	retrieve_hybrid_after	5
+v0.3.0.9000	v0.4.0	rw	schema_after_writes	documents=[doc_id,origin,text,last_modified,content_hash,ingested_at] fk=0 hnsw=3
+v0.3.0.9000	v0.4.0	rw	documents_after	6
+v0.3.0.9000	v0.4.0	rw	md5_unchanged	FALSE
+v0.3.0.9000	v0.4.0	rw	reopen_ro	5
+v0.3.1	v0.3.0	ro	ragnar	0.3.0
+v0.3.1	v0.3.0	ro	connect	ok
+v0.3.1	v0.3.0	ro	schema_after_connect	documents=[doc_id,origin,text] fk=1 hnsw=3
+v0.3.1	v0.3.0	ro	embed_width	16
+v0.3.1	v0.3.0	ro	retrieve_hybrid_rows	6
+v0.3.1	v0.3.0	ro	retrieve_bm25_rows	5
+v0.3.1	v0.3.0	ro	cred_sources_rows	1
+v0.3.1	v0.3.0	ro	md5_unchanged	TRUE
+v0.3.1	v0.3.0	rw	ragnar	0.3.0
+v0.3.1	v0.3.0	rw	connect	ok
+v0.3.1	v0.3.0	rw	schema_after_connect	documents=[doc_id,origin,text] fk=1 hnsw=3
+v0.3.1	v0.3.0	rw	embed_width	16
+v0.3.1	v0.3.0	rw	retrieve_hybrid_rows	6
+v0.3.1	v0.3.0	rw	retrieve_bm25_rows	5
+v0.3.1	v0.3.0	rw	cred_sources_rows	1
+v0.3.1	v0.3.0	rw	insert	ok
+v0.3.1	v0.3.0	rw	ingest	ok
+v0.3.1	v0.3.0	rw	delete_two_statements	ok
+v0.3.1	v0.3.0	rw	delete_one_transaction	ERROR: Constraint Error: Violates foreign key constraint because key "doc_id: 2" is still referenced by a foreign key in a different table. If this is an unexpected constraint violation, please refer to our foreign key limitations in the documentation ℹ Context: rapi_execute ℹ Error type: CONSTRAINT
+v0.3.1	v0.3.0	rw	build_index	ok
+v0.3.1	v0.3.0	rw	retrieve_hybrid_after	6
+v0.3.1	v0.3.0	rw	schema_after_writes	documents=[doc_id,origin,text] fk=1 hnsw=3
+v0.3.1	v0.3.0	rw	documents_after	7
+v0.3.1	v0.3.0	rw	md5_unchanged	FALSE
+v0.3.1	v0.3.0	rw	reopen_ro	6
+v0.3.1	v0.3.0.9000	ro	ragnar	0.3.0.9000
+v0.3.1	v0.3.0.9000	ro	connect	ok
+v0.3.1	v0.3.0.9000	ro	schema_after_connect	documents=[doc_id,origin,text] fk=1 hnsw=3
+v0.3.1	v0.3.0.9000	ro	embed_width	16
+v0.3.1	v0.3.0.9000	ro	retrieve_hybrid_rows	6
+v0.3.1	v0.3.0.9000	ro	retrieve_bm25_rows	5
+v0.3.1	v0.3.0.9000	ro	cred_sources_rows	1
+v0.3.1	v0.3.0.9000	ro	md5_unchanged	TRUE
+v0.3.1	v0.3.0.9000	rw	ragnar	0.3.0.9000
+v0.3.1	v0.3.0.9000	rw	connect	ok
+v0.3.1	v0.3.0.9000	rw	schema_after_connect	documents=[doc_id,origin,text] fk=1 hnsw=3
+v0.3.1	v0.3.0.9000	rw	embed_width	16
+v0.3.1	v0.3.0.9000	rw	retrieve_hybrid_rows	6
+v0.3.1	v0.3.0.9000	rw	retrieve_bm25_rows	5
+v0.3.1	v0.3.0.9000	rw	cred_sources_rows	1
+v0.3.1	v0.3.0.9000	rw	insert	ok
+v0.3.1	v0.3.0.9000	rw	ingest	ok
+v0.3.1	v0.3.0.9000	rw	delete_two_statements	ok
+v0.3.1	v0.3.0.9000	rw	delete_one_transaction	ERROR: Constraint Error: Violates foreign key constraint because key "doc_id: 2" is still referenced by a foreign key in a different table. If this is an unexpected constraint violation, please refer to our foreign key limitations in the documentation ℹ Context: rapi_execute ℹ Error type: CONSTRAINT
+v0.3.1	v0.3.0.9000	rw	build_index	ok
+v0.3.1	v0.3.0.9000	rw	retrieve_hybrid_after	6
+v0.3.1	v0.3.0.9000	rw	schema_after_writes	documents=[doc_id,origin,text] fk=1 hnsw=3
+v0.3.1	v0.3.0.9000	rw	documents_after	7
+v0.3.1	v0.3.0.9000	rw	md5_unchanged	FALSE
+v0.3.1	v0.3.0.9000	rw	reopen_ro	6
+v0.3.1	v0.3.1	ro	ragnar	0.3.1
+v0.3.1	v0.3.1	ro	connect	ok
+v0.3.1	v0.3.1	ro	schema_after_connect	documents=[doc_id,origin,text] fk=1 hnsw=3
+v0.3.1	v0.3.1	ro	embed_width	16
+v0.3.1	v0.3.1	ro	retrieve_hybrid_rows	6
+v0.3.1	v0.3.1	ro	retrieve_bm25_rows	5
+v0.3.1	v0.3.1	ro	cred_sources_rows	1
+v0.3.1	v0.3.1	ro	md5_unchanged	TRUE
+v0.3.1	v0.3.1	rw	ragnar	0.3.1
+v0.3.1	v0.3.1	rw	connect	ok
+v0.3.1	v0.3.1	rw	schema_after_connect	documents=[doc_id,origin,text] fk=1 hnsw=3
+v0.3.1	v0.3.1	rw	embed_width	16
+v0.3.1	v0.3.1	rw	retrieve_hybrid_rows	6
+v0.3.1	v0.3.1	rw	retrieve_bm25_rows	5
+v0.3.1	v0.3.1	rw	cred_sources_rows	1
+v0.3.1	v0.3.1	rw	insert	ok
+v0.3.1	v0.3.1	rw	ingest	ok
+v0.3.1	v0.3.1	rw	delete_two_statements	ok
+v0.3.1	v0.3.1	rw	delete_one_transaction	ERROR: Constraint Error: Violates foreign key constraint because key "doc_id: 2" is still referenced by a foreign key in a different table. If this is an unexpected constraint violation, please refer to our foreign key limitations in the documentation ℹ Context: rapi_execute ℹ Error type: CONSTRAINT
+v0.3.1	v0.3.1	rw	build_index	ok
+v0.3.1	v0.3.1	rw	retrieve_hybrid_after	6
+v0.3.1	v0.3.1	rw	schema_after_writes	documents=[doc_id,origin,text] fk=1 hnsw=3
+v0.3.1	v0.3.1	rw	documents_after	7
+v0.3.1	v0.3.1	rw	md5_unchanged	FALSE
+v0.3.1	v0.3.1	rw	reopen_ro	6
+v0.3.1	v0.4.0	ro	ragnar	0.4.0
+v0.3.1	v0.4.0	ro	connect	ok
+v0.3.1	v0.4.0	ro	schema_after_connect	documents=[doc_id,origin,text] fk=1 hnsw=3
+v0.3.1	v0.4.0	ro	embed_width	16
+v0.3.1	v0.4.0	ro	retrieve_hybrid_rows	6
+v0.3.1	v0.4.0	ro	retrieve_bm25_rows	5
+v0.3.1	v0.4.0	ro	cred_sources_rows	1
+v0.3.1	v0.4.0	ro	md5_unchanged	TRUE
+v0.3.1	v0.4.0	rw	ragnar	0.4.0
+v0.3.1	v0.4.0	rw	connect	ok
+v0.3.1	v0.4.0	rw	schema_after_connect	documents=[doc_id,origin,text,last_modified,content_hash,ingested_at] fk=0 hnsw=3
+v0.3.1	v0.4.0	rw	embed_width	16
+v0.3.1	v0.4.0	rw	retrieve_hybrid_rows	6
+v0.3.1	v0.4.0	rw	retrieve_bm25_rows	5
+v0.3.1	v0.4.0	rw	cred_sources_rows	1
+v0.3.1	v0.4.0	rw	insert	ok
+v0.3.1	v0.4.0	rw	ingest	ok
+v0.3.1	v0.4.0	rw	delete_two_statements	ok
+v0.3.1	v0.4.0	rw	delete_one_transaction	ok
+v0.3.1	v0.4.0	rw	build_index	ok
+v0.3.1	v0.4.0	rw	retrieve_hybrid_after	5
+v0.3.1	v0.4.0	rw	schema_after_writes	documents=[doc_id,origin,text,last_modified,content_hash,ingested_at] fk=0 hnsw=3
+v0.3.1	v0.4.0	rw	documents_after	6
+v0.3.1	v0.4.0	rw	md5_unchanged	FALSE
+v0.3.1	v0.4.0	rw	reopen_ro	5
+v0.4.0	v0.3.0	ro	ragnar	0.3.0
+v0.4.0	v0.3.0	ro	connect	ok
+v0.4.0	v0.3.0	ro	schema_after_connect	documents=[doc_id,origin,text,last_modified,content_hash,ingested_at] fk=0 hnsw=3
+v0.4.0	v0.3.0	ro	embed_width	16
+v0.4.0	v0.3.0	ro	retrieve_hybrid_rows	6
+v0.4.0	v0.3.0	ro	retrieve_bm25_rows	5
+v0.4.0	v0.3.0	ro	cred_sources_rows	1
+v0.4.0	v0.3.0	ro	md5_unchanged	TRUE
+v0.4.0	v0.3.0	rw	ragnar	0.3.0
+v0.4.0	v0.3.0	rw	connect	ok
+v0.4.0	v0.3.0	rw	schema_after_connect	documents=[doc_id,origin,text,last_modified,content_hash,ingested_at] fk=0 hnsw=3
+v0.4.0	v0.3.0	rw	embed_width	16
+v0.4.0	v0.3.0	rw	retrieve_hybrid_rows	6
+v0.4.0	v0.3.0	rw	retrieve_bm25_rows	5
+v0.4.0	v0.3.0	rw	cred_sources_rows	1
+v0.4.0	v0.3.0	rw	insert	ok
+v0.4.0	v0.3.0	rw	ingest	ERROR: Binder Error: table "excluded" has 3 columns available but 6 columns specified ℹ Context: rapi_prepare ℹ Error type: BINDER
+v0.4.0	v0.3.0	rw	delete_two_statements	ok
+v0.4.0	v0.3.0	rw	delete_one_transaction	ok
+v0.4.0	v0.3.0	rw	build_index	ok
+v0.4.0	v0.3.0	rw	retrieve_hybrid_after	5
+v0.4.0	v0.3.0	rw	schema_after_writes	documents=[doc_id,origin,text,last_modified,content_hash,ingested_at] fk=0 hnsw=3
+v0.4.0	v0.3.0	rw	documents_after	5
+v0.4.0	v0.3.0	rw	md5_unchanged	FALSE
+v0.4.0	v0.3.0	rw	reopen_ro	5
+v0.4.0	v0.3.0.9000	ro	ragnar	0.3.0.9000
+v0.4.0	v0.3.0.9000	ro	connect	ok
+v0.4.0	v0.3.0.9000	ro	schema_after_connect	documents=[doc_id,origin,text,last_modified,content_hash,ingested_at] fk=0 hnsw=3
+v0.4.0	v0.3.0.9000	ro	embed_width	16
+v0.4.0	v0.3.0.9000	ro	retrieve_hybrid_rows	6
+v0.4.0	v0.3.0.9000	ro	retrieve_bm25_rows	5
+v0.4.0	v0.3.0.9000	ro	cred_sources_rows	1
+v0.4.0	v0.3.0.9000	ro	md5_unchanged	TRUE
+v0.4.0	v0.3.0.9000	rw	ragnar	0.3.0.9000
+v0.4.0	v0.3.0.9000	rw	connect	ok
+v0.4.0	v0.3.0.9000	rw	schema_after_connect	documents=[doc_id,origin,text,last_modified,content_hash,ingested_at] fk=0 hnsw=3
+v0.4.0	v0.3.0.9000	rw	embed_width	16
+v0.4.0	v0.3.0.9000	rw	retrieve_hybrid_rows	6
+v0.4.0	v0.3.0.9000	rw	retrieve_bm25_rows	5
+v0.4.0	v0.3.0.9000	rw	cred_sources_rows	1
+v0.4.0	v0.3.0.9000	rw	insert	ok
+v0.4.0	v0.3.0.9000	rw	ingest	ERROR: Binder Error: table "excluded" has 3 columns available but 6 columns specified ℹ Context: rapi_prepare ℹ Error type: BINDER
+v0.4.0	v0.3.0.9000	rw	delete_two_statements	ok
+v0.4.0	v0.3.0.9000	rw	delete_one_transaction	ok
+v0.4.0	v0.3.0.9000	rw	build_index	ok
+v0.4.0	v0.3.0.9000	rw	retrieve_hybrid_after	5
+v0.4.0	v0.3.0.9000	rw	schema_after_writes	documents=[doc_id,origin,text,last_modified,content_hash,ingested_at] fk=0 hnsw=3
+v0.4.0	v0.3.0.9000	rw	documents_after	5
+v0.4.0	v0.3.0.9000	rw	md5_unchanged	FALSE
+v0.4.0	v0.3.0.9000	rw	reopen_ro	5
+v0.4.0	v0.3.1	ro	ragnar	0.3.1
+v0.4.0	v0.3.1	ro	connect	ok
+v0.4.0	v0.3.1	ro	schema_after_connect	documents=[doc_id,origin,text,last_modified,content_hash,ingested_at] fk=0 hnsw=3
+v0.4.0	v0.3.1	ro	embed_width	16
+v0.4.0	v0.3.1	ro	retrieve_hybrid_rows	6
+v0.4.0	v0.3.1	ro	retrieve_bm25_rows	5
+v0.4.0	v0.3.1	ro	cred_sources_rows	1
+v0.4.0	v0.3.1	ro	md5_unchanged	TRUE
+v0.4.0	v0.3.1	rw	ragnar	0.3.1
+v0.4.0	v0.3.1	rw	connect	ok
+v0.4.0	v0.3.1	rw	schema_after_connect	documents=[doc_id,origin,text,last_modified,content_hash,ingested_at] fk=0 hnsw=3
+v0.4.0	v0.3.1	rw	embed_width	16
+v0.4.0	v0.3.1	rw	retrieve_hybrid_rows	6
+v0.4.0	v0.3.1	rw	retrieve_bm25_rows	5
+v0.4.0	v0.3.1	rw	cred_sources_rows	1
+v0.4.0	v0.3.1	rw	insert	ok
+v0.4.0	v0.3.1	rw	ingest	ERROR: Binder Error: table "excluded" has 3 columns available but 6 columns specified ℹ Context: rapi_prepare ℹ Error type: BINDER
+v0.4.0	v0.3.1	rw	delete_two_statements	ok
+v0.4.0	v0.3.1	rw	delete_one_transaction	ok
+v0.4.0	v0.3.1	rw	build_index	ok
+v0.4.0	v0.3.1	rw	retrieve_hybrid_after	5
+v0.4.0	v0.3.1	rw	schema_after_writes	documents=[doc_id,origin,text,last_modified,content_hash,ingested_at] fk=0 hnsw=3
+v0.4.0	v0.3.1	rw	documents_after	5
+v0.4.0	v0.3.1	rw	md5_unchanged	FALSE
+v0.4.0	v0.3.1	rw	reopen_ro	5
+v0.4.0	v0.4.0	ro	ragnar	0.4.0
+v0.4.0	v0.4.0	ro	connect	ok
+v0.4.0	v0.4.0	ro	schema_after_connect	documents=[doc_id,origin,text,last_modified,content_hash,ingested_at] fk=0 hnsw=3
+v0.4.0	v0.4.0	ro	embed_width	16
+v0.4.0	v0.4.0	ro	retrieve_hybrid_rows	6
+v0.4.0	v0.4.0	ro	retrieve_bm25_rows	5
+v0.4.0	v0.4.0	ro	cred_sources_rows	1
+v0.4.0	v0.4.0	ro	md5_unchanged	TRUE
+v0.4.0	v0.4.0	rw	ragnar	0.4.0
+v0.4.0	v0.4.0	rw	connect	ok
+v0.4.0	v0.4.0	rw	schema_after_connect	documents=[doc_id,origin,text,last_modified,content_hash,ingested_at] fk=0 hnsw=3
+v0.4.0	v0.4.0	rw	embed_width	16
+v0.4.0	v0.4.0	rw	retrieve_hybrid_rows	6
+v0.4.0	v0.4.0	rw	retrieve_bm25_rows	5
+v0.4.0	v0.4.0	rw	cred_sources_rows	1
+v0.4.0	v0.4.0	rw	insert	ok
+v0.4.0	v0.4.0	rw	ingest	ok
+v0.4.0	v0.4.0	rw	delete_two_statements	ok
+v0.4.0	v0.4.0	rw	delete_one_transaction	ok
+v0.4.0	v0.4.0	rw	build_index	ok
+v0.4.0	v0.4.0	rw	retrieve_hybrid_after	5
+v0.4.0	v0.4.0	rw	schema_after_writes	documents=[doc_id,origin,text,last_modified,content_hash,ingested_at] fk=0 hnsw=3
+v0.4.0	v0.4.0	rw	documents_after	6
+v0.4.0	v0.4.0	rw	md5_unchanged	FALSE
+v0.4.0	v0.4.0	rw	reopen_ro	5
