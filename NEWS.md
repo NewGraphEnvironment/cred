@@ -5,6 +5,9 @@ cred now supports one ragnar: the CRAN release, 0.4.0 or later
 development branch, so CI tested a different ragnar from the one users had, and a fix that passed
 every local test failed in CI.
 
+* `crd_store_push(dry_run = TRUE)` prints only the selected store's manifest entry by default,
+  while still listing all store names. Set `show_full_manifest = TRUE` to print every entry.
+
 * `ragnar (>= 0.4.0)` replaces the development branch. The store functions refuse an older ragnar
   with a message giving both versions; update it with `pak::pak("ragnar")` and restart R.
 * Every ragnar can read every store, but ragnar 0.4.0 upgrades a store written by an older ragnar
