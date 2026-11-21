@@ -166,6 +166,77 @@ test_that(".crd_s3_precondition_failed is not fooled by a bare 412 substring", {
 
 # ---- push guards ----------------------------------------------------------
 
+test_that("crd_store_push dry-run previews only the selected store by default", {
+  skip_if_not_installed("duckdb")
+  f <- withr::local_tempfile(fileext = ".duckdb")
+  file.create(f)
+  manifest <- list(stores = list(
+    alpha = list(repo = "PRIVATE_REPO_ALPHA", branch = "private-a", head_sha = "secret-a"),
+    beta = list(repo = "PRIVATE_REPO_BETA", branch = "private-b", head_sha = "secret-b")
+  ))
+  local_mocked_bindings(
+    .crd_s3_head_bucket = function(source, profile = "") TRUE,
+    .crd_s3_head_object = function(source, key, profile = "") {
+      list(exists = TRUE, confirmed_absent = FALSE, etag = '"etag"', out = "")
+    },
+    .crd_manifest_read = function(source, profile = "") manifest,
+    .crd_store_describe = function(store_path, built_by) {
+      list(repo = "public/current", branch = "main", head_sha = "current-sha",
+           embedding_model = NA_character_, embedding_size = NA_integer_)
+    },
+    .crd_check_model = function(...) invisible(NULL),
+    .crd_s3_cp_up = function(...) stop("dry run attempted upload"),
+    .package = "cred"
+  )
+
+  messages <- character()
+  printed <- utils::capture.output(withCallingHandlers(
+    crd_store_push(f, source = "s3://bucket/prefix/", name = "current", dry_run = TRUE),
+    message = function(m) {
+      messages <<- c(messages, conditionMessage(m))
+      invokeRestart("muffleMessage")
+    }
+  ))
+  preview <- jsonlite::fromJSON(paste(printed, collapse = "\n"), simplifyVector = FALSE)
+
+  expect_match(messages[[2]], "alpha, beta, current", fixed = TRUE)
+  expect_identical(names(preview$stores), "current")
+  expect_identical(preview$stores$current$head_sha, "current-sha")
+  expect_false(any(grepl("PRIVATE_REPO|secret-[ab]|private-[ab]", printed)))
+})
+
+test_that("crd_store_push can print the full manifest during a dry-run", {
+  skip_if_not_installed("duckdb")
+  f <- withr::local_tempfile(fileext = ".duckdb")
+  file.create(f)
+  manifest <- list(stores = list(
+    alpha = list(repo = "PRIVATE_REPO_ALPHA", branch = "private-a", head_sha = "secret-a")
+  ))
+  local_mocked_bindings(
+    .crd_s3_head_bucket = function(source, profile = "") TRUE,
+    .crd_s3_head_object = function(source, key, profile = "") {
+      list(exists = TRUE, confirmed_absent = FALSE, etag = '"etag"', out = "")
+    },
+    .crd_manifest_read = function(source, profile = "") manifest,
+    .crd_store_describe = function(store_path, built_by) {
+      list(repo = "public/current", branch = "main", head_sha = "current-sha",
+           embedding_model = NA_character_, embedding_size = NA_integer_)
+    },
+    .crd_check_model = function(...) invisible(NULL),
+    .crd_s3_cp_up = function(...) stop("dry run attempted upload"),
+    .package = "cred"
+  )
+
+  printed <- utils::capture.output(crd_store_push(
+    f, source = "s3://bucket/prefix/", name = "current", dry_run = TRUE,
+    show_full_manifest = TRUE
+  ))
+  preview <- jsonlite::fromJSON(paste(printed, collapse = "\n"), simplifyVector = FALSE)
+
+  expect_setequal(names(preview$stores), c("alpha", "current"))
+  expect_identical(preview$stores$alpha$head_sha, "secret-a")
+})
+
 test_that("crd_store_push refuses when the bucket is unreachable", {
   skip_if_not_installed("duckdb")
   f <- withr::local_tempfile(fileext = ".duckdb")
