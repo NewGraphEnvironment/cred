@@ -44,7 +44,7 @@ would hold, at the cost of the changes alone."><meta property="og:image" content
 <div class="row">
   <main id="main" class="col-md-9"><div class="page-header">
       <img src="../logo.png" class="logo" alt=""><h1>Bring an existing evidence store up to date with Zotero</h1>
-      <small class="dont-index">Source: <a href="https://github.com/NewGraphEnvironment/cred/blob/v0.8.0/R/store.R" class="external-link"><code>R/store.R</code></a></small>
+      <small class="dont-index">Source: <a href="https://github.com/NewGraphEnvironment/cred/blob/main/R/store.R" class="external-link"><code>R/store.R</code></a></small>
       <div class="d-none name"><code>crd_store_update.Rd</code></div>
     </div>
 
@@ -137,11 +137,19 @@ does one that would leave it with no documents. When the update would
 ingest nothing, drop nothing and record nothing new, the store is not
 written at all, so a new PDF that cannot be read does not rewrite it.
 Close any connection to the store before updating it.</p>
+<p><strong>How big the result is.</strong> The updated copy is written out again into a
+fresh file, holding only its live rows, and the search indexes are built
+once on that file, so the store comes out the size a fresh
+<code><a href="crd_store_build.html">crd_store_build()</a></code> of the same documents would be. An update that
+changes nothing leaves a store as it was, whatever free space it holds.
+While it runs, up to three files sit beside each other: the store, the
+working copy (larger than the store when ragnar upgrades it, below), and
+the compacted file, about the size of the result.</p>
 <p><strong>A store written before ragnar 0.4.0.</strong> An update that changes it also
 upgrades it to the schema ragnar 0.4.0 writes, because ragnar upgrades a
-store as it opens it for writing: <code>documents</code> gains three columns, and the
-file grows (about 1.85x on two real stores). The update rebuilds the index,
-so search works as on a fresh build. An update that changes nothing leaves
+store as it opens it for writing: <code>documents</code> gains three columns. The
+space the upgrade frees in the working copy does not reach the store, and
+the indexes are built afresh, so search works as on a fresh build. An update that changes nothing leaves
 the store, and its schema, as they were. Once upgraded, a store cannot be
 ingested into by ragnar 0.3.x, so anyone sharing it needs cred and ragnar
 current.</p>

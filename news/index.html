@@ -32,9 +32,14 @@
 <div class="row">
   <main id="main" class="col-md-9"><div class="page-header">
       <img src="../logo.png" class="logo" alt=""><h1>Changelog</h1>
-      <small>Source: <a href="https://github.com/NewGraphEnvironment/cred/blob/v0.8.0/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
+      <small>Source: <a href="https://github.com/NewGraphEnvironment/cred/blob/main/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="development version" id="cred-development-version">cred (development version)<a class="anchor" aria-label="anchor" href="#cred-development-version"></a></h2>
+<ul><li>
+<code><a href="../reference/crd_store_update.html">crd_store_update()</a></code> leaves a store the size a fresh <code><a href="../reference/crd_store_build.html">crd_store_build()</a></code> would (<a href="https://github.com/NewGraphEnvironment/cred/issues/48" class="external-link">#48</a>). Each update rebuilt the search indexes inside the file, and duckdb keeps the space it frees, so updated stores carried 32 to 76 % free space that every <code><a href="../reference/crd_store_connect.html">crd_store_connect()</a></code> downloaded. The update now copies the store into a fresh file and builds the indexes once there. On a 924 MB store it was also faster (34 s against 75 s). A store written before ragnar 0.4.0 no longer grows when an update upgrades it. While an update runs, up to three files the size of the store sit side by side.</li>
+</ul></div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.8.0" id="cred-080">cred 0.8.0<a class="anchor" aria-label="anchor" href="#cred-080"></a></h2>
 <p>cred now supports one ragnar: the CRAN release, 0.4.0 or later (<a href="https://github.com/NewGraphEnvironment/cred/issues/43" class="external-link">#43</a>). It had installed ragnar’s development branch, so CI tested a different ragnar from the one users had, and a fix that passed every local test failed in CI.</p>
