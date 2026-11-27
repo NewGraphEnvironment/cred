@@ -251,7 +251,10 @@ test_that("an updated store holds every object a fresh build holds, its indexes 
   got <- .crd_test_inventory(path)
   expect_identical(got, .crd_test_inventory(fresh))
   expect_true(all(c("main.cred_sources", "main.cred_ragnar", "fts_main_chunks.docs") %in% got$tables))
-  expect_identical(got$views, "main.chunks")
+  # Present, not the only view: duckdb 2.0's FTS extension adds
+  # fts_main_chunks.index_metadata, and the comparison above already holds the
+  # updated store to a fresh build's views under whichever duckdb runs.
+  expect_true("main.chunks" %in% got$views)
   expect_length(got$indexes, 3L)
   expect_true(.crd_test_cosine_indexed(path))
   expect_gt(bm25_hits(path, "zzzonlykeyC"), 0L)
