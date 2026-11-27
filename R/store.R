@@ -1967,11 +1967,13 @@ crd_search <- function(store, query, top_k = 5L,
 #' @param progress `logical(1)` passed to ragnar. Default `FALSE`, and
 #'   [crd_store_build()] passes `FALSE`: ragnar's per-file progress output does
 #'   not handle every file name safely.
+#' @param build_index `logical(1)` passed to ragnar. [crd_store_update()]
+#'   passes `FALSE` and builds the index on its compacted copy instead.
 #' @return A `list`: `ingested` (paths now in the store), `skipped`
 #'   (`origin`, `reason`) and `notes` (`origin`, `kind`, `detail`: fallback
 #'   reads, split and dropped chunks).
 #' @noRd
-.crd_store_ingest <- function(store, paths, read = NULL, progress = FALSE) {
+.crd_store_ingest <- function(store, paths, read = NULL, progress = FALSE, build_index = TRUE) {
   notes_dir <- tempfile("cred-ingest-")
   dir.create(notes_dir)
   on.exit(unlink(notes_dir, recursive = TRUE), add = TRUE)
@@ -1979,7 +1981,8 @@ crd_search <- function(store, query, top_k = 5L,
 
   worker_errors <- character()
   withCallingHandlers(
-    ragnar::ragnar_store_ingest(store, paths, prepare = prepare, progress = progress),
+    ragnar::ragnar_store_ingest(store, paths, prepare = prepare, progress = progress,
+                                build_index = build_index),
     ragnar_ingest_worker_error = function(w) {
       if (is.character(w$path) && length(w$path) == 1L && !is.na(w$path)) {
         worker_errors[[w$path]] <<- conditionMessage(w)
@@ -2434,11 +2437,20 @@ crd_store_build <- function(store_path,
 #' written at all, so a new PDF that cannot be read does not rewrite it.
 #' Close any connection to the store before updating it.
 #'
+#' **How big the result is.** The updated copy is written out again into a
+#' fresh file, holding only its live rows, and the search indexes are built
+#' once on that file, so the store comes out the size a fresh
+#' [crd_store_build()] of the same documents would be. An update that
+#' changes nothing leaves a store as it was, whatever free space it holds.
+#' While it runs, up to three files sit beside each other: the store, the
+#' working copy (larger than the store when ragnar upgrades it, below), and
+#' the compacted file, about the size of the result.
+#'
 #' **A store written before ragnar 0.4.0.** An update that changes it also
 #' upgrades it to the schema ragnar 0.4.0 writes, because ragnar upgrades a
-#' store as it opens it for writing: `documents` gains three columns, and the
-#' file grows (about 1.85x on two real stores). The update rebuilds the index,
-#' so search works as on a fresh build. An update that changes nothing leaves
+#' store as it opens it for writing: `documents` gains three columns. The
+#' space the upgrade frees in the working copy does not reach the store, and
+#' the indexes are built afresh, so search works as on a fresh build. An update that changes nothing leaves
 #' the store, and its schema, as they were. Once upgraded, a store cannot be
 #' ingested into by ragnar 0.3.x, so anyone sharing it needs cred and ragnar
 #' current.
@@ -2488,7 +2500,7 @@ crd_store_update <- function(store_path,
   }
   leftover <- Sys.glob(paste0(store_path, ".updating-*"))
   if (length(leftover) > 0L) {
-    warning("Copies left by an update that did not finish, each the size of the store:\n",
+    warning("Copies of the store left by an update that did not finish:\n",
             paste0("  ", leftover, collapse = "\n"), call. = FALSE)
   }
 
@@ -2602,11 +2614,21 @@ crd_store_update <- function(store_path,
   # is finished: ragnar commits each document on its own and builds the index
   # once at the end, so a store updated in place and interrupted would be left
   # with an index that does not match its documents.
+  #
+  # The copy is then compacted into a second file, which is what replaces the
+  # store (#48). Rebuilding an index drops the old one, and duckdb keeps the
+  # space it held: updated stores carried 32 to 76 % free blocks. So the
+  # working copy loses its indexes before anything is written to it, and they
+  # are built once, on the compacted file.
   work <- paste0(store_path, ".updating-", Sys.getpid())
-  on.exit(unlink(c(work, paste0(work, ".wal"))), add = TRUE)
+  compact <- paste0(work, "-compact")
+  on.exit(unlink(c(work, paste0(work, ".wal"), compact, paste0(compact, ".wal"))), add = TRUE)
   if (!file.copy(store_path, work, overwrite = TRUE)) {
     stop("Could not copy the store to ", work, call. = FALSE)
   }
+  # Before ragnar opens it: ragnar 0.4.0 upgrades a pre-0.4.0 store as it opens
+  # it for writing, and the upgrade recreates every index it finds.
+  .crd_store_drop_indexes(work)
   store <- ragnar::ragnar_store_connect(work, read_only = FALSE)
 
   # A replaced document goes before its file is read again, as a removed one
@@ -2630,10 +2652,8 @@ crd_store_update <- function(store_path,
               notes = tibble::tibble(origin = character(), kind = character(), detail = character()))
   if (length(to_ingest) > 0L) {
     message("Ingesting ", length(to_ingest), " PDF(s) into ", store_path)
-    # Rebuilds the index, whatever it ingested.
-    ing <- .crd_store_ingest(store, to_ingest, progress = FALSE)
-  } else if (length(dropped) > 0L) {
-    ragnar::ragnar_store_build_index(store)
+    # No index here: it is built on the compacted file.
+    ing <- .crd_store_ingest(store, to_ingest, progress = FALSE, build_index = FALSE)
   }
 
   final <- new_rec(ing$ingested)
@@ -2644,18 +2664,11 @@ crd_store_update <- function(store_path,
   }
   if (length(ing$ingested) == 0L && length(dropped) == 0L && same_rec(final)) {
     # Nothing could be ingested and nothing else changed: the copy differs
-    # from the store only by a rebuilt index, and replacing the store with it
-    # would change its md5 for nothing.
+    # from the store only by its dropped indexes, and replacing the store with
+    # a rebuilt one would change its md5 for nothing.
     .crd_store_report(ing, src)
     message("Store is current: ", store_path, " | kept: ", nrow(docs))
     return(current())
-  }
-  # A copy kept with nothing ingested or dropped (only the record changed) has
-  # had no index rebuild, and ragnar 0.4.0 may have upgraded it on open, which
-  # recreates HNSW indexes made by an older duckdb (1.5.6 measured) without their metric. Every kept copy leaves
-  # with a rebuilt index (#43).
-  if (length(to_ingest) == 0L && length(dropped) == 0L) {
-    ragnar::ragnar_store_build_index(store)
   }
   .crd_sources_write(store@con, final$origin_id, final$md5)
   .crd_ragnar_stamp_write(store@con)
@@ -2666,7 +2679,16 @@ crd_store_update <- function(store_path,
   DBI::dbExecute(store@con, "CHECKPOINT")
   DBI::dbDisconnect(store@con, shutdown = TRUE)
   store <- NULL
-  if (file.exists(paste0(work, ".wal")) || !file.rename(work, store_path)) {
+  if (file.exists(paste0(work, ".wal"))) {
+    stop("The updated copy kept a write-ahead log after closing; the store is unchanged.",
+         call. = FALSE)
+  }
+  # Every kept copy leaves with indexes built by ragnar's own statements, with
+  # their metrics, whichever duckdb runs: a copy that carried them would
+  # replay the SQL duckdb recorded, which before duckdb 2.0 has no metric (#43).
+  .crd_store_compact(work, compact)
+  unlink(work)
+  if (file.exists(paste0(compact, ".wal")) || !file.rename(compact, store_path)) {
     stop("Could not move the updated store into place at ", store_path,
          "; the store is unchanged.", call. = FALSE)
   }
@@ -2681,6 +2703,112 @@ crd_store_update <- function(store_path,
           "crd_store_connect(verify = FALSE) until then, which would otherwise replace it ",
           "with the copy the manifest describes. Reconnect any session that had it open.")
   current(ing$ingested, dropped)
+}
+
+#' Drop a store's search indexes
+#'
+#' Removes the HNSW indexes on `embeddings` and every `fts_main_*` schema, on a
+#' plain connection, so nothing ragnar does on opening the store recreates
+#' them. Used on an update's working copy, whose indexes are built afresh on
+#' the compacted file.
+#'
+#' @param path `character(1)` path to a store no connection has open.
+#' @return `NULL`, invisibly.
+#' @noRd
+.crd_store_drop_indexes <- function(path) {
+  con <- DBI::dbConnect(duckdb::duckdb(), path)
+  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  DBI::dbExecute(con, "INSTALL vss; LOAD vss; SET hnsw_enable_experimental_persistence = true")
+  idx <- DBI::dbGetQuery(con, "SELECT index_name FROM duckdb_indexes()
+                               WHERE database_name = current_database() AND table_name = 'embeddings'")
+  for (i in idx$index_name) {
+    DBI::dbExecute(con, paste("DROP INDEX", DBI::dbQuoteIdentifier(con, i)))
+  }
+  fts <- DBI::dbGetQuery(con, "SELECT schema_name FROM duckdb_schemas()
+                               WHERE database_name = current_database() AND schema_name LIKE 'fts_main_%'")
+  for (f in fts$schema_name) {
+    DBI::dbExecute(con, paste("DROP SCHEMA", DBI::dbQuoteIdentifier(con, f), "CASCADE"))
+  }
+  DBI::dbExecute(con, "CHECKPOINT")
+  invisible(NULL)
+}
+
+#' Row counts of every table in an attached database
+#'
+#' @param con A duckdb connection with `db` attached.
+#' @param db `character(1)` the attached database's name.
+#' @return Named `numeric`, one count per `schema.table`, sorted by name.
+#' @noRd
+.crd_store_rows <- function(con, db) {
+  tables <- DBI::dbGetQuery(con, "SELECT schema_name, table_name FROM duckdb_tables()
+                                  WHERE database_name = ?", params = list(db))
+  q <- function(x) DBI::dbQuoteIdentifier(con, x)
+  n <- vapply(seq_len(nrow(tables)), function(i) {
+    as.numeric(DBI::dbGetQuery(con, paste0("SELECT COUNT(*) AS n FROM ", q(db), ".",
+                                           q(tables$schema_name[i]), ".",
+                                           q(tables$table_name[i])))$n)
+  }, numeric(1))
+  names(n) <- paste(tables$schema_name, tables$table_name, sep = ".")
+  n[order(names(n), method = "radix")]
+}
+
+#' Copy a store into a fresh file and build its indexes there
+#'
+#' duckdb reuses a free block but never gives one back, so a store whose
+#' indexes were rebuilt carries the space the old ones held. `COPY FROM
+#' DATABASE` writes only the live rows into a new file, and the indexes are
+#' then built once, by ragnar, on that file: what a fresh build leaves (#48).
+#' `from` should hold no indexes ([.crd_store_drop_indexes()]), or the copy
+#' replays the SQL duckdb recorded for them, which before duckdb 2.0 has no
+#' metric.
+#'
+#' @param from `character(1)` path to the store to copy; no connection may
+#'   have it open.
+#' @param to `character(1)` path of the new file; must not exist.
+#' @return `to`, invisibly. Stops if a table's row count differs between the
+#'   two, or if the new file is left with a write-ahead log.
+#' @noRd
+.crd_store_compact <- function(from, to) {
+  con <- DBI::dbConnect(duckdb::duckdb())
+  on.exit(if (!is.null(con)) DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  # An in-memory database spills to `.tmp` under the working directory.
+  spill <- tempfile("cred-compact-")
+  on.exit(unlink(spill, recursive = TRUE), add = TRUE)
+  DBI::dbExecute(con, paste("SET temp_directory =", DBI::dbQuoteString(con, spill)))
+  DBI::dbExecute(con, paste("ATTACH", DBI::dbQuoteString(con, from), "AS cred_from (READ_ONLY)"))
+  DBI::dbExecute(con, paste("ATTACH", DBI::dbQuoteString(con, to), "AS cred_to"))
+  DBI::dbExecute(con, "COPY FROM DATABASE cred_from TO cred_to")
+
+  # Both sides read the same way, and an empty side refuses: a lookup that
+  # found no tables would otherwise compare nothing and pass.
+  want <- .crd_store_rows(con, "cred_from")
+  got <- .crd_store_rows(con, "cred_to")
+  if (length(want) == 0L || !identical(want, got)) {
+    differ <- union(setdiff(names(want), names(got)), setdiff(names(got), names(want)))
+    both <- intersect(names(want), names(got))
+    differ <- c(differ, both[want[both] != got[both]])
+    stop("Compacting the updated store did not copy it whole",
+         if (length(differ) > 0L) paste0(" (tables differ: ", paste(differ, collapse = ", "), ")"),
+         if (length(want) == 0L) " (no tables found to copy)",
+         "; the store is unchanged.", call. = FALSE)
+  }
+  DBI::dbExecute(con, "DETACH cred_from")
+  DBI::dbExecute(con, "DETACH cred_to")
+  DBI::dbDisconnect(con, shutdown = TRUE)
+  con <- NULL
+
+  store <- ragnar::ragnar_store_connect(to, read_only = FALSE)
+  on.exit(if (!is.null(store)) try(DBI::dbDisconnect(store@con, shutdown = TRUE), silent = TRUE),
+          add = TRUE)
+  ragnar::ragnar_store_build_index(store)
+  DBI::dbExecute(store@con, "CHECKPOINT")
+  DBI::dbDisconnect(store@con, shutdown = TRUE)
+  store <- NULL
+  if (file.exists(paste0(to, ".wal"))) {
+    stop("The compacted store kept a write-ahead log after closing; the store is unchanged.",
+         call. = FALSE)
+  }
+  invisible(to)
 }
 
 #' Split a store source URI into bucket and key prefix

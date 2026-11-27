@@ -128,9 +128,10 @@ local_update_world <- function(env = parent.frame()) {
                                      title = character(), reason = character()))
     },
     .crd_ollama_check = function(...) invisible(NULL),
-    .crd_store_ingest = function(store, paths, read = NULL, progress = FALSE) {
+    .crd_store_ingest = function(store, paths, read = NULL, progress = FALSE, build_index = TRUE) {
       world$ingested[[length(world$ingested) + 1L]] <- paths
-      real_ingest(store, paths, read = .crd_test_read_text, progress = progress)
+      real_ingest(store, paths, read = .crd_test_read_text, progress = progress,
+                  build_index = build_index)
     },
     .env = env
   )
@@ -200,6 +201,117 @@ test_that("an update holds what a fresh build from the same arguments holds", {
   expect_gt(bm25_hits(path, "zzzonlykeyC"), 0L)
   expect_identical(bm25_hits(path, "zzzonlykeyA"), 0L)
   expect_false(any(grepl("[.]updating-", list.files(world$root))))
+})
+
+test_that("an updated store carries no more free space than a fresh build (#48)", {
+  # Every update rebuilt the indexes inside the file, and duckdb keeps the space
+  # the old ones held: on this fixture an updated store held 27 blocks, 8 free,
+  # where a fresh build of the same keys holds 19, none free.
+  world <- local_update_world()
+  path <- build(world, c("keyA", "keyB"))
+  # The highest ids issued so far. Whichever document the removal below takes,
+  # a restarted sequence could hand out ids no row then holds, so only a
+  # comparison with what was issued can see it.
+  con <- DBI::dbConnect(duckdb::duckdb(), path, read_only = TRUE)
+  issued <- DBI::dbGetQuery(con, "SELECT MAX(doc_id) AS doc, MAX(chunk_id) AS chunk FROM embeddings")
+  DBI::dbDisconnect(con, shutdown = TRUE)
+  # A removal first, so the second update ingests into a file the first
+  # compacted, and its new ids come from sequences that went through the copy.
+  update(path, "keyB")
+  update(path, c("keyB", "keyC"))
+  fresh <- build(world, c("keyB", "keyC"), name = "fresh.duckdb")
+
+  got <- .crd_test_db_size(path)
+  want <- .crd_test_db_size(fresh)
+  expect_lte(got[["free"]], want[["free"]])
+  expect_lte(got[["total"]], want[["total"]])
+  expect_identical(contents(path), contents(fresh))
+  # A sequence restarted by the copy would hand keyC ids already issued:
+  # `chunk_id`, the FTS index's key, has no constraint, so a reused one would
+  # pass silently. keyC's ids must all come after every id issued before it.
+  con <- DBI::dbConnect(duckdb::duckdb(), path, read_only = TRUE)
+  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  new <- DBI::dbGetQuery(con, "SELECT MIN(e.doc_id) AS doc, MIN(e.chunk_id) AS chunk, COUNT(*) AS n
+                               FROM embeddings e JOIN documents d USING (doc_id)
+                               WHERE d.origin LIKE '%keyC.md'")
+  expect_gt(new$n, 0)
+  expect_gt(new$doc, issued$doc)
+  expect_gt(new$chunk, issued$chunk)
+  ids <- DBI::dbGetQuery(con, "SELECT COUNT(*) AS n, COUNT(DISTINCT chunk_id) AS d FROM embeddings")
+  expect_identical(ids$n, ids$d)
+  expect_gt(bm25_hits(path, "zzzonlykeyC"), 0L)
+})
+
+test_that("an updated store holds every object a fresh build holds, its indexes usable", {
+  world <- local_update_world()
+  path <- build(world, c("keyA", "keyB"))
+  update(path, c("keyB", "keyC"))
+  fresh <- build(world, c("keyB", "keyC"), name = "fresh.duckdb")
+
+  got <- .crd_test_inventory(path)
+  expect_identical(got, .crd_test_inventory(fresh))
+  expect_true(all(c("main.cred_sources", "main.cred_ragnar", "fts_main_chunks.docs") %in% got$tables))
+  # Present, not the only view: duckdb 2.0's FTS extension adds
+  # fts_main_chunks.index_metadata, and the comparison above already holds the
+  # updated store to a fresh build's views under whichever duckdb runs.
+  expect_true("main.chunks" %in% got$views)
+  expect_length(got$indexes, 3L)
+  expect_true(.crd_test_cosine_indexed(path))
+  expect_gt(bm25_hits(path, "zzzonlykeyC"), 0L)
+})
+
+test_that("a compaction that fails leaves the store exactly as it was, and no copy", {
+  world <- local_update_world()
+  path <- build(world, c("keyA", "keyB"))
+  before <- tools::md5sum(path)
+  local_mocked_bindings(.crd_store_compact = function(from, to) {
+    writeLines("half written", to)
+    stop("no space left on device")
+  })
+  expect_error(suppressMessages(crd_store_update(path, citation_keys = c("keyB", "keyC"))),
+               "no space left on device")
+  expect_identical(tools::md5sum(path), before)
+  expect_identical(list.files(world$root), c("store.duckdb", "zotero"))
+})
+
+test_that("the compaction's row counts read every table, and see a lost row", {
+  skip_if_not_installed("duckdb")
+  dir <- withr::local_tempdir()
+  con <- DBI::dbConnect(duckdb::duckdb())
+  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  for (db in c("a", "b")) {
+    DBI::dbExecute(con, paste0("ATTACH '", file.path(dir, db), ".duckdb' AS ", db))
+    DBI::dbExecute(con, paste0("CREATE TABLE ", db, ".t1 AS SELECT * FROM range(5)"))
+    DBI::dbExecute(con, paste0("CREATE SCHEMA ", db, ".s"))
+    DBI::dbExecute(con, paste0("CREATE TABLE ", db, ".s.t2 AS SELECT * FROM range(3)"))
+  }
+  expect_identical(.crd_store_rows(con, "a"), c(main.t1 = 5, s.t2 = 3))
+  expect_identical(.crd_store_rows(con, "a"), .crd_store_rows(con, "b"))
+  DBI::dbExecute(con, "DELETE FROM b.s.t2 WHERE range = 0")
+  expect_false(identical(.crd_store_rows(con, "a"), .crd_store_rows(con, "b")))
+  expect_length(.crd_store_rows(con, "nothing_attached"), 0L)
+})
+
+test_that("a compaction that loses rows, or finds no tables, leaves the store as it was", {
+  world <- local_update_world()
+  path <- build(world, c("keyA", "keyB"))
+  before <- tools::md5sum(path)
+  real_rows <- .crd_store_rows
+  local_mocked_bindings(.crd_store_rows = function(con, db) {
+    n <- real_rows(con, db)
+    if (db == "cred_to") n[["main.cred_sources"]] <- n[["main.cred_sources"]] - 1
+    n
+  })
+  expect_error(suppressMessages(crd_store_update(path, citation_keys = c("keyB", "keyC"))),
+               "tables differ: main.cred_sources")
+  expect_identical(tools::md5sum(path), before)
+  expect_identical(list.files(world$root), c("store.duckdb", "zotero"))
+
+  local_mocked_bindings(.crd_store_rows = function(con, db) stats::setNames(numeric(), character()))
+  expect_error(suppressMessages(crd_store_update(path, citation_keys = c("keyB", "keyC"))),
+               "no tables found to copy")
+  expect_identical(tools::md5sum(path), before)
+  expect_identical(list.files(world$root), c("store.duckdb", "zotero"))
 })
 
 test_that("a build stamps the ragnar that wrote the store, and an update that changes it restamps it", {
@@ -538,6 +650,12 @@ test_that("an update that changes a pre-0.4.0 store upgrades it, and it holds an
   expect_identical(got$hnsw, 3)
   # The update's index rebuild restores the cosine index.
   expect_true(.crd_test_cosine_indexed(path))
+  # ragnar's upgrade rebuilds `embeddings` inside the file; the compaction
+  # leaves none of the space it freed.
+  # Total as well as free: without the compaction, one index build reuses the
+  # blocks the upgrade freed, so the file is a block larger with none free.
+  expect_lte(.crd_test_db_size(path)[["free"]], .crd_test_db_size(fresh)[["free"]])
+  expect_lte(.crd_test_db_size(path)[["total"]], .crd_test_db_size(fresh)[["total"]])
 
   scores <- function(p) {
     store <- ragnar::ragnar_store_connect(p, read_only = TRUE)

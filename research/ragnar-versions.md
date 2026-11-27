@@ -1,6 +1,6 @@
 # ragnar versions: which one cred supports, and whether a store crosses between them
 
-**Verified:** 2026-11-18 · **Issues:** #43 (from #35, #44) · **Produced by:**
+**Verified:** 2026-11-18, the update section revised 2026-11-27 · **Issues:** #43 (from #35, #44), #48 · **Produced by:**
 `data-raw/ragnar_store_compat.R`, results in `data-raw/logs/ragnar_store_compat/20261118_*`; ragnar
 0.3.0, 0.3.1 and 0.4.0 from CRAN and a 0.3.0.9000 development install (`013253d`), each in its own
 library; duckdb 1.5.6, and 2.0.0 for the index-metric check; R 4.5.2, macOS; ragnar 0.4.0's `R/store.R` and `R/store-v2.R`; copies of two
@@ -81,8 +81,9 @@ and ragnar, not the store.
   matches the manifest's md5: the next verified connect downloads the store again. Under 0.3.x the
   same open left the file as it was, so this is new with 0.4.0.
 - `crd_store_update()` opens its working copy read-write, so a pre-0.4.0 store comes out of an update
-  in 0.4.0 format. Every update that changes something rebuilds the index, so it also restores the
-  HNSW metrics the upgrade loses. A bare `crd_store_connect(read_only = FALSE)` does not. When the update changes nothing, the copy is discarded and the store keeps its
+  in 0.4.0 format. Since #48 it drops the copy's indexes before ragnar opens it, so the upgrade
+  recreates none, then compacts the copy and builds the indexes once with their metrics: the
+  upgrade's growth and its lost metrics both stay out of the store. A bare `crd_store_connect(read_only = FALSE)` does not. When the update changes nothing, the copy is discarded and the store keeps its
   old format.
 - cred's two-statement delete works under both formats. Under the 0.4.0 floor the working copy is
   always upgraded before the deletes run, so one transaction would work too, and no test can tell
