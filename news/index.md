@@ -1,6 +1,6 @@
 # Changelog
 
-## cred (development version)
+## cred 0.8.1
 
 - [`crd_store_update()`](https://newgraphenvironment.github.io/cred/reference/crd_store_update.md)
   leaves a store the size a fresh
