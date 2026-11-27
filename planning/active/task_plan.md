@@ -53,17 +53,17 @@ umbrella #58 is claimed after approval.
 - [x] Replace the 13 non-ASCII string literals with ASCII `--`: `R/audit.R` 316, 472 and
       603; `R/store.R` 186, 611, 633, 3054, 3065, 3197, 3326, 3337, 3388 and 3397 (from
       `getParseData` `STR_CONST`). Comments stay. No test matches an em dash.
-- [ ] `tools:::.check_package_ASCII_code(".")` comes back empty, and `devtools::check()`
+- [x] `tools:::.check_package_ASCII_code(".")` comes back empty, and `devtools::check()`
       shows 0 warnings
 - [x] Remove `error-on: '"error"'` and its comment from `.github/workflows/R-CMD-check.yaml`
 
 ## Phase 3: Ingest reporting on ragnar 0.4.0 (batch 2: #51, #49)
-- [ ] Before building: `members_check.sh ... 58 <branch> --batch 2`
-- [ ] #49, measured first: run a scratch ingest under ragnar 0.4.0 with `progress = TRUE` on
+- [x] Before building: `members_check.sh ... 58 <branch> --batch 2`
+- [x] #49, measured first: run a scratch ingest under ragnar 0.4.0 with `progress = TRUE` on
       files whose names carry brace markup. Confirm that each name prints literally and that
       nothing is evaluated. 0.4.0 uses `cli_alert_info("ingested: {origin}")`. Record the
       verdict in `findings.md`, with no probe names.
-- [ ] If the measurement passes: add `progress = rlang::is_interactive()` to
+- [x] If the measurement passes: add `progress = rlang::is_interactive()` to
       `crd_store_build()` and `crd_store_update()` and pass it to `.crd_store_ingest()`
       (`R/store.R` ~2353, ~2656). Replace the test that fails when progress is on with one
       that checks the argument reaches ragnar, plus an end-to-end ingest of a file named
@@ -71,13 +71,13 @@ umbrella #58 is claimed after approval.
       (~1967, ~2265) and the `CLAUDE.md` bullet "ragnar's progress output stays off". If the
       measurement fails, record what still fails, keep progress off, and file nothing
       upstream without the owner's word.
-- [ ] Plan review folded in (review-plan.md): #51 and #49 land together, written to the
+- [x] Plan review folded in (review-plan.md): #51 and #49 land together, written to the
       post-#51 contract (O1). The crashed-worker mock builds `ingest_summary` (B3), with a
       message unlike any warning text (AC1). A missing path that was not an error gets a reason
       naming ragnar's status (G2). The ingest roxygen and the CLAUDE.md "keeps it by path"
       bullet are updated (G3). The `{.strong x}` test collects every message (G6).
       test-store-build.R:426 and the :482 mock are changed deliberately (G7).
-- [ ] #51: keep `ragnar_store_ingest()`'s return value and read its `ingest_summary`
+- [x] #51: keep `ragnar_store_ingest()`'s return value and read its `ingest_summary`
       attribute. The reason for an unreported failure is `message` where
       `status == "error"`. Drop the `worker_errors` map and keep the muffling handler. The
       `documents` table still decides what was ingested. Tests in

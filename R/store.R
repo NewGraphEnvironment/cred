@@ -1949,14 +1949,15 @@ crd_search <- function(store, query, top_k = 5L,
 #' model than the store records.
 #'
 #' ragnar (>= 0.4.0) reports a document that failed in a worker as a
-#' `ragnar_ingest_worker_error` warning with a `path` field; the worker's own
-#' condition class does not survive. Every such warning that carries a path is
-#' muffled and kept by `path`, whatever failed, so a failure shows up as an
-#' entry in `skipped` (and the build's "Skipped" warning) rather than as
-#' ragnar's warning. The reason is `prepare`'s note where it left one
-#' (`cred_ingest_skip`, a fallback that also failed) and ragnar's message where
-#' it did not (a worker that crashed). The `documents` table, not the
-#' conditions, decides what was ingested.
+#' `ragnar_ingest_worker_error` warning with a `path` field, and records it in
+#' the `ingest_summary` attribute of the store it returns: one row per input
+#' path, with `status` `"error"` and the worker's `message`. Every such
+#' warning that carries a path is muffled, so a failure shows up as an entry
+#' in `skipped` (and the build's "Skipped" warning) rather than as ragnar's
+#' warning. The reason is `prepare`'s note where it left one
+#' (`cred_ingest_skip`, a fallback that also failed) and the summary's message
+#' where it did not (a worker that crashed). The `documents` table, not the
+#' summary, decides what was ingested.
 #'
 #' Releases before 0.4.0 re-raised the worker's error with its class instead,
 #' which needed a second handler; cred no longer supports them (#43).
@@ -1964,9 +1965,9 @@ crd_search <- function(store, query, top_k = 5L,
 #' @param store A `DuckDBRagnarStore` open for writing.
 #' @param paths `character` document paths.
 #' @param read As in [.crd_ingest_prepare()].
-#' @param progress `logical(1)` passed to ragnar. Default `FALSE`, and
-#'   [crd_store_build()] passes `FALSE`: ragnar's per-file progress output does
-#'   not handle every file name safely.
+#' @param progress `logical(1)` passed to ragnar. Default `FALSE`;
+#'   [crd_store_build()] and [crd_store_update()] pass their own `progress`.
+#'   ragnar 0.4.0 prints each origin literally (#49).
 #' @param build_index `logical(1)` passed to ragnar. [crd_store_update()]
 #'   passes `FALSE` and builds the index on its compacted copy instead.
 #' @return A `list`: `ingested` (paths now in the store), `skipped`
@@ -1979,25 +1980,35 @@ crd_search <- function(store, query, top_k = 5L,
   on.exit(unlink(notes_dir, recursive = TRUE), add = TRUE)
   prepare <- .crd_ingest_prepare(store@embed, notes_dir, read = read)
 
-  worker_errors <- character()
-  withCallingHandlers(
+  res <- withCallingHandlers(
     ragnar::ragnar_store_ingest(store, paths, prepare = prepare, progress = progress,
                                 build_index = build_index),
     ragnar_ingest_worker_error = function(w) {
       if (is.character(w$path) && length(w$path) == 1L && !is.na(w$path)) {
-        worker_errors[[w$path]] <<- conditionMessage(w)
         invokeRestart("muffleWarning")
       }
     }
   )
+  ing_summary <- attr(res, "ingest_summary")
+  if (!is.data.frame(ing_summary)) {
+    ing_summary <- tibble::tibble(path = character(), status = character(), message = character())
+  }
 
   notes <- .crd_ingest_notes(notes_dir)
   paths <- unique(paths)
   docs <- DBI::dbGetQuery(store@con, "SELECT origin FROM documents")$origin
   said <- notes[notes$kind == "skipped", , drop = FALSE]
   unsaid <- setdiff(paths, c(docs, said$origin))
-  unsaid_reason <- unname(worker_errors[unsaid])
-  unsaid_reason[is.na(unsaid_reason)] <- "not ingested; see ragnar's warning"
+  # ragnar's message for a worker that failed; for any other path the documents
+  # table lacks, the status ragnar recorded, so the reason never points at a
+  # warning that was not raised.
+  row <- match(unsaid, ing_summary$path)
+  unsaid_reason <- as.character(ifelse(
+    !is.na(row) & ing_summary$status[row] %in% "error" & !is.na(ing_summary$message[row]),
+    ing_summary$message[row],
+    paste0("not ingested; ragnar reported status ",
+           ifelse(is.na(row) | is.na(ing_summary$status[row]), "none", ing_summary$status[row]))
+  ))
   list(
     ingested = paths[paths %in% docs],
     skipped = tibble::tibble(
@@ -2262,9 +2273,11 @@ crd_search <- function(store, query, top_k = 5L,
 #' service itself still stops the build and leaves no store: it would cost
 #' every PDF still to come, silently, rather than one that is named.
 #'
-#' ragnar's own progress output is off, because it does not handle every file
-#' name safely. The build says what it will ingest before it starts, and what
-#' it ingested, read differently, split or skipped when it ends.
+#' The build says what it will ingest before it starts, and what it
+#' ingested, read differently, split or skipped when it ends. In between,
+#' ragnar reports each file as it is ingested when `progress = TRUE`, which is
+#' the default in an interactive session. Each line names the file's full
+#' local path, so a script that keeps its output as a log leaves it off.
 #'
 #' @param store_path `character(1)` path for the `.duckdb` store to create.
 #' @param collection `character(1)` Zotero collection name, or a
@@ -2277,6 +2290,9 @@ crd_search <- function(store, query, top_k = 5L,
 #' @param overwrite `logical(1)` replace an existing store. Default `FALSE`.
 #'   To add, replace or drop a few documents, [crd_store_update()] changes
 #'   only those.
+#' @param progress `logical(1)` show ragnar's per-file progress while
+#'   ingesting. Default [rlang::is_interactive()]. Each line names a file's
+#'   full local path.
 #' @inheritParams crd_zot_src_lookup
 #' @return Invisibly, a [tibble][tibble::tibble] with one row per ingested
 #'   file (`citation_key`, `src_path`), so a key with several PDFs has several
@@ -2299,10 +2315,12 @@ crd_store_build <- function(store_path,
                             model = "nomic-embed-text",
                             zotero_dir = "~/Zotero",
                             overwrite = FALSE,
-                            library = getOption("cred.zotero_library")) {
+                            library = getOption("cred.zotero_library"),
+                            progress = rlang::is_interactive()) {
   chk::chk_string(store_path)
   chk::chk_string(model)
   chk::chk_flag(overwrite)
+  chk::chk_flag(progress)
 
   # Cheap argument validation before the dependency check, so a caller who got
   # the arguments wrong is told that rather than being sent to install DuckDB.
@@ -2350,7 +2368,7 @@ crd_store_build <- function(store_path,
   # its old bytes, and the next update reads it again rather than never.
   md5 <- tools::md5sum(unique(src$src_path))
   message("Ingesting ", nrow(src), " PDF(s) into ", store_path)
-  ing <- .crd_store_ingest(store, src$src_path, progress = FALSE)
+  ing <- .crd_store_ingest(store, src$src_path, progress = progress)
   if (length(ing$ingested) == 0L) {
     stop("No PDF could be ingested:\n", .crd_store_skipped(ing, src), call. = FALSE)
   }
@@ -2480,8 +2498,10 @@ crd_store_update <- function(store_path,
                              collection = NULL,
                              citation_keys = NULL,
                              zotero_dir = "~/Zotero",
-                             library = getOption("cred.zotero_library")) {
+                             library = getOption("cred.zotero_library"),
+                             progress = rlang::is_interactive()) {
   chk::chk_string(store_path)
+  chk::chk_flag(progress)
   if (is.null(collection) == is.null(citation_keys)) {
     stop("Supply exactly one of `collection` or `citation_keys`.", call. = FALSE)
   }
@@ -2653,7 +2673,7 @@ crd_store_update <- function(store_path,
   if (length(to_ingest) > 0L) {
     message("Ingesting ", length(to_ingest), " PDF(s) into ", store_path)
     # No index here: it is built on the compacted file.
-    ing <- .crd_store_ingest(store, to_ingest, progress = FALSE, build_index = FALSE)
+    ing <- .crd_store_ingest(store, to_ingest, progress = progress, build_index = FALSE)
   }
 
   final <- new_rec(ing$ingested)

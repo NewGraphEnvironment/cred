@@ -38,6 +38,28 @@ Why here: a small change to `crd_search()` in the same file. Touches: `R/store.R
 | #47 | crd_search(): make the BM25 fallback opt-in, or warn on every degraded call |
 
 
+## R CMD check after batch 1 (2026-11-27)
+
+`devtools::check(args = "--no-manual")` on 57e0019: 0 errors, 0 warnings, 3 notes (`.lintr` hidden,
+`README.html` at top level, `.data` global binding), all out of scope. R CMD build also warned that
+the code uses the native pipe and needs R >= 4.1.0, so DESCRIPTION now declares `Depends: R (>= 4.1.0)`.
+
+## ragnar 0.4.0's progress line and file names (#49), measured 2026-11-27
+
+A scratch ingest under ragnar 0.4.0, duckdb 1.5.6 and R 4.5.2, with `progress = TRUE`, used six
+files whose names carry cli brace markup, including one that would run code if evaluated. All six
+printed literally on their `ingested:` lines, and nothing was evaluated (a marker file the
+evaluating name would create was absent). ragnar 0.4.0 writes the line as
+`cli_alert_info("ingested: {origin}")`, which substitutes the value rather than parsing it.
+The same run confirmed that `ingest_summary` reaches the caller on the returned store, with
+status `ok` for each file. The probe stays in the session scratchpad.
+Progress comes back for interactive sessions only, because each line names a full local path.
+
+## PR #55 review
+
+See `review-pr55.md`. Mergeable once its NEWS bullet moves out of the released 0.8.0 section.
+The merge waits for the owner's word.
+
 ## Errors Encountered
 
 | Error | Resolution |

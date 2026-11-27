@@ -304,10 +304,13 @@ Shipped: [#22](https://github.com/NewGraphEnvironment/cred/issues/22) ragnar ret
   each range once (ragnar keys `embeddings`, which the `chunks` view joins, on
   `(doc_id, start, end)`, and halves of neighbouring chunks collide), and drops a part at 64 characters. Any other embed failure leaves the chunks
   unembedded, so ragnar's main-process embed aborts the build and the store is deleted, as
-  before. **ragnar's progress output stays off** (`progress = FALSE`): its per-file message does
-  not handle arbitrary file names safely, which was reported to ragnar privately on
-  2026-10-31. Keep it off until ragnar's fix ships, and never put a file path into a cli
-  format string in cred either; pass it as a `{variable}`. Characters do not predict a
+  before. **ragnar's progress output follows the session** (`progress = rlang::is_interactive()`
+  on `crd_store_build()` and `crd_store_update()`; `.crd_store_ingest()` itself defaults to
+  `FALSE`). It was off from #35 to #49, because ragnar's per-file message did not handle
+  arbitrary file names safely. ragnar 0.4.0 prints each origin literally, measured with file
+  names carrying cli markup, and a test ingests one (#49). It stays off outside an interactive
+  session because each line names a full local path, which a kept log would publish. Never
+  put a file path into a cli format string in cred either; pass it as a `{variable}`. Characters do not predict a
   refusal: a 1,887-character run of `•` is refused, while a 2,073-character paragraph is not. So there is no length cap.
   [#35](https://github.com/NewGraphEnvironment/cred/issues/35),
   `research/ollama-embedding-context.md`.
@@ -318,8 +321,10 @@ Shipped: [#22](https://github.com/NewGraphEnvironment/cred/issues/22) ragnar ret
   re-parented to `baseenv()`. The structure test (`topenv()` is `baseenv()`) is the guard. The
   end-to-end test cannot be: under `R CMD check` the workers load the code under test anyway.
   ragnar (>= 0.4.0) reports a failed document as a `ragnar_ingest_worker_error` warning with a
-  `path` field and drops the worker's own class; `.crd_store_ingest()` muffles each one and
-  keeps it by path, and the `documents` table, not the conditions, decides what was ingested.
+  `path` field and drops the worker's own class, and records each input path's `status` and
+  `message` in the `ingest_summary` attribute of the store it **returns** (not the one passed
+  in). `.crd_store_ingest()` muffles each warning and takes a crashed worker's reason from that
+  summary (#51), and the `documents` table, not the summary, decides what was ingested.
   Releases before 0.4.0 re-raised the worker's error with its class kept, which needed a second
   handler that the 0.4.0 floor retired (#43). When ragnar changes again, test against both
   releases: install the other one into a scratch library and run the tests with `R_LIBS`
