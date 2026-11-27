@@ -32,7 +32,7 @@ new ids with those issued before the update.
 ## Evidence
 
 Measurement method and numbers: `findings.md` in this directory ("Phase 1 measurements", "Phase 4: a real
-store"); the probe scripts lived in the session scratchpad and are restated there.
+store"); the scripts that produced them: `scripts/probe_compact.R` and `scripts/real_update.R`.
 
 ## Owed
 

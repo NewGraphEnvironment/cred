@@ -73,8 +73,8 @@ TO dst` from an in-memory connection; then `ragnar_store_build_index()` on dst):
 - `metadata` (the serialised embedder) identical; `contents()` identical; BM25 scores identical; cosine
   `EXPLAIN` uses HNSW.
 
-Probe scripts: the session scratchpad (`probe1.R`, `probe2.R`); the measurement is reproduced by the Phase 2
-tests.
+Probe script: `scripts/probe_compact.R` (with `scripts/probe_common.R`); the toy-fixture measurement is
+reproduced by the Phase 2 tests.
 
 ## Phase 4: a real store (2026-11-27 UTC; ragnar 0.4.0, duckdb 1.5.6, m-series Mac)
 
@@ -96,7 +96,7 @@ kept). Same input copy for both; main's code from a worktree of `origin/main` (d
 - This store grew 1.20x under main, not the 1.85x the two smaller stores in `research/ragnar-versions.md`
   showed: the growth depends on the store.
 
-Script: the session scratchpad's `real_update.R` (`Rscript real_update.R <cred checkout> <store> <out>`).
+Script: `scripts/real_update.R` (`Rscript real_update.R <cred checkout> <store> <out>`).
 
 ## Errors Encountered
 

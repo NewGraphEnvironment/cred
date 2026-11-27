@@ -1,0 +1,46 @@
+# Phase 1 probe (#48): drop a store copy's indexes, COPY FROM DATABASE into a fresh
+# file, build the indexes there, and compare with the source. Run from the repo root.
+source("planning/archive/2026-11-issue-48-store-update-compaction/scripts/probe_common.R")
+test_that("probe2", {
+  world <- local_update_world()
+  path <- build(world, c("keyA", "keyB", "keyC"))
+  work <- file.path(world$root, "work.duckdb"); file.copy(path, work)
+  s <- ragnar::ragnar_store_connect(work, read_only = FALSE)
+  idx <- DBI::dbGetQuery(s@con, "SELECT index_name FROM duckdb_indexes() WHERE table_name = 'embeddings'")$index_name
+  for (i in idx) DBI::dbExecute(s@con, sprintf('DROP INDEX "%s"', i))
+  DBI::dbExecute(s@con, "DROP SCHEMA fts_main_chunks CASCADE")
+  DBI::dbExecute(s@con, "CHECKPOINT"); DBI::dbDisconnect(s@con, shutdown = TRUE)
+  cat("work after drop:", dbsize(work), "\n")
+  fresh <- file.path(world$root, "compact.duckdb")
+  con <- DBI::dbConnect(duckdb::duckdb())
+  DBI::dbExecute(con, sprintf("ATTACH '%s' AS src (READ_ONLY)", work))
+  DBI::dbExecute(con, sprintf("ATTACH '%s' AS dst", fresh))
+  r <- tryCatch({DBI::dbExecute(con, "COPY FROM DATABASE src TO dst"); "ok"}, error = function(e) conditionMessage(e))
+  cat("copy:", r, "\n")
+  DBI::dbExecute(con, "DETACH src"); DBI::dbExecute(con, "DETACH dst"); DBI::dbDisconnect(con, shutdown = TRUE)
+  cat("compact before index:", dbsize(fresh), "\n")
+  seqv <- function(p) { c <- DBI::dbConnect(duckdb::duckdb(), p, read_only = TRUE); on.exit(DBI::dbDisconnect(c, shutdown = TRUE))
+    DBI::dbGetQuery(c, "SELECT sequence_name, start_value, last_value FROM duckdb_sequences()") }
+  print(seqv(path)); print(seqv(fresh))
+  s <- ragnar::ragnar_store_connect(fresh, read_only = FALSE)
+  ragnar::ragnar_store_build_index(s)
+  DBI::dbExecute(s@con, "CHECKPOINT"); DBI::dbDisconnect(s@con, shutdown = TRUE)
+  cat("compact after index:", dbsize(fresh), " wal:", file.exists(paste0(fresh, ".wal")), "\n")
+  a <- inventory(path); b <- inventory(fresh)
+  cat("inventory identical:", identical(a, b), "\n"); if (!identical(a, b)) { str(a); str(b) }
+  cat("cosine indexed src/compact:", .crd_test_cosine_indexed(path), .crd_test_cosine_indexed(fresh), "\n")
+  sc <- function(p) { st <- ragnar::ragnar_store_connect(p, read_only = TRUE); on.exit(DBI::dbDisconnect(st@con, shutdown = TRUE))
+    r <- ragnar::ragnar_retrieve_bm25(st, "culvert salmon", top_k = 50L); sort(round(.crd_flat(r$metric_value, "numeric"), 8)) }
+  cat("bm25 identical:", identical(sc(path), sc(fresh)), "\n")
+  cat("contents identical:", identical(contents(path), contents(fresh)), "\n")
+  m <- function(p) { c <- DBI::dbConnect(duckdb::duckdb(), p, read_only = TRUE); on.exit(DBI::dbDisconnect(c, shutdown = TRUE)); DBI::dbGetQuery(c, "SELECT * FROM metadata") }
+  cat("metadata identical:", identical(m(path), m(fresh)), "\n")
+  # ingest into the compacted copy works (sequences continue)
+  s <- ragnar::ragnar_store_connect(fresh, read_only = FALSE)
+  extra <- file.path(world$root, "zotero", "storage", "DDDD4444", "keyD.md"); dir.create(dirname(extra), recursive = TRUE)
+  writeLines(.crd_test_prose(800L, 9L), extra)
+  r <- tryCatch({cred:::.crd_store_ingest(s, extra, read = .crd_test_read_text); "ok"}, error = function(e) conditionMessage(e))
+  cat("ingest into compact:", r, " docs:", DBI::dbGetQuery(s@con, "SELECT COUNT(*) n, COUNT(DISTINCT doc_id) d FROM documents")[[1]], "\n")
+  DBI::dbDisconnect(s@con, shutdown = TRUE)
+  expect_true(TRUE)
+})
