@@ -1,3 +1,13 @@
+# cred 0.8.1
+
+* `crd_store_update()` leaves a store the size a fresh `crd_store_build()` would
+  ([#48](https://github.com/NewGraphEnvironment/cred/issues/48)). Each update rebuilt the search
+  indexes inside the file, and duckdb keeps the space it frees, so updated stores carried 32 to 76 %
+  free space that every `crd_store_connect()` downloaded. The update now copies the store into a
+  fresh file and builds the indexes once there. On a 924 MB store it was also faster (34 s against
+  75 s). A store written before ragnar 0.4.0 no longer grows when an update upgrades it. While an
+  update runs, up to three files the size of the store sit side by side.
+
 # cred 0.8.0
 
 cred now supports one ragnar: the CRAN release, 0.4.0 or later

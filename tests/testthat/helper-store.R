@@ -476,3 +476,35 @@ local_pre040_store <- function(env = parent.frame(), n_docs = 3L) {
                                WHERE table_name = 'embeddings' AND index_name = 'store_hnsw_cosine_index'")$sql
   length(sql) == 1L && grepl("metric", sql, fixed = TRUE)
 }
+
+# A store's block accounting (#48): `PRAGMA database_size` counts the blocks the
+# file holds and how many of them are free. duckdb reuses a free block but never
+# gives it back, so free blocks are space every reader downloads for nothing.
+.crd_test_db_size <- function(path) {
+  con <- DBI::dbConnect(duckdb::duckdb(), path, read_only = TRUE)
+  on.exit(DBI::dbDisconnect(con, shutdown = TRUE))
+  d <- DBI::dbGetQuery(con, "PRAGMA database_size")
+  c(total = as.numeric(d$total_blocks), used = as.numeric(d$used_blocks),
+    free = as.numeric(d$free_blocks))
+}
+
+# The named objects a store holds: schemas, tables, views, sequences, macros,
+# and each index with the SQL duckdb recorded for it. Not constraints, column
+# defaults or sequence positions, which a copy could change without changing
+# this list.
+.crd_test_inventory <- function(path) {
+  con <- DBI::dbConnect(duckdb::duckdb(), path, read_only = TRUE)
+  on.exit(DBI::dbDisconnect(con, shutdown = TRUE))
+  DBI::dbExecute(con, "INSTALL vss; LOAD vss; INSTALL fts; LOAD fts")
+  q <- function(sql) sort(DBI::dbGetQuery(con, sql)[[1]], method = "radix")
+  db <- "database_name = current_database()"
+  list(
+    schemas = q(paste("SELECT schema_name FROM duckdb_schemas() WHERE", db, "AND NOT internal")),
+    tables = q(paste("SELECT schema_name || '.' || table_name FROM duckdb_tables() WHERE", db)),
+    views = q(paste("SELECT schema_name || '.' || view_name FROM duckdb_views() WHERE", db, "AND NOT internal")),
+    sequences = q(paste("SELECT schema_name || '.' || sequence_name FROM duckdb_sequences() WHERE", db)),
+    macros = unique(q(paste("SELECT schema_name || '.' || function_name FROM duckdb_functions() WHERE",
+                            db, "AND NOT internal"))),
+    indexes = q(paste("SELECT index_name || ': ' || coalesce(sql, '') FROM duckdb_indexes() WHERE", db))
+  )
+}
