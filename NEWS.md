@@ -1,4 +1,4 @@
-# cred (development version)
+# cred 0.8.1
 
 * `crd_store_update()` leaves a store the size a fresh `crd_store_build()` would
   ([#48](https://github.com/NewGraphEnvironment/cred/issues/48)). Each update rebuilt the search
