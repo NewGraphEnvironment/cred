@@ -2733,6 +2733,25 @@ crd_store_update <- function(store_path,
   invisible(NULL)
 }
 
+#' Row counts of every table in an attached database
+#'
+#' @param con A duckdb connection with `db` attached.
+#' @param db `character(1)` the attached database's name.
+#' @return Named `numeric`, one count per `schema.table`, sorted by name.
+#' @noRd
+.crd_store_rows <- function(con, db) {
+  tables <- DBI::dbGetQuery(con, "SELECT schema_name, table_name FROM duckdb_tables()
+                                  WHERE database_name = ?", params = list(db))
+  q <- function(x) DBI::dbQuoteIdentifier(con, x)
+  n <- vapply(seq_len(nrow(tables)), function(i) {
+    as.numeric(DBI::dbGetQuery(con, paste0("SELECT COUNT(*) AS n FROM ", q(db), ".",
+                                           q(tables$schema_name[i]), ".",
+                                           q(tables$table_name[i])))$n)
+  }, numeric(1))
+  names(n) <- paste(tables$schema_name, tables$table_name, sep = ".")
+  n[order(names(n), method = "radix")]
+}
+
 #' Copy a store into a fresh file and build its indexes there
 #'
 #' duckdb reuses a free block but never gives one back, so a store whose
@@ -2760,21 +2779,18 @@ crd_store_update <- function(store_path,
   DBI::dbExecute(con, paste("ATTACH", DBI::dbQuoteString(con, to), "AS cred_to"))
   DBI::dbExecute(con, "COPY FROM DATABASE cred_from TO cred_to")
 
-  tables <- DBI::dbGetQuery(con, "SELECT schema_name, table_name FROM duckdb_tables()
-                                  WHERE database_name = 'cred_from'")
-  count <- function(db, schema, table) {
-    DBI::dbGetQuery(con, paste0("SELECT COUNT(*) AS n FROM ", DBI::dbQuoteIdentifier(con, db), ".",
-                                DBI::dbQuoteIdentifier(con, schema), ".",
-                                DBI::dbQuoteIdentifier(con, table)))$n
-  }
-  for (i in seq_len(nrow(tables))) {
-    n_from <- count("cred_from", tables$schema_name[i], tables$table_name[i])
-    n_to <- tryCatch(count("cred_to", tables$schema_name[i], tables$table_name[i]),
-                     error = function(e) NA_real_)
-    if (!identical(as.numeric(n_from), as.numeric(n_to))) {
-      stop("Compacting the updated store lost rows of table ", tables$table_name[i],
-           " (", n_from, " before, ", n_to, " after); the store is unchanged.", call. = FALSE)
-    }
+  # Both sides read the same way, and an empty side refuses: a lookup that
+  # found no tables would otherwise compare nothing and pass.
+  want <- .crd_store_rows(con, "cred_from")
+  got <- .crd_store_rows(con, "cred_to")
+  if (length(want) == 0L || !identical(want, got)) {
+    differ <- union(setdiff(names(want), names(got)), setdiff(names(got), names(want)))
+    both <- intersect(names(want), names(got))
+    differ <- c(differ, both[want[both] != got[both]])
+    stop("Compacting the updated store did not copy it whole",
+         if (length(differ) > 0L) paste0(" (tables differ: ", paste(differ, collapse = ", "), ")"),
+         if (length(want) == 0L) " (no tables found to copy)",
+         "; the store is unchanged.", call. = FALSE)
   }
   DBI::dbExecute(con, "DETACH cred_from")
   DBI::dbExecute(con, "DETACH cred_to")

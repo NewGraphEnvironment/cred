@@ -271,6 +271,46 @@ test_that("a compaction that fails leaves the store exactly as it was, and no co
   expect_identical(list.files(world$root), c("store.duckdb", "zotero"))
 })
 
+test_that("the compaction's row counts read every table, and see a lost row", {
+  skip_if_not_installed("duckdb")
+  dir <- withr::local_tempdir()
+  con <- DBI::dbConnect(duckdb::duckdb())
+  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  for (db in c("a", "b")) {
+    DBI::dbExecute(con, paste0("ATTACH '", file.path(dir, db), ".duckdb' AS ", db))
+    DBI::dbExecute(con, paste0("CREATE TABLE ", db, ".t1 AS SELECT * FROM range(5)"))
+    DBI::dbExecute(con, paste0("CREATE SCHEMA ", db, ".s"))
+    DBI::dbExecute(con, paste0("CREATE TABLE ", db, ".s.t2 AS SELECT * FROM range(3)"))
+  }
+  expect_identical(.crd_store_rows(con, "a"), c(main.t1 = 5, s.t2 = 3))
+  expect_identical(.crd_store_rows(con, "a"), .crd_store_rows(con, "b"))
+  DBI::dbExecute(con, "DELETE FROM b.s.t2 WHERE range = 0")
+  expect_false(identical(.crd_store_rows(con, "a"), .crd_store_rows(con, "b")))
+  expect_length(.crd_store_rows(con, "nothing_attached"), 0L)
+})
+
+test_that("a compaction that loses rows, or finds no tables, leaves the store as it was", {
+  world <- local_update_world()
+  path <- build(world, c("keyA", "keyB"))
+  before <- tools::md5sum(path)
+  real_rows <- .crd_store_rows
+  local_mocked_bindings(.crd_store_rows = function(con, db) {
+    n <- real_rows(con, db)
+    if (db == "cred_to") n[["main.cred_sources"]] <- n[["main.cred_sources"]] - 1
+    n
+  })
+  expect_error(suppressMessages(crd_store_update(path, citation_keys = c("keyB", "keyC"))),
+               "tables differ: main.cred_sources")
+  expect_identical(tools::md5sum(path), before)
+  expect_identical(list.files(world$root), c("store.duckdb", "zotero"))
+
+  local_mocked_bindings(.crd_store_rows = function(con, db) stats::setNames(numeric(), character()))
+  expect_error(suppressMessages(crd_store_update(path, citation_keys = c("keyB", "keyC"))),
+               "no tables found to copy")
+  expect_identical(tools::md5sum(path), before)
+  expect_identical(list.files(world$root), c("store.duckdb", "zotero"))
+})
+
 test_that("a build stamps the ragnar that wrote the store, and an update that changes it restamps it", {
   world <- local_update_world()
   path <- build(world, c("keyA", "keyB"))
@@ -609,7 +649,10 @@ test_that("an update that changes a pre-0.4.0 store upgrades it, and it holds an
   expect_true(.crd_test_cosine_indexed(path))
   # ragnar's upgrade rebuilds `embeddings` inside the file; the compaction
   # leaves none of the space it freed.
+  # Total as well as free: without the compaction, one index build reuses the
+  # blocks the upgrade freed, so the file is a block larger with none free.
   expect_lte(.crd_test_db_size(path)[["free"]], .crd_test_db_size(fresh)[["free"]])
+  expect_lte(.crd_test_db_size(path)[["total"]], .crd_test_db_size(fresh)[["total"]])
 
   scores <- function(p) {
     store <- ragnar::ragnar_store_connect(p, read_only = TRUE)

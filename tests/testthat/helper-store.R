@@ -488,9 +488,10 @@ local_pre040_store <- function(env = parent.frame(), n_docs = 3L) {
     free = as.numeric(d$free_blocks))
 }
 
-# Every object a store holds besides its rows: schemas, tables, views,
-# sequences, macros, and each index with the SQL duckdb recorded for it. Two
-# stores that agree here and in their rows are the same store.
+# The named objects a store holds: schemas, tables, views, sequences, macros,
+# and each index with the SQL duckdb recorded for it. Not constraints, column
+# defaults or sequence positions, which a copy could change without changing
+# this list.
 .crd_test_inventory <- function(path) {
   con <- DBI::dbConnect(duckdb::duckdb(), path, read_only = TRUE)
   on.exit(DBI::dbDisconnect(con, shutdown = TRUE))
