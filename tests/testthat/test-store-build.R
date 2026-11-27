@@ -376,8 +376,12 @@ test_that("an ingest names a worker that crashed without leaving a note", {
     ragnar::MarkdownDocument(paste(readLines(path, warn = FALSE), collapse = "\n"), origin = path)
   }), baseenv())
   store <- local_build_store(.crd_test_embed_limited(5000L))
+  # Every argument cred passes must be one the real function takes, or this
+  # mock would accept a call ragnar refuses.
+  mock_args <- c("store", "paths", "prepare", "progress", "build_index")
+  expect_true(all(mock_args %in% names(formals(ragnar::ragnar_store_ingest))))
   local_mocked_bindings(
-    ragnar_store_ingest = function(store, paths, prepare, progress) {
+    ragnar_store_ingest = function(store, paths, prepare, progress, build_index = TRUE) {
       ragnar::ragnar_store_update(store, prepare(paths[1]))
       e <- tryCatch(prepare(paths[2]), error = function(e) e)
       rlang::warn(sprintf('`prepare("%s")` signaled an Error: %s', paths[2], conditionMessage(e)),

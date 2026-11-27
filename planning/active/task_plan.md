@@ -82,15 +82,15 @@ Mechanism, decided in the plan (agent-operations §4, mechanism promoted):
 
 ## Phase 3: Implementation (`R/store.R`)
 
-- [ ] `.crd_store_ingest()` gains `build_index = TRUE`, passed to `ragnar_store_ingest()`; `crd_store_build()`
+- [x] `.crd_store_ingest()` gains `build_index = TRUE`, passed to `ragnar_store_ingest()`; `crd_store_build()`
       unchanged. Test mocks that wrap it forward `build_index` (code-check-r: a `function(...)` mock hides
       arguments).
-- [ ] `crd_store_update()`: drop the working copy's HNSW indexes (from `duckdb_indexes()` on `embeddings`) and
+- [x] `crd_store_update()`: drop the working copy's HNSW indexes (from `duckdb_indexes()` on `embeddings`) and
       `fts_main_*` schemas on a plain DBI connection **before** ragnar's read-write connect, so ragnar 0.4.0's
       upgrade of a pre-0.4.0 store finds no indexes to recreate (review); ingest with `build_index = FALSE`; remove the two
       `ragnar_store_build_index()` branches (dropped-only, record-only); write record and stamp; checkpoint and
       close.
-- [ ] New internal `.crd_store_compact(from, to)`: in-memory connection with `temp_directory` under
+- [x] New internal `.crd_store_compact(from, to)`: in-memory connection with `temp_directory` under
       `tempdir()` (an in-memory database spills to `.tmp` in the working directory; review), `ATTACH` both,
       `COPY FROM DATABASE`, refuse unless every `main` table's row count matches (`cred_sources`, `cred_ragnar`
       and `metadata` included; review), `DETACH`; then `ragnar_store_connect(to,
@@ -98,7 +98,7 @@ Mechanism, decided in the plan (agent-operations §4, mechanism promoted):
       file. The update renames the compacted file into place; any failure stops with the store unchanged. Its
       own `on.exit()` removes the compacted file and its `.wal`; the leftover warning stops saying "each the
       size of the store"; the comments that say the update rebuilds the index on the copy go (review).
-- [ ] Tests from Phase 2 pass; full `devtools::test()` green.
+- [x] Tests from Phase 2 pass; full `devtools::test()` green.
 
 ## Phase 4: Measure on a real store
 

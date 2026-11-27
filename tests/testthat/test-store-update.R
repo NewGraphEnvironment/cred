@@ -128,9 +128,10 @@ local_update_world <- function(env = parent.frame()) {
                                      title = character(), reason = character()))
     },
     .crd_ollama_check = function(...) invisible(NULL),
-    .crd_store_ingest = function(store, paths, read = NULL, progress = FALSE) {
+    .crd_store_ingest = function(store, paths, read = NULL, progress = FALSE, build_index = TRUE) {
       world$ingested[[length(world$ingested) + 1L]] <- paths
-      real_ingest(store, paths, read = .crd_test_read_text, progress = progress)
+      real_ingest(store, paths, read = .crd_test_read_text, progress = progress,
+                  build_index = build_index)
     },
     .env = env
   )
