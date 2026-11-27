@@ -40,6 +40,42 @@ the file's size before and after.
 - **ragnar 0.4.0 adds growth of its own.** Its read-write connect upgrades a pre-0.4.0 store by rebuilding `embeddings` with `CREATE TABLE ... AS`, and duckdb keeps the freed space: a read-write open that wrote nothing took two real stores from 28.6 to 52.7 MB and 94.6 to 175.4 MB (about 1.85x), under duckdb 1.5.6 and 2.0.0 alike. `crd_store_update()` opens its copy read-write, so the first update of every pre-0.4.0 store that changes anything carries this on top of the growth above (`research/ragnar-versions.md`).
 - **`COPY FROM DATABASE` works as the compaction.** `ATTACH` the upgraded file read-only and `COPY FROM DATABASE` into a fresh one: 52.7 MB back to 27.8 MB (smaller than the original 28.6 MB), with all three HNSW indexes present, and the copy retrieves. The probe is in cred's `planning/archive/2026-11-issue-43-ragnar-versions/findings.md`. Still to check before relying on it: the FTS index, `cred_sources` and `cred_ragnar` come through, and the HNSW indexes keep their metric.
 
+## Phase 1 measurements (2026-11-26; ragnar 0.4.0, duckdb 1.5.6, toy fixture from `local_update_world()`)
+
+`PRAGMA database_size`, 256 KiB blocks. Build keys A+B, update to A+B+C, update to B+C, then a fresh build of
+B+C:
+
+| store | file | total blocks | used | free |
+|---|---|---|---|---|
+| build A+B | 4,993,024 | 19 | 19 | 0 |
+| update +C | 7,090,176 | 27 | 19 | 8 |
+| update -A | 6,828,032 | 27 | 19 | 8 |
+| fresh B+C | 4,993,024 | 19 | 19 | 0 |
+
+So the toy fixture separates an updated store from a fresh build, and a fresh build carries **no** free blocks:
+ragnar's temporary FTS `chunks` table leaves none at this scale. The parity target is therefore 0 free here.
+
+Objects in a 0.4.0 store (fresh build): schema `fts_main_chunks` (5 tables, macros `match_bm25` and
+`tokenize`), tables `documents`, `embeddings`, `metadata`, `cred_sources`, `cred_ragnar`, view `chunks`,
+sequences `chunk_id_seq` and `doc_id_seq`, three HNSW indexes. Under duckdb 1.5.6 even ragnar's own
+`ragnar_store_build_index()` is recorded as `CREATE INDEX store_hnsw_cosine_index ON embeddings USING HNSW
+(embedding);`, no metric, which confirms that a `COPY FROM DATABASE` carrying indexes would lose them.
+
+Compaction probe (a 3-document store copied, opened through ragnar read-write, HNSW indexes and
+`fts_main_chunks` dropped, checkpointed; then `ATTACH src (READ_ONLY)`, `ATTACH dst`, `COPY FROM DATABASE src
+TO dst` from an in-memory connection; then `ragnar_store_build_index()` on dst):
+
+- work copy after the drops: 19 total, 11 used, 8 free; copied file before the index: 11 blocks, 0 free;
+  after the index: 19 total, 19 used, 0 free, no `.wal`. Identical to a fresh build.
+- Object inventory of the compacted file identical to the source's (schemas, tables, view, sequences, macros,
+  index SQL). Sequences carry their values (`doc_id_seq` 4, `chunk_id_seq` 22), and a further
+  `.crd_store_ingest()` into the compacted file works (4 distinct doc_ids).
+- `metadata` (the serialised embedder) identical; `contents()` identical; BM25 scores identical; cosine
+  `EXPLAIN` uses HNSW.
+
+Probe scripts: the session scratchpad (`probe1.R`, `probe2.R`); the measurement is reproduced by the Phase 2
+tests.
+
 ## Errors Encountered
 
 | Error | Resolution |
