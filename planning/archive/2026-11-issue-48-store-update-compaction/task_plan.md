@@ -125,10 +125,10 @@ Mechanism, decided in the plan (agent-operations §4, mechanism promoted):
 
 ## Validation
 
-- [ ] Tests pass
-- [ ] `/code-check` clean (once over the branch with `/code-check branch`)
-- [ ] PWF checkboxes match landed work
-- [ ] `/planning-archive` on completion
+- [x] Tests pass
+- [x] `/code-check` clean (once over the branch with `/code-check branch`)
+- [x] PWF checkboxes match landed work
+- [x] `/planning-archive` on completion
 
 Verification: the Phase 2 free-blocks test fails on main and passes on the branch (restore the bug and see it
 go red); object parity and BM25 score parity with a fresh build; existing cosine-index tests stay green under
