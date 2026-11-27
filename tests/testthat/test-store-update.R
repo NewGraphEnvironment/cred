@@ -209,7 +209,9 @@ test_that("an updated store carries no more free space than a fresh build (#48)"
   # where a fresh build of the same keys holds 19, none free.
   world <- local_update_world()
   path <- build(world, c("keyA", "keyB"))
-  update(path, c("keyA", "keyB", "keyC"))
+  # A removal first, so the second update ingests into a file the first
+  # compacted, and its new ids come from sequences that went through the copy.
+  update(path, "keyB")
   update(path, c("keyB", "keyC"))
   fresh <- build(world, c("keyB", "keyC"), name = "fresh.duckdb")
 
@@ -218,8 +220,9 @@ test_that("an updated store carries no more free space than a fresh build (#48)"
   expect_lte(got[["free"]], want[["free"]])
   expect_lte(got[["total"]], want[["total"]])
   expect_identical(contents(path), contents(fresh))
-  # The second update ingested into a compacted file, so its sequences came
-  # through the copy: a restarted one would repeat an id.
+  # A sequence restarted by the copy would repeat an id: `doc_id` is a primary
+  # key and would refuse, but `chunk_id`, the FTS index's key, has no
+  # constraint and would repeat silently.
   con <- DBI::dbConnect(duckdb::duckdb(), path, read_only = TRUE)
   on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
   ids <- DBI::dbGetQuery(con, "SELECT COUNT(*) AS n, COUNT(DISTINCT doc_id) AS d FROM documents")
