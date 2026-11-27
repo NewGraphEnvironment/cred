@@ -25,9 +25,13 @@ umbrella #58 is claimed after approval.
     `crd_store_build()` and `crd_store_update()`. Each per-file progress line prints an
     absolute local path. A non-interactive run writes those lines to logs that get
     committed, which is #54's concern again.
-  - **#47:** with `"error"`, a failed embed aborts with the same
-    `cred_retrieval_fallback_<reason>` classes the `vss` path already raises. No new class
-    scheme.
+  - **#47:** with `"error"`, a failed embed aborts with the
+    `cred_retrieval_error_<reason>` / `cred_retrieval_error` pair that the `vss` path already
+    raises, so one handler covers both methods. (Corrected by the plan review, B1: the plan had
+    named the warning class.) `fallback` is ignored under `vss` and `bm25`.
+  - **#49:** `.crd_store_ingest()` keeps its own default of `FALSE`. Only the two exported
+    functions default to interactive.
+  - **#26:** `notes = ""` writes `""`. A note is replaced, never field-merged.
   - **#49 probe:** the measurement uses file names with brace markup. The probe file names
     stay in the scratchpad and are not committed. Public text says only what ragnar 0.4.0's
     NEWS says, that origins are printed literally.
@@ -67,6 +71,12 @@ umbrella #58 is claimed after approval.
       (~1967, ~2265) and the `CLAUDE.md` bullet "ragnar's progress output stays off". If the
       measurement fails, record what still fails, keep progress off, and file nothing
       upstream without the owner's word.
+- [ ] Plan review folded in (review-plan.md): #51 and #49 land together, written to the
+      post-#51 contract (O1). The crashed-worker mock builds `ingest_summary` (B3), with a
+      message unlike any warning text (AC1). A missing path that was not an error gets a reason
+      naming ragnar's status (G2). The ingest roxygen and the CLAUDE.md "keeps it by path"
+      bullet are updated (G3). The `{.strong x}` test collects every message (G6).
+      test-store-build.R:426 and the :482 mock are changed deliberately (G7).
 - [ ] #51: keep `ragnar_store_ingest()`'s return value and read its `ingest_summary`
       attribute. The reason for an unreported failure is `message` where
       `status == "error"`. Drop the `worker_errors` map and keep the muffling handler. The
@@ -84,6 +94,14 @@ umbrella #58 is claimed after approval.
       a test where two degraded calls both error. Update `?crd_search` "Diagnosing a
       fallback", the vignette and README wherever they rely on the silent fallback (grep
       `crd_search(`), and any internal caller.
+- [ ] Plan review folded in (review-plan.md): `.crd_retrieval_abort()` takes `method`, and
+      its tail no longer claims hybrid degrades (B2). Tests that pass `fallback = "bm25"`:
+      test-store-fallback.R 487, 505, 531, 550, 588, 602, 620, and
+      test-store-embed-check.R 490 (G1). Grep the sentence for every claim that hybrid falls
+      back or warns once (G4: `crd_search` details and a code comment, `.crd_retrieval_failure`,
+      `.crd_store_probe_id`, `crd_store_connect` and its `check_model = FALSE` advice,
+      helper-store.R, two CLAUDE.md bullets). Neither the vignette nor README calls
+      `crd_search()`. Grep the org for `crd_search(` callers and name the break in NEWS (A5).
 - [ ] NEWS: the changed default leads the entry. PR body: `Bump: minor`.
 
 ## Phase 5: Push manifest notes (batch 3: #26; #54 is left to #55)
@@ -94,7 +112,10 @@ umbrella #58 is claimed after approval.
       entry. `.crd_manifest_merge()` keeps the existing entry's `notes` when the new entry
       has none. Document that `notes = ""` clears a note.
 - [ ] Tests in `tests/testthat/test-store-push.R`: a pure merge test where notes survive a
-      push without them, and a dry-run test where the preview shows this store's notes.
+      push without them, while `built_by` from the old entry does not (AC2). A dry-run test
+      whose preview shows a note preserved from the existing manifest (AC3). An atomic
+      existing entry does not crash the merge (G8). The `.crd_manifest_merge` roxygen and the
+      CLAUDE.md "merged, never replaced" bullet are updated.
 
 ## Owed at the end (reported, done after merge)
 
