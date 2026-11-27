@@ -1,3 +1,25 @@
+# cred (development version)
+
+* **`crd_search(method = "hybrid")` now stops when it cannot embed the query**, instead of
+  returning BM25 rows ([#47](https://github.com/NewGraphEnvironment/cred/issues/47)). The
+  fallback warned only once per reason and store, so later degraded searches in a session
+  returned keyword results that looked like semantic ones. The error carries the
+  `cred_retrieval_error_<reason>` classes that `method = "vss"` raises. Pass
+  `fallback = "bm25"` to keep the old behaviour, or `method = "bm25"` for keyword search
+  outright. A script that searches with no embedding service running now errors.
+* `crd_store_build()` and `crd_store_update()` show ragnar's per-file progress again in an
+  interactive session (`progress`, default `rlang::is_interactive()`;
+  [#49](https://github.com/NewGraphEnvironment/cred/issues/49)). ragnar 0.4.0 prints each file
+  name literally. Each line names a file's full local path, so it stays off in scripts whose
+  output is kept as a log.
+* A document whose worker crashed is reported with the reason from ragnar's own per-file
+  report, not from its warning ([#51](https://github.com/NewGraphEnvironment/cred/issues/51)).
+* `R CMD check` passes with no warnings, and CI fails on a new one
+  ([#32](https://github.com/NewGraphEnvironment/cred/issues/32),
+  [#38](https://github.com/NewGraphEnvironment/cred/issues/38)). `tibble` is now declared in
+  `Imports`, `openxlsx` in `Suggests`, and cred depends on R >= 4.1.0, which its code already
+  needed.
+
 # cred 0.8.1
 
 * `crd_store_update()` leaves a store the size a fresh `crd_store_build()` would

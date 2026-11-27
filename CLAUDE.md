@@ -219,14 +219,19 @@ Shipped: [#22](https://github.com/NewGraphEnvironment/cred/issues/22) ragnar ret
   metric; `?crd_search` shows how.
 - **`hybrid` is the right default because it is a strict superset of `bm25`.** Measured across
   2 queries x 3 `top_k`: zero BM25 chunks were absent from the hybrid results, and hybrid
-  returned 5-17 chunks where BM25 returned 3-10. `hybrid` needs Ollama but falls back to BM25
-  with a warning, so it is never *less* available — a `bm25` default would discard the semantic
-  half for everyone to avoid a dependency the fallback already handles.
+  returned 5-17 chunks where BM25 returned 3-10. `hybrid` needs Ollama. Until #47 it fell back
+  to BM25 with a warning that fired once per reason and store, so later degraded calls looked
+  like semantic ones and only the `method` column said otherwise. Now a failed embed **stops
+  with a `cred_retrieval_error_<reason>` error** (the `vss` path's classes) unless the caller
+  passes `fallback = "bm25"`. A `bm25` default would still discard the semantic half for
+  everyone; a caller without Ollama asks for `method = "bm25"` or `fallback = "bm25"`.
+  [#47](https://github.com/NewGraphEnvironment/cred/issues/47).
 - **A fallback is classified by condition class, not by message text.** Measured against
   ragnar 0.3.0: `httr2_failure` means the embedding service got no answer; `httr2_http` means it
   answered and refused, so it is running and "start Ollama" is the wrong half of the old advice;
   and within that, only a **404** means the model is absent — a 500 or 503 has nothing to do
-  with pulling one. All survive `ragnar_retrieve()` unwrapped. Warnings are subclassed
+  with pulling one. All survive `ragnar_retrieve()` unwrapped. The errors are subclassed
+  `cred_retrieval_error_<reason>`; the warnings, under `fallback = "bm25"` only, are subclassed
   `cred_retrieval_fallback_<reason>` and fire once per session per reason **and store** — keyed
   on the store alone, a mismatch met after a connection failure is swallowed as a repeat.
   [#29](https://github.com/NewGraphEnvironment/cred/issues/29).

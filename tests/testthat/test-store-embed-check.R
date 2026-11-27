@@ -487,7 +487,7 @@ test_that("a connect-time probe warning does not silence the later search warnin
 
   # Same reason, same store, different channel. If the two shared one key the
   # user would get BM25 results here with nothing saying the search degraded.
-  expect_warning(crd_search(store, .crd_test_query(), top_k = 3L),
+  expect_warning(crd_search(store, .crd_test_query(), top_k = 3L, fallback = "bm25"),
                  class = "cred_retrieval_fallback_connection")
 })
 

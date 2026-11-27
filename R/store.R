@@ -259,7 +259,8 @@
 #' whole point. Keyed the same way, a "could not check (connection)" emitted by
 #' [crd_store_connect()] would consume the once-per-session slot that
 #' [crd_search()]'s fallback warning needs for the same reason on the same
-#' store — so the search would then degrade to BM25 silently, which is the
+#' store — so a search run with `fallback = "bm25"` would then degrade to BM25
+#' silently, which is the
 #' diagnosis loss #29 exists to end, arriving from the other side.
 #'
 #' It lives in a function rather than inline so a test can ask the code what
@@ -289,7 +290,9 @@
 #' name reconstructed from a string, it is the function that will actually embed
 #' queries against this store. Comparing its width against the store's own
 #' `embedding_size` is exactly the condition that otherwise surfaces downstream
-#' as a `cred_retrieval_fallback_dimension` warning from [crd_search()].
+#' from [crd_search()] as a `dimension` failure: a `cred_retrieval_error_dimension`
+#' error by default, a `cred_retrieval_fallback_dimension` warning under
+#' `fallback = "bm25"`.
 #'
 #' **Width is the detectable part.** A model whose weights changed while its
 #' dimension stayed the same is invisible here, and to every other check in this
@@ -386,7 +389,8 @@
       "  the bytes the manifest recorded.\n",
       "    ollama pull ", .crd_fallback_model(store = store), "\n",
       "  or rebuild with crd_store_build(). BM25 retrieval needs no embedding and is\n",
-      "  unaffected, so pass check_model = FALSE to open the store anyway."
+      "  unaffected, so pass check_model = FALSE to open the store anyway, and search\n",
+      "  it with crd_search(method = \"bm25\")."
     ),
     class = c("cred_store_embedding_mismatch", "cred_store_embedding_check"),
     store_size = as.integer(meta$size),
@@ -503,8 +507,9 @@
 #'
 #' A mismatch that arises *after* a successful connect — the model re-pulled
 #' mid-session, or `@embed` replaced on the store object — is outside both, and
-#' still surfaces downstream as a `cred_retrieval_fallback_dimension` warning
-#' from [crd_search()]; see "Diagnosing a fallback" there. So does any mismatch
+#' still surfaces downstream from [crd_search()], as an error by default or a
+#' `cred_retrieval_fallback_dimension` warning under `fallback = "bm25"`; see
+#' "Diagnosing a fallback" there. So does any mismatch
 #' on a store opened with `check_model = FALSE`, or one whose probe could not
 #' run. The two layers are complementary, not redundant
 #' (NewGraphEnvironment/cred#30).
@@ -547,7 +552,8 @@
 #'   its recorded embedder now returns, and its model label against the
 #'   manifest. Default `TRUE`. A confirmed width mismatch is an **error**; pass
 #'   `FALSE` to open such a store anyway, which is a reasonable thing to want —
-#'   BM25 retrieval needs no embedding and is unaffected by the mismatch.
+#'   BM25 retrieval needs no embedding and is unaffected by the mismatch. Search
+#'   it with `crd_search(method = "bm25")`: a default hybrid search stops on it.
 #' @return A `ragnar` store object, as returned by
 #'   [ragnar::ragnar_store_connect()].
 #' @export
@@ -908,8 +914,9 @@ crd_store_connect <- function(store,
 
 #' Classify a failure of semantic retrieval
 #'
-#' `crd_search(method = "hybrid")` falls back to BM25 when semantic retrieval
-#' raises, and the ways it can fail need different things said about them.
+#' `crd_search(method = "hybrid")` stops, or falls back to BM25 under
+#' `fallback = "bm25"`, when semantic retrieval raises, and the ways it can
+#' fail need different things said about them.
 #' Guessing costs more than it looks: an embedding-width mismatch means the
 #' store's own recorded embedder no longer produces vectors of the width the
 #' store holds, so the store is not answering the questions it appears to be —
@@ -1280,11 +1287,12 @@ crd_store_connect <- function(store,
   )
 }
 
-#' Raise a classified error for a retrieval that has nowhere to fall back to
+#' Raise a classified error for a semantic retrieval that does not fall back
 #'
 #' `method = "vss"` is semantic retrieval and nothing else, so a failure there
-#' is terminal — unlike `"hybrid"`, which degrades to BM25 with a warning.
-#' Erroring is right; raising the condition **unclassified** was not. A
+#' is terminal. `"hybrid"` stops the same way unless the caller passed
+#' `fallback = "bm25"` (#47). Erroring is right; raising the condition
+#' **unclassified** was not. A
 #' width-mismatched store produced a bare
 #' `Binder Error: array_cosine_distance(...)` and no diagnosis at all
 #' (NewGraphEnvironment/cred#30).
@@ -1297,18 +1305,24 @@ crd_store_connect <- function(store,
 #'
 #' @param cond the condition caught from the retrieval call.
 #' @param store the store being searched.
+#' @param method `character(1)` the method that failed, `"vss"` or `"hybrid"`.
 #' @return Never returns; raises a `cred_retrieval_error` condition.
 #' @noRd
-.crd_retrieval_abort <- function(cond, store = NULL) {
+.crd_retrieval_abort <- function(cond, store = NULL, method = "vss") {
   reason <- .crd_retrieval_failure(cond)
+  head <- if (identical(method, "hybrid")) {
+    'Semantic retrieval failed, so crd_search(method = "hybrid") stopped rather than return BM25 rows.\n'
+  } else {
+    'Semantic retrieval failed, and method = "vss" has no fallback.\n'
+  }
   rlang::abort(
     paste0(
-      'Semantic retrieval failed, and method = "vss" has no fallback.\n',
+      head,
       .crd_embed_remedy(reason, cond, store = store), "\n",
       # Says what is true of the METHODS, not of the store. Asserting the other
       # two "still work on this store" contradicted the `unknown` remedy
       # directly above it, which says the store itself may be at fault.
-      '  "hybrid" degrades to BM25 with a warning, and "bm25" needs no\n',
+      '  "hybrid" with fallback = "bm25" takes BM25 rows instead, and "bm25" needs no\n',
       "  embedding at all."
     ),
     # Subclassed by reason, in the same scheme as the fallback warning, so a
@@ -1380,15 +1394,20 @@ crd_store_connect <- function(store,
 #'
 #' `method = "hybrid"` combines semantic (vector) and lexical (BM25) retrieval
 #' and needs a running Ollama instance to embed the query. When semantic
-#' retrieval fails **for any reason** the search falls back to BM25 with a
-#' warning rather than failing: lexical retrieval needs no embedding and remains
-#' effective for the numeric and parameter-level claims this package exists to
-#' check. The `method` column reports `"bm25"` when that happens, so a caller
-#' can always tell the search degraded.
+#' retrieval fails, for any reason, the search **stops with an error** by
+#' default, so a keyword-only result can never be read as a semantic one. Pass
+#' `fallback = "bm25"` to take BM25 rows instead: lexical retrieval needs no
+#' embedding and remains effective for the numeric and parameter-level claims
+#' this package exists to check. The `method` column then reports `"bm25"`.
+#' `method = "bm25"` asks for keyword search outright.
 #'
 #' @section Diagnosing a fallback:
-#' The warning is subclassed by what went wrong, so a caller can act on the
-#' reason rather than grep the message. All inherit `cred_retrieval_fallback`:
+#' The condition is subclassed by what went wrong, so a caller can act on the
+#' reason rather than grep the message. By default it is an **error** of class
+#' `cred_retrieval_error_<reason>`, inheriting `cred_retrieval_error`, as
+#' `method = "vss"` raises. With `fallback = "bm25"` it is a **warning** of
+#' class `cred_retrieval_fallback_<reason>`, inheriting
+#' `cred_retrieval_fallback`. The reasons are the same in both:
 #'
 #' \describe{
 #'   \item{`cred_retrieval_fallback_connection`}{The embedding service could not
@@ -1422,8 +1441,10 @@ crd_store_connect <- function(store,
 #'     reported verbatim and no remedy is prescribed.}
 #' }
 #'
-#' Each fires once per session per reason and per store, so a machine without
-#' Ollama does not emit the same four lines on every call.
+#' The warning, under `fallback = "bm25"` only, fires once per session per
+#' reason and per store, so a machine without Ollama does not emit the same
+#' four lines on every call; after it, only the `method` column shows the
+#' search degraded. The error fires on every call.
 #'
 #' @param store a ragnar store, from [crd_store_connect()] or
 #'   [ragnar::ragnar_store_connect()].
@@ -1433,6 +1454,10 @@ crd_store_connect <- function(store,
 #'   then adjacent chunks are merged, so the number of rows returned is neither
 #'   `top_k` nor `2 * top_k` — expect somewhere between the two.
 #' @param method `character(1)` one of `"hybrid"`, `"bm25"`, `"vss"`.
+#' @param fallback `character(1)` what `method = "hybrid"` does when the query
+#'   cannot be embedded: `"error"` (the default) stops with a
+#'   `cred_retrieval_error` condition; `"bm25"` returns BM25 rows with a
+#'   `cred_retrieval_fallback` warning. Ignored for `"bm25"` and `"vss"`.
 #' @param zotero_dir `character(1)` Zotero data directory used to resolve
 #'   citation keys. Default `"~/Zotero"`.
 #' @return A [tibble][tibble::tibble] with one row per retrieved passage, with
@@ -1470,11 +1495,13 @@ crd_store_connect <- function(store,
 #' }
 crd_search <- function(store, query, top_k = 5L,
                        method = c("hybrid", "bm25", "vss"),
-                       zotero_dir = "~/Zotero") {
+                       zotero_dir = "~/Zotero",
+                       fallback = c("error", "bm25")) {
   chk::chk_string(query)
   chk::chk_whole_number(top_k)
   chk::chk_string(zotero_dir)
   method <- match.arg(method)
+  fallback <- rlang::arg_match(fallback)
   .crd_need("ragnar")
 
   used <- method
@@ -1492,9 +1519,10 @@ crd_search <- function(store, query, top_k = 5L,
     hybrid = tryCatch(
       ragnar::ragnar_retrieve(store, query, top_k = top_k),
       error = function(e) {
-        # Every failure still falls back — erroring here would break searches
-        # that work today, and the `method` column already tells a caller the
-        # search degraded. What the warning *says* is what #29 changed.
+        # By default a failure stops (#47): the fallback warning fires once per
+        # reason and store, so later degraded calls were told only by the
+        # `method` column. A caller who wants keyword rows asks for them.
+        if (fallback == "error") .crd_retrieval_abort(e, store = store, method = "hybrid")
         .crd_retrieval_fallback_warn(e, store = store)
         used <<- "bm25"
         ragnar::ragnar_retrieve_bm25(store, query, top_k = top_k)

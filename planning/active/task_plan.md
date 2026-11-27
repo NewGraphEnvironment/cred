@@ -85,16 +85,16 @@ umbrella #58 is claimed after approval.
       equals the summary's message.
 
 ## Phase 4: Search fallback (batch 4: #47)
-- [ ] Before building: `members_check.sh ... 58 <branch> --batch 4`
-- [ ] `crd_search(fallback = c("error", "bm25"))`, matched with `rlang::arg_match()`. With
+- [x] Before building: `members_check.sh ... 58 <branch> --batch 4`
+- [x] `crd_search(fallback = c("error", "bm25"))`, matched with `rlang::arg_match()`. With
       `"error"`, abort with the reason-subclassed error the `vss` path raises (~1306-1318,
       `.crd_retrieval_fallback_msg()`). The message says to pass `fallback = "bm25"` for
       keyword-only results. `"bm25"` keeps today's warning (once per reason and store).
-- [ ] Update existing fallback tests to pass `fallback = "bm25"` or to expect the error. Add
+- [x] Update existing fallback tests to pass `fallback = "bm25"` or to expect the error. Add
       a test where two degraded calls both error. Update `?crd_search` "Diagnosing a
       fallback", the vignette and README wherever they rely on the silent fallback (grep
       `crd_search(`), and any internal caller.
-- [ ] Plan review folded in (review-plan.md): `.crd_retrieval_abort()` takes `method`, and
+- [x] Plan review folded in (review-plan.md): `.crd_retrieval_abort()` takes `method`, and
       its tail no longer claims hybrid degrades (B2). Tests that pass `fallback = "bm25"`:
       test-store-fallback.R 487, 505, 531, 550, 588, 602, 620, and
       test-store-embed-check.R 490 (G1). Grep the sentence for every claim that hybrid falls
@@ -102,7 +102,7 @@ umbrella #58 is claimed after approval.
       `.crd_store_probe_id`, `crd_store_connect` and its `check_model = FALSE` advice,
       helper-store.R, two CLAUDE.md bullets). Neither the vignette nor README calls
       `crd_search()`. Grep the org for `crd_search(` callers and name the break in NEWS (A5).
-- [ ] NEWS: the changed default leads the entry. PR body: `Bump: minor`.
+- [x] NEWS: the changed default leads the entry. PR body: `Bump: minor`.
 
 ## Phase 5: Push manifest notes (batch 3: #26; #54 is left to #55)
 - [ ] Before building: `members_check.sh ... 58 <branch> --batch 3 --skip 54`. Start only

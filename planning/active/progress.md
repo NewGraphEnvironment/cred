@@ -20,3 +20,8 @@
 - #49 measured (findings.md), progress back as `progress = rlang::is_interactive()`; #51 reads `ingest_summary`.
 - Tests: test-store-build and test-store-update 231 passed.
 - Next: Phase 4 (#47)
+
+## Phase 4, 2026-11-27
+- `crd_search(fallback = c("error", "bm25"))`, default error with the vss classes; stale sentences rewritten; NEWS written for batches 1, 2, 4.
+- Tests: all store tests 800 passed, 0 skipped (Ollama reachable).
+- Next: Phase 5 (#26), waiting on the owner's word to merge PR #55

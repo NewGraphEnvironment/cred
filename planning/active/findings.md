@@ -60,6 +60,17 @@ Progress comes back for interactive sessions only, because each line names a ful
 See `review-pr55.md`. Mergeable once its NEWS bullet moves out of the released 0.8.0 section.
 The merge waits for the owner's word.
 
+## #47: who calls crd_search(), and what else said hybrid falls back (2026-11-27)
+
+`gh api search/code q='org:NewGraphEnvironment "crd_search("'` (default branches): the only code
+caller outside cred is knowledge's `scripts/0150-store.R` (`ACTION=query`), which now errors where
+it printed BM25 rows with no embedding service. soul's CLAUDE.md already treats a `bm25` row from a
+hybrid search as a failed search. Neither README nor the vignette calls `crd_search()`.
+Sentences rewritten in the sentence grep: `crd_search` details, its "Diagnosing a fallback"
+section and frequency line, a code comment, `.crd_retrieval_abort`, `.crd_retrieval_failure`,
+`.crd_store_probe_id`, the `crd_store_connect` roxygen (two places) and its mismatch error's
+`check_model = FALSE` advice, `helper-store.R`, and two CLAUDE.md bullets.
+
 ## Errors Encountered
 
 | Error | Resolution |

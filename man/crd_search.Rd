@@ -9,7 +9,8 @@ crd_search(
   query,
   top_k = 5L,
   method = c("hybrid", "bm25", "vss"),
-  zotero_dir = "~/Zotero"
+  zotero_dir = "~/Zotero",
+  fallback = c("error", "bm25")
 )
 }
 \arguments{
@@ -27,6 +28,11 @@ then adjacent chunks are merged, so the number of rows returned is neither
 
 \item{zotero_dir}{\code{character(1)} Zotero data directory used to resolve
 citation keys. Default \code{"~/Zotero"}.}
+
+\item{fallback}{\code{character(1)} what \code{method = "hybrid"} does when the query
+cannot be embedded: \code{"error"} (the default) stops with a
+\code{cred_retrieval_error} condition; \code{"bm25"} returns BM25 rows with a
+\code{cred_retrieval_fallback} warning. Ignored for \code{"bm25"} and \code{"vss"}.}
 }
 \value{
 A \link[tibble:tibble]{tibble} with one row per retrieved passage, with
@@ -69,16 +75,21 @@ known source against one paraphrase, this searches an entire indexed corpus.
 
 \code{method = "hybrid"} combines semantic (vector) and lexical (BM25) retrieval
 and needs a running Ollama instance to embed the query. When semantic
-retrieval fails \strong{for any reason} the search falls back to BM25 with a
-warning rather than failing: lexical retrieval needs no embedding and remains
-effective for the numeric and parameter-level claims this package exists to
-check. The \code{method} column reports \code{"bm25"} when that happens, so a caller
-can always tell the search degraded.
+retrieval fails, for any reason, the search \strong{stops with an error} by
+default, so a keyword-only result can never be read as a semantic one. Pass
+\code{fallback = "bm25"} to take BM25 rows instead: lexical retrieval needs no
+embedding and remains effective for the numeric and parameter-level claims
+this package exists to check. The \code{method} column then reports \code{"bm25"}.
+\code{method = "bm25"} asks for keyword search outright.
 }
 \section{Diagnosing a fallback}{
 
-The warning is subclassed by what went wrong, so a caller can act on the
-reason rather than grep the message. All inherit \code{cred_retrieval_fallback}:
+The condition is subclassed by what went wrong, so a caller can act on the
+reason rather than grep the message. By default it is an \strong{error} of class
+\verb{cred_retrieval_error_<reason>}, inheriting \code{cred_retrieval_error}, as
+\code{method = "vss"} raises. With \code{fallback = "bm25"} it is a \strong{warning} of
+class \verb{cred_retrieval_fallback_<reason>}, inheriting
+\code{cred_retrieval_fallback}. The reasons are the same in both:
 
 \describe{
 \item{\code{cred_retrieval_fallback_connection}}{The embedding service could not
@@ -112,8 +123,10 @@ prescribes is both cheaper and the only one that sees it.}
 reported verbatim and no remedy is prescribed.}
 }
 
-Each fires once per session per reason and per store, so a machine without
-Ollama does not emit the same four lines on every call.
+The warning, under \code{fallback = "bm25"} only, fires once per session per
+reason and per store, so a machine without Ollama does not emit the same
+four lines on every call; after it, only the \code{method} column shows the
+search degraded. The error fires on every call.
 }
 
 \examples{
