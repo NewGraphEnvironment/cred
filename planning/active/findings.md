@@ -76,6 +76,28 @@ TO dst` from an in-memory connection; then `ragnar_store_build_index()` on dst):
 Probe scripts: the session scratchpad (`probe1.R`, `probe2.R`); the measurement is reproduced by the Phase 2
 tests.
 
+## Phase 4: a real store (2026-11-27 UTC; ragnar 0.4.0, duckdb 1.5.6, m-series Mac)
+
+A scratch copy of a real 924.3 MB store (404 documents, pre-0.4.0 schema, 0 % free), updated to remove one
+document (no embedder needed; sources mocked to the store's own origins minus one, so every other document is
+kept). Same input copy for both; main's code from a worktree of `origin/main` (d08ff2c), the branch at 9af4078.
+
+| code | file after | blocks total / used / free | update wall time |
+|---|---|---|---|
+| main | 1,109.8 MB | 4,439 / 3,696 / 743 (17 %) | 74.8 s |
+| branch | 923.5 MB | 3,694 / 3,691 / 3 (0 %) | 33.8 s |
+
+- BM25 top 20 for "culvert fish passage": identical chunks and scores between the two.
+- Object inventory identical (schemas, tables, view, sequences, macros, index SQL); cosine `EXPLAIN` uses HNSW
+  on both.
+- The branch is **faster**, not slower: main's copy had ragnar 0.4.0's upgrade recreate the three HNSW
+  indexes, then the update rebuilt them; the branch drops them before the upgrade and builds once, on a
+  file with no dead blocks. The copy itself costs less than the index build it saves.
+- This store grew 1.20x under main, not the 1.85x the two smaller stores in `research/ragnar-versions.md`
+  showed: the growth depends on the store.
+
+Script: the session scratchpad's `real_update.R` (`Rscript real_update.R <cred checkout> <store> <out>`).
+
 ## Errors Encountered
 
 | Error | Resolution |

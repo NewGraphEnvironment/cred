@@ -2437,11 +2437,20 @@ crd_store_build <- function(store_path,
 #' written at all, so a new PDF that cannot be read does not rewrite it.
 #' Close any connection to the store before updating it.
 #'
+#' **How big the result is.** The updated copy is written out again into a
+#' fresh file, holding only its live rows, and the search indexes are built
+#' once on that file, so the store comes out the size a fresh
+#' [crd_store_build()] of the same documents would be. An update that
+#' changes nothing leaves a store as it was, whatever free space it holds.
+#' While it runs, up to three files sit beside each other: the store, the
+#' working copy (larger than the store when ragnar upgrades it, below), and
+#' the compacted file, about the size of the result.
+#'
 #' **A store written before ragnar 0.4.0.** An update that changes it also
 #' upgrades it to the schema ragnar 0.4.0 writes, because ragnar upgrades a
-#' store as it opens it for writing: `documents` gains three columns, and the
-#' file grows (about 1.85x on two real stores). The update rebuilds the index,
-#' so search works as on a fresh build. An update that changes nothing leaves
+#' store as it opens it for writing: `documents` gains three columns. The
+#' space the upgrade frees in the working copy does not reach the store, and
+#' the indexes are built afresh, so search works as on a fresh build. An update that changes nothing leaves
 #' the store, and its schema, as they were. Once upgraded, a store cannot be
 #' ingested into by ragnar 0.3.x, so anyone sharing it needs cred and ragnar
 #' current.

@@ -33,7 +33,8 @@ R/
 │                  resolution), crd_store_build (Zotero collection or keys → DuckDB,
 │                  through cred's own worker `prepare`: pdftools fallback, split on a
 │                  refused chunk; records each file's md5 in `cred_sources`),
-│                  crd_store_update (only new, changed and removed documents, on a copy),
+│                  crd_store_update (only new, changed and removed documents, on a copy that is compacted
+│                  before it replaces the store),
 │                  crd_store_push (merge-on-write manifest + ETag compare-and-swap)
 ├── pdf.R        — PDF text extraction + paragraph splitting (pdftools)
 └── docx.R       — Word doc extraction (officer) + .paraphrase_tokens(), .token_score()
@@ -347,6 +348,18 @@ Shipped: [#22](https://github.com/NewGraphEnvironment/cred/issues/22) ragnar ret
   record unchanged) discards the copy, so a permanently unreadable PDF does not rewrite the
   store, and its md5, on every run.
 
+  **What replaces the store is a compacted copy of the copy, with its indexes built once.**
+  `ragnar_store_build_index()` drops and recreates the three HNSW indexes and the
+  `fts_main_chunks` schema, and duckdb keeps the space they held, so rebuilding inside the copy
+  left updated stores 32 to 76 % free blocks. `.crd_store_drop_indexes()` strips the copy on a
+  plain connection **before** ragnar opens it (so ragnar 0.4.0's upgrade recreates nothing), the
+  ingest runs with `build_index = FALSE`, and `.crd_store_compact()` does `COPY FROM DATABASE`
+  into a fresh file, checks every table's row count, and builds the indexes there. The copy must
+  carry no index: it would replay the SQL duckdb recorded, which before duckdb 2.0 has no metric,
+  and without `vss` loaded the copy refuses outright. On a 924 MB pre-0.4.0 store, removing one
+  document gave 924 MB and 0 % free in 34 s, where rebuilding in place gave 1,110 MB and 17 % in
+  75 s. [#48](https://github.com/NewGraphEnvironment/cred/issues/48).
+
 - **cred supports CRAN ragnar >= 0.4.0, and a store written before it is upgraded silently.**
   `Suggests: ragnar (>= 0.4.0)`, no `Remotes:` entry, and `.crd_need()` refuses an older loaded
   ragnar (`cred_ragnar_too_old`), so CI and users run the same release. Every ragnar reads every
@@ -356,7 +369,7 @@ Shipped: [#22](https://github.com/NewGraphEnvironment/cred/issues/22) ragnar ret
   at creation, which **lacks the metric when duckdb before 2.0 made the index** (seen in 1.5.6's record and in the
   real pre-0.4.0 stores' records; duckdb 2.0 records it, so an index made under 2.0 keeps it), so cosine queries scan until `ragnar_store_build_index()`. ragnar 0.3.x cannot ingest into an
   upgraded store. So `crd_store_connect(read_only = FALSE)` warns first
-  (`cred_store_upgrade`), `crd_store_update()` (which rebuilds the index on every copy it keeps, a record-only update included)
+  (`cred_store_upgrade`), `crd_store_update()` (which builds the indexes afresh on every copy it keeps, a record-only update included, and compacts the copy so the upgrade's growth never reaches the store)
   says so in its help, and the manifest records `ragnar_version` (stamped into the store's own
   `cred_ragnar` table by build and update, never the pusher's session unless the store has no
   stamp) and `store_schema` read from the file. A pre-0.4.0 test store is built by hand

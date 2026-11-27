@@ -102,18 +102,18 @@ Mechanism, decided in the plan (agent-operations §4, mechanism promoted):
 
 ## Phase 4: Measure on a real store
 
-- [ ] On a scratch copy of a real store (e.g. a `data/rag/*.duckdb` in a sibling report repo), an update that
+- [x] On a scratch copy of a real store (e.g. a `data/rag/*.duckdb` in a sibling report repo), an update that
       removes one document (needs no embedder), on main and on the branch: file size, `PRAGMA database_size`,
       wall time, and BM25/hybrid results against the main-updated copy. Record in `findings.md` and the archive
       README's Measurement section.
 
 ## Phase 5: Docs and release notes
 
-- [ ] Roxygen of `crd_store_update()`: "What a failure costs" (the compacted copy; at the peak three files sit
+- [x] Roxygen of `crd_store_update()`: "What a failure costs" (the compacted copy; at the peak three files sit
       together: the store, the working copy, larger than the store after a pre-0.4.0 upgrade, and the compacted
       copy, about the store's used size; review), the pre-0.4.0 paragraph (the 1.85x growth no longer reaches the pushed
       file). `devtools::document()`.
-- [ ] Grep the 1.85x / growth sentences across `CLAUDE.md`, `research/ragnar-versions.md`,
+- [x] Grep the 1.85x / growth sentences across `CLAUDE.md`, `research/ragnar-versions.md`,
       `research/ragnar-store-update.md`, roxygen and NEWS; correct each that now describes the update (the
       read-write connect still grows a file, so those stay).
 - [ ] NEWS bullet under the development heading; `lintr::lint_package()` 0 new lints; `devtools::check()`.

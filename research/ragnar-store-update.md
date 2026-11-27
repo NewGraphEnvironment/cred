@@ -1,6 +1,6 @@
 # Changing a built ragnar store: what an update relies on
 
-**Verified:** 2026-10-31, deletes and skip rules revised for ragnar 0.4.0 on 2026-11-18 · **Issues:** #44, #43 · **Produced by:** ragnar 0.3.1 and 0.3.1.9000 internals
+**Verified:** 2026-10-31, deletes and skip rules revised for ragnar 0.4.0 on 2026-11-18, the index and compaction on 2026-11-27 · **Issues:** #44, #43, #48 · **Produced by:** ragnar 0.3.1 and 0.3.1.9000 internals
 (`ragnar_store_ingest`, `prepare_ingest_paths`, `do_ingest_remote_work`, `ragnar_store_update_v2`,
 `ragnar_store_create_v2`), duckdb 1.5.2 on macOS, and `tests/testthat/test-store-update.R`. Run record:
 `planning/archive/2026-10-issue-44-store-update/`.
@@ -31,7 +31,14 @@ decides what to hand ragnar, and hands it only origins the store does not hold.
 ## The index after a change
 
 - `ragnar_store_ingest()` rebuilds the FTS and VSS indexes at the end whenever it was given a path,
-  whether or not any was ingested.
+  whether or not any was ingested, unless `build_index = FALSE`.
+- A rebuild drops the old indexes inside the file, and duckdb keeps their space: updated stores
+  carried 32 to 76 % free blocks, every block downloaded by each reader. So the update builds no
+  index in its working copy (indexes dropped before ragnar opens it, ingest with
+  `build_index = FALSE`), copies it into a fresh file with `COPY FROM DATABASE`, and builds the
+  indexes there once (#48). The copy carries sequences, the `chunks` view, `metadata` (the
+  serialised embedder) and cred's own tables; a fresh build and an updated store hold the same
+  objects and the same blocks on the toy fixture (19, none free).
 - BM25 results come through the `chunks` view, so a removed document disappears from results even
   from a stale index. What a stale index keeps is the removed document's share of the term
   statistics: BM25 scores differ from a fresh build's until the index is rebuilt. Test a rebuild by
