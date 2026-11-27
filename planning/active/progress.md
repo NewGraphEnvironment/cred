@@ -21,3 +21,13 @@
   0 failed, 2 skipped; 0 lints.
 - Commits: fe9259c (tests), and the Phase 3 commit.
 - Next: Phase 4, a real-store measurement.
+
+## Phases 4-5, 2026-11-27 UTC
+
+- Phase 4: real 924 MB pre-0.4.0 store, one removal: main 1,110 MB / 17 % free / 75 s, branch 924 MB / 0 %
+  / 34 s, BM25 and object inventory identical (findings).
+- Phase 5: roxygen, NEWS (new development heading), CLAUDE.md, both research files. `devtools::check()`:
+  0 errors; its 3 warnings and 3 notes predate the branch (non-ASCII in older strings, undeclared
+  `tibble`/`openxlsx`, `.lintr`, a local `README.html`), and CI errors only on errors. 0 lints.
+- `/code-check branch` round 1: one finding (the duplicate-id checks could not fail), fixed in ab25ccc and
+  proven by planting a restarted sequence. Commits: 901d0c2, ab25ccc.

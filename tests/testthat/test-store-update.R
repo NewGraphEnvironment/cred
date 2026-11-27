@@ -209,6 +209,12 @@ test_that("an updated store carries no more free space than a fresh build (#48)"
   # where a fresh build of the same keys holds 19, none free.
   world <- local_update_world()
   path <- build(world, c("keyA", "keyB"))
+  # The highest ids issued so far. Whichever document the removal below takes,
+  # a restarted sequence could hand out ids no row then holds, so only a
+  # comparison with what was issued can see it.
+  con <- DBI::dbConnect(duckdb::duckdb(), path, read_only = TRUE)
+  issued <- DBI::dbGetQuery(con, "SELECT MAX(doc_id) AS doc, MAX(chunk_id) AS chunk FROM embeddings")
+  DBI::dbDisconnect(con, shutdown = TRUE)
   # A removal first, so the second update ingests into a file the first
   # compacted, and its new ids come from sequences that went through the copy.
   update(path, "keyB")
@@ -220,13 +226,17 @@ test_that("an updated store carries no more free space than a fresh build (#48)"
   expect_lte(got[["free"]], want[["free"]])
   expect_lte(got[["total"]], want[["total"]])
   expect_identical(contents(path), contents(fresh))
-  # A sequence restarted by the copy would repeat an id: `doc_id` is a primary
-  # key and would refuse, but `chunk_id`, the FTS index's key, has no
-  # constraint and would repeat silently.
+  # A sequence restarted by the copy would hand keyC ids already issued:
+  # `chunk_id`, the FTS index's key, has no constraint, so a reused one would
+  # pass silently. keyC's ids must all come after every id issued before it.
   con <- DBI::dbConnect(duckdb::duckdb(), path, read_only = TRUE)
   on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
-  ids <- DBI::dbGetQuery(con, "SELECT COUNT(*) AS n, COUNT(DISTINCT doc_id) AS d FROM documents")
-  expect_identical(ids$n, ids$d)
+  new <- DBI::dbGetQuery(con, "SELECT MIN(e.doc_id) AS doc, MIN(e.chunk_id) AS chunk, COUNT(*) AS n
+                               FROM embeddings e JOIN documents d USING (doc_id)
+                               WHERE d.origin LIKE '%keyC.md'")
+  expect_gt(new$n, 0)
+  expect_gt(new$doc, issued$doc)
+  expect_gt(new$chunk, issued$chunk)
   ids <- DBI::dbGetQuery(con, "SELECT COUNT(*) AS n, COUNT(DISTINCT chunk_id) AS d FROM embeddings")
   expect_identical(ids$n, ids$d)
   expect_gt(bm25_hits(path, "zzzonlykeyC"), 0L)

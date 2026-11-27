@@ -116,7 +116,7 @@ Mechanism, decided in the plan (agent-operations §4, mechanism promoted):
 - [x] Grep the 1.85x / growth sentences across `CLAUDE.md`, `research/ragnar-versions.md`,
       `research/ragnar-store-update.md`, roxygen and NEWS; correct each that now describes the update (the
       read-write connect still grows a file, so those stay).
-- [ ] NEWS bullet under the development heading; `lintr::lint_package()` 0 new lints; `devtools::check()`.
+- [x] NEWS bullet under the development heading; `lintr::lint_package()` 0 new lints; `devtools::check()`.
 
 ## Owed at the end (reported, done after merge)
 
