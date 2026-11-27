@@ -1,3 +1,10 @@
+# cred (development version)
+
+* `crd_store_push(dry_run = TRUE)` prints only the selected store's manifest entry by default,
+  while still listing all store names, so a logged dry run carries no other store's provenance
+  ([#54](https://github.com/NewGraphEnvironment/cred/issues/54)). Set
+  `show_full_manifest = TRUE` to print every entry.
+
 # cred 0.8.1
 
 * `crd_store_update()` leaves a store the size a fresh `crd_store_build()` would
@@ -14,9 +21,6 @@ cred now supports one ragnar: the CRAN release, 0.4.0 or later
 ([#43](https://github.com/NewGraphEnvironment/cred/issues/43)). It had installed ragnar's
 development branch, so CI tested a different ragnar from the one users had, and a fix that passed
 every local test failed in CI.
-
-* `crd_store_push(dry_run = TRUE)` prints only the selected store's manifest entry by default,
-  while still listing all store names. Set `show_full_manifest = TRUE` to print every entry.
 
 * `ragnar (>= 0.4.0)` replaces the development branch. The store functions refuse an older ragnar
   with a message giving both versions; update it with `pak::pak("ragnar")` and restart R.
