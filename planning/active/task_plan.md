@@ -33,25 +33,25 @@ umbrella #58 is claimed after approval.
     NEWS says, that origins are printed literally.
 
 ## Phase 1: Review PR #55 (outside contributor, #54)
-- [ ] Run `/code-check` on #55's diff in a scratch worktree of its head. Check that the
+- [x] Run `/code-check` on #55's diff in a scratch worktree of its head. Check that the
       `held` env refactor keeps `prepare`'s `topenv()` at `baseenv()` (the structure test)
       and that it is needed for zero lints. Check that its NEWS bullet merges cleanly
       against main at v0.8.1.
-- [ ] Write the findings to `planning/active/review-pr55.md`. Ask the owner to merge it
+- [x] Write the findings to `planning/active/review-pr55.md`. Ask the owner to merge it
       (via `/gh-pr-merge`) or say what to raise on #55. Go on with Phases 2-4 while the
       answer is pending.
 
 ## Phase 2: Check clean (batch 1: #32, #38)
-- [ ] Before building: `bash "$T/skills/_shared/members_check.sh" "$(git remote get-url origin)" 58 <branch> --batch 1`
-- [ ] `DESCRIPTION`: `Imports: tibble` (returned by `crd_search()`, `R/zotero.R`,
+- [x] Before building: `bash "$T/skills/_shared/members_check.sh" "$(git remote get-url origin)" 58 <branch> --batch 1`
+- [x] `DESCRIPTION`: `Imports: tibble` (returned by `crd_search()`, `R/zotero.R`,
       `R/docx.R`, `R/pdf.R`, `R/rmd.R` and used in tests), `Suggests: openxlsx` (the guarded
       path in `crd_aud_fmt_xlsx()`)
-- [ ] Replace the 13 non-ASCII string literals with ASCII `--`: `R/audit.R` 316, 472 and
+- [x] Replace the 13 non-ASCII string literals with ASCII `--`: `R/audit.R` 316, 472 and
       603; `R/store.R` 186, 611, 633, 3054, 3065, 3197, 3326, 3337, 3388 and 3397 (from
       `getParseData` `STR_CONST`). Comments stay. No test matches an em dash.
 - [ ] `tools:::.check_package_ASCII_code(".")` comes back empty, and `devtools::check()`
       shows 0 warnings
-- [ ] Remove `error-on: '"error"'` and its comment from `.github/workflows/R-CMD-check.yaml`
+- [x] Remove `error-on: '"error"'` and its comment from `.github/workflows/R-CMD-check.yaml`
 
 ## Phase 3: Ingest reporting on ragnar 0.4.0 (batch 2: #51, #49)
 - [ ] Before building: `members_check.sh ... 58 <branch> --batch 2`

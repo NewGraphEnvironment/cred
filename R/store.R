@@ -183,7 +183,7 @@
   # otherwise download, compare against NULL, and fail after having already
   # replaced a good local store.
   if (is.null(entry$md5) || !nzchar(entry$md5)) {
-    stop("Manifest entry for '", name, "' carries no md5 — it cannot be verified.\n",
+    stop("Manifest entry for '", name, "' carries no md5 -- it cannot be verified.\n",
          "  Ask whoever pushed the store to repair the manifest, or pass verify = FALSE.",
          call. = FALSE)
   }
@@ -608,7 +608,7 @@ crd_store_connect <- function(store,
   }
 
   if (file.exists(local_path)) {
-    message("Local ", basename(local_path), " does not match the manifest — re-downloading.")
+    message("Local ", basename(local_path), " does not match the manifest -- re-downloading.")
   }
 
   dir.create(dirname(local_path), recursive = TRUE, showWarnings = FALSE)
@@ -630,7 +630,7 @@ crd_store_connect <- function(store,
   if (!identical(got, entry$md5)) {
     stop("MD5 mismatch after download for '", name, "'.\n",
          "  manifest: ", entry$md5, "\n  download: ", got, "\n",
-         "  The store may be mid-push or the manifest stale — do not trust results.\n",
+         "  The store may be mid-push or the manifest stale -- do not trust results.\n",
          "  Any existing local store was left untouched.",
          call. = FALSE)
   }
@@ -3051,7 +3051,7 @@ crd_store_update <- function(store_path,
                    error = function(e) NA_integer_)
   if (is.na(size)) {
     warning("Could not read embedding_size from ", basename(store_path),
-            " — the embedding-dimension check will be skipped for this push.",
+            " -- the embedding-dimension check will be skipped for this push.",
             call. = FALSE)
   }
   label <- tryCatch(as.character(DBI::dbGetQuery(con, "SELECT name FROM metadata")$name[1]),
@@ -3062,7 +3062,7 @@ crd_store_update <- function(store_path,
   if (is.na(model)) {
     model <- Sys.getenv("CRED_EMBED_MODEL", "nomic-embed-text")
     warning("Could not read the embedding model from ", basename(store_path),
-            " — recording '", model, "' from the environment instead. ",
+            " -- recording '", model, "' from the environment instead. ",
             "The model recorded in the manifest may not be the one used.",
             call. = FALSE)
   }
@@ -3194,7 +3194,7 @@ crd_store_update <- function(store_path,
     "  already in the manifest: ", paste(models, collapse = ", "),
     " (dimension ", paste(sizes, collapse = ", "), ")\n",
     if (size_conflict) {
-      "  The embedding DIMENSION differs, which is read from the store itself — this is a real
+      "  The embedding DIMENSION differs, which is read from the store itself -- this is a real
   incompatibility, not just a label mismatch.\n"
     } else {
       ""
@@ -3323,7 +3323,7 @@ crd_store_push <- function(store_path,
   if (!head$exists && !head$confirmed_absent) {
     stop("Could not determine whether a manifest exists at ", source, "log.json\n  ",
          paste(head$out, collapse = "\n  "),
-         "\n  This is not a 404 — refusing to push rather than guess.", call. = FALSE)
+         "\n  This is not a 404 -- refusing to push rather than guess.", call. = FALSE)
   }
   if (head$exists && is.na(head$etag)) {
     stop("Read the manifest at ", source, "log.json but could not obtain its ETag.\n",
@@ -3334,7 +3334,7 @@ crd_store_push <- function(store_path,
     stop("No manifest at ", source, "log.json\n",
          "  The bucket is reachable, so this prefix has no manifest yet.\n",
          "  If that is intended, pass create_manifest = TRUE.\n",
-         "  If not, check getOption(\"cred.store_source\") — a wrong prefix looks",
+         "  If not, check getOption(\"cred.store_source\") -- a wrong prefix looks",
          " exactly like this.", call. = FALSE)
   }
 
@@ -3385,7 +3385,7 @@ crd_store_push <- function(store_path,
     unlink(tmp)
 
     if (identical(res$status, 0L)) {
-      message("Manifest updated — now holds: ",
+      message("Manifest updated -- now holds: ",
               paste(names(merged$stores), collapse = ", "))
       return(invisible(merged))
     }
@@ -3394,7 +3394,7 @@ crd_store_push <- function(store_path,
            paste(c(res$out, res$err), collapse = "\n  "), stale_warning, call. = FALSE)
     }
 
-    message("Manifest changed under us — re-merging (attempt ", attempt, ")")
+    message("Manifest changed under us -- re-merging (attempt ", attempt, ")")
     head <- .crd_s3_head_object(source, "log.json", profile = profile)
 
     # A re-probe that is not a clean read must abort. Treating it as absence

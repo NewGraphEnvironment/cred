@@ -23,6 +23,7 @@ Suggests:
     DT,
     duckdb,
     knitr,
+    openxlsx,
     ragnar (>= 0.4.0),
     rbbt,
     rmarkdown,
@@ -44,4 +45,5 @@ Imports:
     rlang,
     RSQLite,
     stringr,
+    tibble,
     tools
