@@ -313,7 +313,7 @@ crd_aud_verify_all <- function(
   }
 
   if (nrow(sources) == 0L) {
-    message("No sources resolved — nothing to do.")
+    message("No sources resolved -- nothing to do.")
     return(invisible(audit))
   }
 
@@ -469,7 +469,7 @@ crd_aud_fill_src <- function(
   readr::write_csv(audit, audit_file, na = "")
   n_filled   <- sum(audit$verified[idx] == "auto",   na.rm = TRUE)
   n_nomatch  <- sum(audit$verified[idx] == "no_match", na.rm = TRUE)
-  message("Done — ", n_filled, " filled, ", n_nomatch, " no_match")
+  message("Done -- ", n_filled, " filled, ", n_nomatch, " no_match")
   invisible(audit)
 }
 
@@ -600,7 +600,7 @@ crd_aud_eval_inline <- function(audit_file,
       val  <- tryCatch(
         as.character(eval(parse(text = expr), envir = env)),
         error = function(e) {
-          warning("Could not evaluate: ", expr, " — ", conditionMessage(e),
+          warning("Could not evaluate: ", expr, " -- ", conditionMessage(e),
                   call. = FALSE)
           span
         }

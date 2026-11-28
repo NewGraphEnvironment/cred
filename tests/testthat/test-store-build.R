@@ -361,10 +361,13 @@ test_that("an ingest names a worker that crashed without leaving a note", {
   skip_if_not_installed("duckdb")
   skip_if_not_installed("rlang")
   # ragnar (>= 0.4.0) reports a failed worker as a ragnar_ingest_worker_error
-  # warning with a `path` field. The test above reaches it through real mirai
-  # workers; this one raises it as ragnar does, to reach the one case a real
+  # warning with a `path` field, and records it in the ingest_summary attribute
+  # of the store it returns. The test above reaches both through real mirai
+  # workers; this one produces them as ragnar does, to reach the one case a real
   # worker cannot be made to produce on demand: a worker that died before
   # `prepare` left a note, so ragnar's own message is the only reason there is.
+  # The crashed path raises no warning here, and its summary message is text no
+  # warning carries, so the reason can only have come from the summary (#51).
   dir <- withr::local_tempdir()
   good <- .crd_test_doc(.crd_test_prose(800L), dir)
   bad <- file.path(dir, "unreadable.pdf")
@@ -386,7 +389,10 @@ test_that("an ingest names a worker that crashed without leaving a note", {
       e <- tryCatch(prepare(paths[2]), error = function(e) e)
       rlang::warn(sprintf('`prepare("%s")` signaled an Error: %s', paths[2], conditionMessage(e)),
                   class = "ragnar_ingest_worker_error", path = paths[2], call = NULL)
-      rlang::warn("Worker interrupted.", class = "ragnar_ingest_worker_error", path = paths[3], call = NULL)
+      attr(store, "ingest_summary") <- tibble::tibble(
+        path = paths, status = c("ok", "error", "error"), n_chunks = c(3L, 0L, 0L),
+        message = c(NA, "prepare failed", "Worker interrupted (from the summary).")
+      )
       invisible(store)
     },
     .package = "ragnar"
@@ -398,7 +404,8 @@ test_that("an ingest names a worker that crashed without leaving a note", {
   expect_identical(res$ingested, good)
   expect_setequal(res$skipped$origin, c(bad, crashed))
   expect_match(res$skipped$reason[res$skipped$origin == bad], "pdftools", fixed = TRUE)
-  expect_identical(res$skipped$reason[res$skipped$origin == crashed], "Worker interrupted.")
+  expect_identical(res$skipped$reason[res$skipped$origin == crashed],
+                   "Worker interrupted (from the summary).")
 })
 
 test_that("an ingest finishes past a chunk the model refuses whole", {
@@ -423,11 +430,37 @@ test_that("an ingest finishes past a chunk the model refuses whole", {
   expect_gt(sum(stored$origin == glyphs), nrow(whole))
 })
 
-test_that("ragnar's progress output is off unless asked for", {
-  # Its per-file line does not handle every file name safely, and Zotero file
-  # names are not ours to choose. crd_store_build() passes FALSE as well,
-  # which the build-report mocks below enforce.
+test_that("ragnar's progress output follows the session unless asked for", {
+  # Each per-file line names a full local path, so a script whose output is kept
+  # as a log has it off; an interactive session has it on (#49).
   expect_false(formals(.crd_store_ingest)$progress)
+  for (f in list(crd_store_build, crd_store_update)) {
+    expect_identical(formals(f)$progress, quote(rlang::is_interactive()))
+  }
+})
+
+test_that("ragnar's progress line prints a file name with cli markup literally", {
+  skip_if_not_installed("ragnar", "0.4.0")
+  skip_if_not_installed("duckdb")
+  skip_if_not_installed("mirai")
+  # ragnar 0.4.0 prints each origin literally (its NEWS), which is what lets
+  # progress come back on (#49). A file name is not ours to choose.
+  dir <- withr::local_tempdir()
+  marked <- file.path(dir, "{.strong x}.md")
+  writeLines(.crd_test_prose(800L), marked)
+  store <- local_build_store(.crd_test_embed_limited(5000L))
+
+  msgs <- character()
+  withCallingHandlers(
+    .crd_store_ingest(store, marked, read = .crd_test_read_text, progress = TRUE),
+    message = function(m) {
+      msgs <<- c(msgs, conditionMessage(m))
+      invokeRestart("muffleMessage")
+    }
+  )
+  line <- grep("ingested:", msgs, value = TRUE)
+  expect_length(line, 1L)
+  expect_true(grepl(marked, line, fixed = TRUE))
 })
 
 test_that("an ingest still fails whole when the embedding service is down", {
@@ -479,8 +512,8 @@ local_build_mocks <- function(ingest, env = parent.frame()) {
       )
     },
     .crd_ollama_check = function(...) invisible(NULL),
-    .crd_store_ingest = function(store, paths, read = NULL, progress = TRUE) {
-      if (!isFALSE(progress)) stop("crd_store_build() must pass progress = FALSE")
+    .crd_store_ingest = function(store, paths, read = NULL, progress = NA) {
+      assign("progress", progress, envir = .crd_build_seen)
       ingest(unique(paths))
     },
     .env = env
@@ -495,6 +528,9 @@ local_build_mocks <- function(ingest, env = parent.frame()) {
 }
 
 no_notes <- function() tibble::tibble(origin = character(), kind = character(), detail = character())
+
+# What crd_store_build() last passed to the mocked ingest.
+.crd_build_seen <- new.env(parent = emptyenv())
 
 test_that("crd_store_build() names a skipped PDF by key and returns only what it ingested", {
   skip_if_not_installed("ragnar", "0.4.0")
@@ -535,6 +571,25 @@ test_that("crd_store_build() names a skipped PDF by key and returns only what it
   expect_setequal(rec$origin_id, .crd_origin_id(paths[1:2]))
   expect_identical(rec$md5[match(.crd_origin_id(paths[1:2]), rec$origin_id)],
                    unname(tools::md5sum(paths[1:2])))
+})
+
+test_that("crd_store_build() hands its progress to the ingest", {
+  skip_if_not_installed("ragnar", "0.4.0")
+  skip_if_not_installed("duckdb")
+  ingest <- function(paths) {
+    list(ingested = paths, skipped = tibble::tibble(origin = character(), reason = character()),
+         notes = no_notes())
+  }
+  local_build_mocks(ingest)
+  # testthat runs non-interactively, so the default is off; asked for, it is on.
+  for (want in c(FALSE, TRUE)) {
+    target <- withr::local_tempfile(fileext = ".duckdb")
+    rm(list = ls(.crd_build_seen), envir = .crd_build_seen)
+    args <- list(target, citation_keys = "keyA")
+    if (want) args$progress <- TRUE
+    suppressMessages(do.call(crd_store_build, args))
+    expect_identical(.crd_build_seen$progress, want)
+  }
 })
 
 test_that("crd_store_build() keeps the store when it cannot write the source record", {

@@ -124,8 +124,8 @@ local_ragnar_store <- function() {
 
 # --- Failure-shape fixtures for #29 ---------------------------------------
 #
-# `crd_search(method = "hybrid")` falls back to BM25 when semantic retrieval
-# fails, and the point of #29 is that the four ways it can fail need four
+# `crd_search(method = "hybrid")` stops, or falls back to BM25 under
+# `fallback = "bm25"`, when semantic retrieval fails, and the point of #29 is that the four ways it can fail need four
 # different things said about them. Each fixture below reaches one of those
 # ways through the REAL `ragnar_retrieve()` call — no mocked bindings, no
 # hand-built conditions — by replacing the store's `embed` function.

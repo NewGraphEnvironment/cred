@@ -9,7 +9,8 @@ crd_store_update(
   collection = NULL,
   citation_keys = NULL,
   zotero_dir = "~/Zotero",
-  library = getOption("cred.zotero_library")
+  library = getOption("cred.zotero_library"),
+  progress = rlang::is_interactive()
 )
 }
 \arguments{
@@ -28,6 +29,10 @@ Library, or a group's name or groupID (as in its URL,
 \verb{zotero.org/groups/<groupID>}). Zotero's internal \code{libraryID} is not
 accepted: it differs between machines. Default
 \code{getOption("cred.zotero_library")}; \code{NULL} searches every library.}
+
+\item{progress}{\code{logical(1)} show ragnar's per-file progress while
+ingesting. Default \code{\link[rlang:is_interactive]{rlang::is_interactive()}}. Each line names a file's
+full local path.}
 }
 \value{
 Invisibly, a \link[tibble:tibble]{tibble} with one row per resolved

@@ -183,7 +183,7 @@
   # otherwise download, compare against NULL, and fail after having already
   # replaced a good local store.
   if (is.null(entry$md5) || !nzchar(entry$md5)) {
-    stop("Manifest entry for '", name, "' carries no md5 — it cannot be verified.\n",
+    stop("Manifest entry for '", name, "' carries no md5 -- it cannot be verified.\n",
          "  Ask whoever pushed the store to repair the manifest, or pass verify = FALSE.",
          call. = FALSE)
   }
@@ -259,7 +259,8 @@
 #' whole point. Keyed the same way, a "could not check (connection)" emitted by
 #' [crd_store_connect()] would consume the once-per-session slot that
 #' [crd_search()]'s fallback warning needs for the same reason on the same
-#' store — so the search would then degrade to BM25 silently, which is the
+#' store — so a search run with `fallback = "bm25"` would then degrade to BM25
+#' silently, which is the
 #' diagnosis loss #29 exists to end, arriving from the other side.
 #'
 #' It lives in a function rather than inline so a test can ask the code what
@@ -289,7 +290,9 @@
 #' name reconstructed from a string, it is the function that will actually embed
 #' queries against this store. Comparing its width against the store's own
 #' `embedding_size` is exactly the condition that otherwise surfaces downstream
-#' as a `cred_retrieval_fallback_dimension` warning from [crd_search()].
+#' from [crd_search()] as a `dimension` failure: a `cred_retrieval_error_dimension`
+#' error by default, a `cred_retrieval_fallback_dimension` warning under
+#' `fallback = "bm25"`.
 #'
 #' **Width is the detectable part.** A model whose weights changed while its
 #' dimension stayed the same is invisible here, and to every other check in this
@@ -386,7 +389,8 @@
       "  the bytes the manifest recorded.\n",
       "    ollama pull ", .crd_fallback_model(store = store), "\n",
       "  or rebuild with crd_store_build(). BM25 retrieval needs no embedding and is\n",
-      "  unaffected, so pass check_model = FALSE to open the store anyway."
+      "  unaffected, so pass check_model = FALSE to open the store anyway, and search\n",
+      "  it with crd_search(method = \"bm25\")."
     ),
     class = c("cred_store_embedding_mismatch", "cred_store_embedding_check"),
     store_size = as.integer(meta$size),
@@ -503,8 +507,9 @@
 #'
 #' A mismatch that arises *after* a successful connect — the model re-pulled
 #' mid-session, or `@embed` replaced on the store object — is outside both, and
-#' still surfaces downstream as a `cred_retrieval_fallback_dimension` warning
-#' from [crd_search()]; see "Diagnosing a fallback" there. So does any mismatch
+#' still surfaces downstream from [crd_search()], as an error by default or a
+#' `cred_retrieval_fallback_dimension` warning under `fallback = "bm25"`; see
+#' "Diagnosing a fallback" there. So does any mismatch
 #' on a store opened with `check_model = FALSE`, or one whose probe could not
 #' run. The two layers are complementary, not redundant
 #' (NewGraphEnvironment/cred#30).
@@ -547,7 +552,8 @@
 #'   its recorded embedder now returns, and its model label against the
 #'   manifest. Default `TRUE`. A confirmed width mismatch is an **error**; pass
 #'   `FALSE` to open such a store anyway, which is a reasonable thing to want —
-#'   BM25 retrieval needs no embedding and is unaffected by the mismatch.
+#'   BM25 retrieval needs no embedding and is unaffected by the mismatch. Search
+#'   it with `crd_search(method = "bm25")`: a default hybrid search stops on it.
 #' @return A `ragnar` store object, as returned by
 #'   [ragnar::ragnar_store_connect()].
 #' @export
@@ -608,7 +614,7 @@ crd_store_connect <- function(store,
   }
 
   if (file.exists(local_path)) {
-    message("Local ", basename(local_path), " does not match the manifest — re-downloading.")
+    message("Local ", basename(local_path), " does not match the manifest -- re-downloading.")
   }
 
   dir.create(dirname(local_path), recursive = TRUE, showWarnings = FALSE)
@@ -630,7 +636,7 @@ crd_store_connect <- function(store,
   if (!identical(got, entry$md5)) {
     stop("MD5 mismatch after download for '", name, "'.\n",
          "  manifest: ", entry$md5, "\n  download: ", got, "\n",
-         "  The store may be mid-push or the manifest stale — do not trust results.\n",
+         "  The store may be mid-push or the manifest stale -- do not trust results.\n",
          "  Any existing local store was left untouched.",
          call. = FALSE)
   }
@@ -908,8 +914,9 @@ crd_store_connect <- function(store,
 
 #' Classify a failure of semantic retrieval
 #'
-#' `crd_search(method = "hybrid")` falls back to BM25 when semantic retrieval
-#' raises, and the ways it can fail need different things said about them.
+#' `crd_search(method = "hybrid")` stops, or falls back to BM25 under
+#' `fallback = "bm25"`, when semantic retrieval raises, and the ways it can
+#' fail need different things said about them.
 #' Guessing costs more than it looks: an embedding-width mismatch means the
 #' store's own recorded embedder no longer produces vectors of the width the
 #' store holds, so the store is not answering the questions it appears to be —
@@ -1280,11 +1287,12 @@ crd_store_connect <- function(store,
   )
 }
 
-#' Raise a classified error for a retrieval that has nowhere to fall back to
+#' Raise a classified error for a semantic retrieval that does not fall back
 #'
 #' `method = "vss"` is semantic retrieval and nothing else, so a failure there
-#' is terminal — unlike `"hybrid"`, which degrades to BM25 with a warning.
-#' Erroring is right; raising the condition **unclassified** was not. A
+#' is terminal. `"hybrid"` stops the same way unless the caller passed
+#' `fallback = "bm25"` (#47). Erroring is right; raising the condition
+#' **unclassified** was not. A
 #' width-mismatched store produced a bare
 #' `Binder Error: array_cosine_distance(...)` and no diagnosis at all
 #' (NewGraphEnvironment/cred#30).
@@ -1297,18 +1305,24 @@ crd_store_connect <- function(store,
 #'
 #' @param cond the condition caught from the retrieval call.
 #' @param store the store being searched.
+#' @param method `character(1)` the method that failed, `"vss"` or `"hybrid"`.
 #' @return Never returns; raises a `cred_retrieval_error` condition.
 #' @noRd
-.crd_retrieval_abort <- function(cond, store = NULL) {
+.crd_retrieval_abort <- function(cond, store = NULL, method = "vss") {
   reason <- .crd_retrieval_failure(cond)
+  head <- if (identical(method, "hybrid")) {
+    'Semantic retrieval failed, so crd_search(method = "hybrid") stopped rather than return BM25 rows.\n'
+  } else {
+    'Semantic retrieval failed, and method = "vss" has no fallback.\n'
+  }
   rlang::abort(
     paste0(
-      'Semantic retrieval failed, and method = "vss" has no fallback.\n',
+      head,
       .crd_embed_remedy(reason, cond, store = store), "\n",
       # Says what is true of the METHODS, not of the store. Asserting the other
       # two "still work on this store" contradicted the `unknown` remedy
       # directly above it, which says the store itself may be at fault.
-      '  "hybrid" degrades to BM25 with a warning, and "bm25" needs no\n',
+      '  "hybrid" with fallback = "bm25" takes BM25 rows instead, and "bm25" needs no\n',
       "  embedding at all."
     ),
     # Subclassed by reason, in the same scheme as the fallback warning, so a
@@ -1380,15 +1394,20 @@ crd_store_connect <- function(store,
 #'
 #' `method = "hybrid"` combines semantic (vector) and lexical (BM25) retrieval
 #' and needs a running Ollama instance to embed the query. When semantic
-#' retrieval fails **for any reason** the search falls back to BM25 with a
-#' warning rather than failing: lexical retrieval needs no embedding and remains
-#' effective for the numeric and parameter-level claims this package exists to
-#' check. The `method` column reports `"bm25"` when that happens, so a caller
-#' can always tell the search degraded.
+#' retrieval fails, for any reason, the search **stops with an error** by
+#' default, so a keyword-only result can never be read as a semantic one. Pass
+#' `fallback = "bm25"` to take BM25 rows instead: lexical retrieval needs no
+#' embedding and remains effective for the numeric and parameter-level claims
+#' this package exists to check. The `method` column then reports `"bm25"`.
+#' `method = "bm25"` asks for keyword search outright.
 #'
 #' @section Diagnosing a fallback:
-#' The warning is subclassed by what went wrong, so a caller can act on the
-#' reason rather than grep the message. All inherit `cred_retrieval_fallback`:
+#' The condition is subclassed by what went wrong, so a caller can act on the
+#' reason rather than grep the message. By default it is an **error** of class
+#' `cred_retrieval_error_<reason>`, inheriting `cred_retrieval_error`, as
+#' `method = "vss"` raises. With `fallback = "bm25"` it is a **warning** of
+#' class `cred_retrieval_fallback_<reason>`, inheriting
+#' `cred_retrieval_fallback`. The reasons are the same in both:
 #'
 #' \describe{
 #'   \item{`cred_retrieval_fallback_connection`}{The embedding service could not
@@ -1422,8 +1441,10 @@ crd_store_connect <- function(store,
 #'     reported verbatim and no remedy is prescribed.}
 #' }
 #'
-#' Each fires once per session per reason and per store, so a machine without
-#' Ollama does not emit the same four lines on every call.
+#' The warning, under `fallback = "bm25"` only, fires once per session per
+#' reason and per store, so a machine without Ollama does not emit the same
+#' four lines on every call; after it, only the `method` column shows the
+#' search degraded. The error fires on every call.
 #'
 #' @param store a ragnar store, from [crd_store_connect()] or
 #'   [ragnar::ragnar_store_connect()].
@@ -1433,6 +1454,10 @@ crd_store_connect <- function(store,
 #'   then adjacent chunks are merged, so the number of rows returned is neither
 #'   `top_k` nor `2 * top_k` — expect somewhere between the two.
 #' @param method `character(1)` one of `"hybrid"`, `"bm25"`, `"vss"`.
+#' @param fallback `character(1)` what `method = "hybrid"` does when the query
+#'   cannot be embedded: `"error"` (the default) stops with a
+#'   `cred_retrieval_error` condition; `"bm25"` returns BM25 rows with a
+#'   `cred_retrieval_fallback` warning. Ignored for `"bm25"` and `"vss"`.
 #' @param zotero_dir `character(1)` Zotero data directory used to resolve
 #'   citation keys. Default `"~/Zotero"`.
 #' @return A [tibble][tibble::tibble] with one row per retrieved passage, with
@@ -1470,11 +1495,13 @@ crd_store_connect <- function(store,
 #' }
 crd_search <- function(store, query, top_k = 5L,
                        method = c("hybrid", "bm25", "vss"),
-                       zotero_dir = "~/Zotero") {
+                       zotero_dir = "~/Zotero",
+                       fallback = c("error", "bm25")) {
   chk::chk_string(query)
   chk::chk_whole_number(top_k)
   chk::chk_string(zotero_dir)
   method <- match.arg(method)
+  fallback <- rlang::arg_match(fallback)
   .crd_need("ragnar")
 
   used <- method
@@ -1492,9 +1519,10 @@ crd_search <- function(store, query, top_k = 5L,
     hybrid = tryCatch(
       ragnar::ragnar_retrieve(store, query, top_k = top_k),
       error = function(e) {
-        # Every failure still falls back — erroring here would break searches
-        # that work today, and the `method` column already tells a caller the
-        # search degraded. What the warning *says* is what #29 changed.
+        # By default a failure stops (#47): the fallback warning fires once per
+        # reason and store, so later degraded calls were told only by the
+        # `method` column. A caller who wants keyword rows asks for them.
+        if (fallback == "error") .crd_retrieval_abort(e, store = store, method = "hybrid")
         .crd_retrieval_fallback_warn(e, store = store)
         used <<- "bm25"
         ragnar::ragnar_retrieve_bm25(store, query, top_k = top_k)
@@ -1950,14 +1978,15 @@ crd_search <- function(store, query, top_k = 5L,
 #' model than the store records.
 #'
 #' ragnar (>= 0.4.0) reports a document that failed in a worker as a
-#' `ragnar_ingest_worker_error` warning with a `path` field; the worker's own
-#' condition class does not survive. Every such warning that carries a path is
-#' muffled and kept by `path`, whatever failed, so a failure shows up as an
-#' entry in `skipped` (and the build's "Skipped" warning) rather than as
-#' ragnar's warning. The reason is `prepare`'s note where it left one
-#' (`cred_ingest_skip`, a fallback that also failed) and ragnar's message where
-#' it did not (a worker that crashed). The `documents` table, not the
-#' conditions, decides what was ingested.
+#' `ragnar_ingest_worker_error` warning with a `path` field, and records it in
+#' the `ingest_summary` attribute of the store it returns: one row per input
+#' path, with `status` `"error"` and the worker's `message`. Every such
+#' warning that carries a path is muffled, so a failure shows up as an entry
+#' in `skipped` (and the build's "Skipped" warning) rather than as ragnar's
+#' warning. The reason is `prepare`'s note where it left one
+#' (`cred_ingest_skip`, a fallback that also failed) and the summary's message
+#' where it did not (a worker that crashed). The `documents` table, not the
+#' summary, decides what was ingested.
 #'
 #' Releases before 0.4.0 re-raised the worker's error with its class instead,
 #' which needed a second handler; cred no longer supports them (#43).
@@ -1965,9 +1994,9 @@ crd_search <- function(store, query, top_k = 5L,
 #' @param store A `DuckDBRagnarStore` open for writing.
 #' @param paths `character` document paths.
 #' @param read As in [.crd_ingest_prepare()].
-#' @param progress `logical(1)` passed to ragnar. Default `FALSE`, and
-#'   [crd_store_build()] passes `FALSE`: ragnar's per-file progress output does
-#'   not handle every file name safely.
+#' @param progress `logical(1)` passed to ragnar. Default `FALSE`;
+#'   [crd_store_build()] and [crd_store_update()] pass their own `progress`.
+#'   ragnar 0.4.0 prints each origin literally (#49).
 #' @param build_index `logical(1)` passed to ragnar. [crd_store_update()]
 #'   passes `FALSE` and builds the index on its compacted copy instead.
 #' @return A `list`: `ingested` (paths now in the store), `skipped`
@@ -1980,25 +2009,35 @@ crd_search <- function(store, query, top_k = 5L,
   on.exit(unlink(notes_dir, recursive = TRUE), add = TRUE)
   prepare <- .crd_ingest_prepare(store@embed, notes_dir, read = read)
 
-  worker_errors <- character()
-  withCallingHandlers(
+  res <- withCallingHandlers(
     ragnar::ragnar_store_ingest(store, paths, prepare = prepare, progress = progress,
                                 build_index = build_index),
     ragnar_ingest_worker_error = function(w) {
       if (is.character(w$path) && length(w$path) == 1L && !is.na(w$path)) {
-        worker_errors[[w$path]] <<- conditionMessage(w)
         invokeRestart("muffleWarning")
       }
     }
   )
+  ing_summary <- attr(res, "ingest_summary")
+  if (!is.data.frame(ing_summary)) {
+    ing_summary <- tibble::tibble(path = character(), status = character(), message = character())
+  }
 
   notes <- .crd_ingest_notes(notes_dir)
   paths <- unique(paths)
   docs <- DBI::dbGetQuery(store@con, "SELECT origin FROM documents")$origin
   said <- notes[notes$kind == "skipped", , drop = FALSE]
   unsaid <- setdiff(paths, c(docs, said$origin))
-  unsaid_reason <- unname(worker_errors[unsaid])
-  unsaid_reason[is.na(unsaid_reason)] <- "not ingested; see ragnar's warning"
+  # ragnar's message for a worker that failed; for any other path the documents
+  # table lacks, the status ragnar recorded, so the reason never points at a
+  # warning that was not raised.
+  row <- match(unsaid, ing_summary$path)
+  unsaid_reason <- as.character(ifelse(
+    !is.na(row) & ing_summary$status[row] %in% "error" & !is.na(ing_summary$message[row]),
+    ing_summary$message[row],
+    paste0("not ingested; ragnar reported status ",
+           ifelse(is.na(row) | is.na(ing_summary$status[row]), "none", ing_summary$status[row]))
+  ))
   list(
     ingested = paths[paths %in% docs],
     skipped = tibble::tibble(
@@ -2263,9 +2302,11 @@ crd_search <- function(store, query, top_k = 5L,
 #' service itself still stops the build and leaves no store: it would cost
 #' every PDF still to come, silently, rather than one that is named.
 #'
-#' ragnar's own progress output is off, because it does not handle every file
-#' name safely. The build says what it will ingest before it starts, and what
-#' it ingested, read differently, split or skipped when it ends.
+#' The build says what it will ingest before it starts, and what it
+#' ingested, read differently, split or skipped when it ends. In between,
+#' ragnar reports each file as it is ingested when `progress = TRUE`, which is
+#' the default in an interactive session. Each line names the file's full
+#' local path, so a script that keeps its output as a log leaves it off.
 #'
 #' @param store_path `character(1)` path for the `.duckdb` store to create.
 #' @param collection `character(1)` Zotero collection name, or a
@@ -2278,6 +2319,9 @@ crd_search <- function(store, query, top_k = 5L,
 #' @param overwrite `logical(1)` replace an existing store. Default `FALSE`.
 #'   To add, replace or drop a few documents, [crd_store_update()] changes
 #'   only those.
+#' @param progress `logical(1)` show ragnar's per-file progress while
+#'   ingesting. Default [rlang::is_interactive()]. Each line names a file's
+#'   full local path.
 #' @inheritParams crd_zot_src_lookup
 #' @return Invisibly, a [tibble][tibble::tibble] with one row per ingested
 #'   file (`citation_key`, `src_path`), so a key with several PDFs has several
@@ -2300,10 +2344,12 @@ crd_store_build <- function(store_path,
                             model = "nomic-embed-text",
                             zotero_dir = "~/Zotero",
                             overwrite = FALSE,
-                            library = getOption("cred.zotero_library")) {
+                            library = getOption("cred.zotero_library"),
+                            progress = rlang::is_interactive()) {
   chk::chk_string(store_path)
   chk::chk_string(model)
   chk::chk_flag(overwrite)
+  chk::chk_flag(progress)
 
   # Cheap argument validation before the dependency check, so a caller who got
   # the arguments wrong is told that rather than being sent to install DuckDB.
@@ -2351,7 +2397,7 @@ crd_store_build <- function(store_path,
   # its old bytes, and the next update reads it again rather than never.
   md5 <- tools::md5sum(unique(src$src_path))
   message("Ingesting ", nrow(src), " PDF(s) into ", store_path)
-  ing <- .crd_store_ingest(store, src$src_path, progress = FALSE)
+  ing <- .crd_store_ingest(store, src$src_path, progress = progress)
   if (length(ing$ingested) == 0L) {
     stop("No PDF could be ingested:\n", .crd_store_skipped(ing, src), call. = FALSE)
   }
@@ -2481,8 +2527,10 @@ crd_store_update <- function(store_path,
                              collection = NULL,
                              citation_keys = NULL,
                              zotero_dir = "~/Zotero",
-                             library = getOption("cred.zotero_library")) {
+                             library = getOption("cred.zotero_library"),
+                             progress = rlang::is_interactive()) {
   chk::chk_string(store_path)
+  chk::chk_flag(progress)
   if (is.null(collection) == is.null(citation_keys)) {
     stop("Supply exactly one of `collection` or `citation_keys`.", call. = FALSE)
   }
@@ -2654,7 +2702,7 @@ crd_store_update <- function(store_path,
   if (length(to_ingest) > 0L) {
     message("Ingesting ", length(to_ingest), " PDF(s) into ", store_path)
     # No index here: it is built on the compacted file.
-    ing <- .crd_store_ingest(store, to_ingest, progress = FALSE, build_index = FALSE)
+    ing <- .crd_store_ingest(store, to_ingest, progress = progress, build_index = FALSE)
   }
 
   final <- new_rec(ing$ingested)
@@ -3052,7 +3100,7 @@ crd_store_update <- function(store_path,
                    error = function(e) NA_integer_)
   if (is.na(size)) {
     warning("Could not read embedding_size from ", basename(store_path),
-            " — the embedding-dimension check will be skipped for this push.",
+            " -- the embedding-dimension check will be skipped for this push.",
             call. = FALSE)
   }
   label <- tryCatch(as.character(DBI::dbGetQuery(con, "SELECT name FROM metadata")$name[1]),
@@ -3063,7 +3111,7 @@ crd_store_update <- function(store_path,
   if (is.na(model)) {
     model <- Sys.getenv("CRED_EMBED_MODEL", "nomic-embed-text")
     warning("Could not read the embedding model from ", basename(store_path),
-            " — recording '", model, "' from the environment instead. ",
+            " -- recording '", model, "' from the environment instead. ",
             "The model recorded in the manifest may not be the one used.",
             call. = FALSE)
   }
@@ -3124,6 +3172,11 @@ crd_store_update <- function(store_path,
 #' every entry other than `name` comes through untouched, including entries
 #' whose shape this version of cred does not recognise.
 #'
+#' The entry for `name` is replaced whole, with one exception: when the new
+#' entry carries no `notes` and the old one does, the old `notes` is kept, so
+#' a push without `notes` does not erase a caveat an earlier push recorded
+#' (#26). An old entry that is not a list has no notes to keep.
+#'
 #' @param existing `list` parsed manifest, or `NULL` for a fresh one.
 #' @param name `character(1)` store name to add or replace.
 #' @param entry `list` manifest entry for `name`.
@@ -3135,6 +3188,9 @@ crd_store_update <- function(store_path,
   if (is.null(existing$stores)) existing$stores <- list()
 
   merged <- existing
+  old <- existing$stores[[name]]
+  # `[[`, not `$`: `$` partial-matches, so an old `notes_private` would answer for `notes`.
+  if (is.null(entry[["notes"]]) && is.list(old) && !is.null(old[["notes"]])) entry$notes <- old[["notes"]]
   merged$stores[[name]] <- entry
   merged$date_updated <- format(as.POSIXct(Sys.time(), tz = "UTC"), "%Y-%m-%dT%H:%M:%SZ")
   merged$manifest_note <-
@@ -3195,7 +3251,7 @@ crd_store_update <- function(store_path,
     "  already in the manifest: ", paste(models, collapse = ", "),
     " (dimension ", paste(sizes, collapse = ", "), ")\n",
     if (size_conflict) {
-      "  The embedding DIMENSION differs, which is read from the store itself — this is a real
+      "  The embedding DIMENSION differs, which is read from the store itself -- this is a real
   incompatibility, not just a label mismatch.\n"
     } else {
       ""
@@ -3273,6 +3329,9 @@ crd_store_update <- function(store_path,
 #' @param show_full_manifest `logical(1)` print every store's manifest entry
 #'   during a dry run. Use this only when the output can be shared safely.
 #'   Default `FALSE`.
+#' @param notes `character(1)` a free-text caveat recorded as the entry's
+#'   `notes`, such as what the store leaves out. Default `NULL` keeps the notes
+#'   an earlier push recorded; `""` replaces them with an empty note.
 #' @return Invisibly, the merged manifest as a `list`.
 #' @export
 #' @examples
@@ -3293,13 +3352,15 @@ crd_store_push <- function(store_path,
                            create_manifest = FALSE,
                            allow_model_mismatch = FALSE,
                            max_retries = 3L,
-                           show_full_manifest = FALSE) {
+                           show_full_manifest = FALSE,
+                           notes = NULL) {
   chk::chk_string(store_path)
   chk::chk_flag(dry_run)
   chk::chk_flag(create_manifest)
   chk::chk_flag(allow_model_mismatch)
   chk::chk_whole_number(max_retries)
   chk::chk_flag(show_full_manifest)
+  if (!is.null(notes)) chk::chk_string(notes)
   chk::chk_file(store_path)
 
   store_path <- path.expand(store_path)
@@ -3329,7 +3390,7 @@ crd_store_push <- function(store_path,
   if (!head$exists && !head$confirmed_absent) {
     stop("Could not determine whether a manifest exists at ", source, "log.json\n  ",
          paste(head$out, collapse = "\n  "),
-         "\n  This is not a 404 — refusing to push rather than guess.", call. = FALSE)
+         "\n  This is not a 404 -- refusing to push rather than guess.", call. = FALSE)
   }
   if (head$exists && is.na(head$etag)) {
     stop("Read the manifest at ", source, "log.json but could not obtain its ETag.\n",
@@ -3340,12 +3401,13 @@ crd_store_push <- function(store_path,
     stop("No manifest at ", source, "log.json\n",
          "  The bucket is reachable, so this prefix has no manifest yet.\n",
          "  If that is intended, pass create_manifest = TRUE.\n",
-         "  If not, check getOption(\"cred.store_source\") — a wrong prefix looks",
+         "  If not, check getOption(\"cred.store_source\") -- a wrong prefix looks",
          " exactly like this.", call. = FALSE)
   }
 
   existing <- if (head$exists) .crd_manifest_read(source, profile = profile) else NULL
   entry <- .crd_store_describe(store_path, built_by = built_by)
+  if (!is.null(notes)) entry$notes <- notes
   if (!is.null(existing)) {
     .crd_check_model(existing, name, entry$embedding_model, allow_model_mismatch,
                      size = entry$embedding_size)
@@ -3395,7 +3457,7 @@ crd_store_push <- function(store_path,
     unlink(tmp)
 
     if (identical(res$status, 0L)) {
-      message("Manifest updated — now holds: ",
+      message("Manifest updated -- now holds: ",
               paste(names(merged$stores), collapse = ", "))
       return(invisible(merged))
     }
@@ -3404,7 +3466,7 @@ crd_store_push <- function(store_path,
            paste(c(res$out, res$err), collapse = "\n  "), stale_warning, call. = FALSE)
     }
 
-    message("Manifest changed under us — re-merging (attempt ", attempt, ")")
+    message("Manifest changed under us -- re-merging (attempt ", attempt, ")")
     head <- .crd_s3_head_object(source, "log.json", profile = profile)
 
     # A re-probe that is not a clean read must abort. Treating it as absence

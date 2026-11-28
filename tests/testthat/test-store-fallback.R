@@ -492,7 +492,7 @@ test_that("crd_search() warns with a reason-specific class and still returns BM2
   # message cannot see the claim around it, and the class is the part a caller
   # can act on programmatically.
   expect_warning(
-    out <- crd_search(store, .crd_test_query(), top_k = 3L),
+    out <- crd_search(store, .crd_test_query(), top_k = 3L, fallback = "bm25"),
     class = "cred_retrieval_fallback_connection"
   )
   expect_s3_class(out, "tbl_df")
@@ -502,13 +502,35 @@ test_that("crd_search() warns with a reason-specific class and still returns BM2
   expect_identical(unique(out$metric), "bm25")
 })
 
+test_that("crd_search() stops by default, on every degraded call, with the vss classes", {
+  # #47: the fallback warning fired once per reason and store, so a second
+  # degraded call returned BM25 rows with nothing raised. The default now stops,
+  # and an error has no frequency guard: the second call stops as the first did.
+  store <- local_ragnar_store_failing("connection")
+  local_reset_fallback_warnings(store)
+
+  for (i in 1:2) {
+    cnd <- expect_error(crd_search(store, .crd_test_query(), top_k = 3L),
+                        class = "cred_retrieval_error_connection")
+    expect_s3_class(cnd, "cred_retrieval_error")
+    expect_false(inherits(cnd, "cred_retrieval_fallback"))
+    expect_match(conditionMessage(cnd), 'fallback = "bm25"', fixed = TRUE)
+    expect_no_match(conditionMessage(cnd), "has no fallback", fixed = TRUE)
+  }
+})
+
+test_that("crd_search() refuses a fallback it does not know", {
+  store <- local_ragnar_store()
+  expect_error(crd_search(store, .crd_test_query(), fallback = "vss"), "fallback")
+})
+
 test_that("crd_search() reports a dimension mismatch as its own reason", {
   store <- local_ragnar_store_failing("dimension")
   local_fallback_warnings_always()
 
   cnd <- NULL
   out <- withCallingHandlers(
-    crd_search(store, .crd_test_query(), top_k = 3L),
+    crd_search(store, .crd_test_query(), top_k = 3L, fallback = "bm25"),
     cred_retrieval_fallback = function(w) {
       cnd <<- w
       invokeRestart("muffleWarning")
@@ -534,7 +556,7 @@ test_that("crd_search() falls back on an unrecognised failure without prescribin
 
   cnd <- NULL
   out <- withCallingHandlers(
-    crd_search(store, .crd_test_query(), top_k = 3L),
+    crd_search(store, .crd_test_query(), top_k = 3L, fallback = "bm25"),
     cred_retrieval_fallback = function(w) {
       cnd <<- w
       invokeRestart("muffleWarning")
@@ -557,7 +579,7 @@ test_that("crd_search() reports a missing model as its own reason, end to end", 
 
   cnd <- NULL
   out <- withCallingHandlers(
-    crd_search(store, .crd_test_query(), top_k = 3L),
+    crd_search(store, .crd_test_query(), top_k = 3L, fallback = "bm25"),
     cred_retrieval_fallback = function(w) {
       cnd <<- w
       invokeRestart("muffleWarning")
@@ -589,11 +611,11 @@ test_that("the fallback warning fires once per session, not once per call", {
   store <- local_ragnar_store_failing("connection")
   local_reset_fallback_warnings(store)
 
-  expect_warning(crd_search(store, .crd_test_query(), top_k = 3L),
+  expect_warning(crd_search(store, .crd_test_query(), top_k = 3L, fallback = "bm25"),
                  class = "cred_retrieval_fallback_connection")
   # Second identical call: same store, same reason, so nothing new to say.
   # Without a frequency guard this four-line warning repeats on every search.
-  expect_no_condition(out <- crd_search(store, .crd_test_query(), top_k = 3L),
+  expect_no_condition(out <- crd_search(store, .crd_test_query(), top_k = 3L, fallback = "bm25"),
                       class = "cred_retrieval_fallback")
   # Silence is the only thing suppressed — the result still reports the fallback.
   expect_identical(unique(out$method), "bm25")
@@ -611,9 +633,9 @@ test_that("two different failures do not collapse into one warning", {
   expect_identical(conn@location, dim_store@location)
   local_reset_fallback_warnings(conn)
 
-  expect_warning(crd_search(conn, .crd_test_query(), top_k = 3L),
+  expect_warning(crd_search(conn, .crd_test_query(), top_k = 3L, fallback = "bm25"),
                  class = "cred_retrieval_fallback_connection")
-  expect_warning(crd_search(dim_store, .crd_test_query(), top_k = 3L),
+  expect_warning(crd_search(dim_store, .crd_test_query(), top_k = 3L, fallback = "bm25"),
                  class = "cred_retrieval_fallback_dimension")
 })
 
@@ -628,10 +650,10 @@ test_that("one unreachable store does not silence another", {
   local_reset_fallback_warnings(a)
   local_reset_fallback_warnings(b)
 
-  expect_warning(crd_search(a, .crd_test_query(), top_k = 3L),
+  expect_warning(crd_search(a, .crd_test_query(), top_k = 3L, fallback = "bm25"),
                  class = "cred_retrieval_fallback_connection")
   # Same reason, different store, so it has not been said yet.
-  expect_warning(crd_search(b, .crd_test_query(), top_k = 3L),
+  expect_warning(crd_search(b, .crd_test_query(), top_k = 3L, fallback = "bm25"),
                  class = "cred_retrieval_fallback_connection")
 })
 

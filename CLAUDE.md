@@ -219,14 +219,19 @@ Shipped: [#22](https://github.com/NewGraphEnvironment/cred/issues/22) ragnar ret
   metric; `?crd_search` shows how.
 - **`hybrid` is the right default because it is a strict superset of `bm25`.** Measured across
   2 queries x 3 `top_k`: zero BM25 chunks were absent from the hybrid results, and hybrid
-  returned 5-17 chunks where BM25 returned 3-10. `hybrid` needs Ollama but falls back to BM25
-  with a warning, so it is never *less* available — a `bm25` default would discard the semantic
-  half for everyone to avoid a dependency the fallback already handles.
+  returned 5-17 chunks where BM25 returned 3-10. `hybrid` needs Ollama. Until #47 it fell back
+  to BM25 with a warning that fired once per reason and store, so later degraded calls looked
+  like semantic ones and only the `method` column said otherwise. Now a failed embed **stops
+  with a `cred_retrieval_error_<reason>` error** (the `vss` path's classes) unless the caller
+  passes `fallback = "bm25"`. A `bm25` default would still discard the semantic half for
+  everyone; a caller without Ollama asks for `method = "bm25"` or `fallback = "bm25"`.
+  [#47](https://github.com/NewGraphEnvironment/cred/issues/47).
 - **A fallback is classified by condition class, not by message text.** Measured against
   ragnar 0.3.0: `httr2_failure` means the embedding service got no answer; `httr2_http` means it
   answered and refused, so it is running and "start Ollama" is the wrong half of the old advice;
   and within that, only a **404** means the model is absent — a 500 or 503 has nothing to do
-  with pulling one. All survive `ragnar_retrieve()` unwrapped. Warnings are subclassed
+  with pulling one. All survive `ragnar_retrieve()` unwrapped. The errors are subclassed
+  `cred_retrieval_error_<reason>`; the warnings, under `fallback = "bm25"` only, are subclassed
   `cred_retrieval_fallback_<reason>` and fire once per session per reason **and store** — keyed
   on the store alone, a mismatch met after a connection failure is swallowed as a repeat.
   [#29](https://github.com/NewGraphEnvironment/cred/issues/29).
@@ -287,7 +292,9 @@ Shipped: [#22](https://github.com/NewGraphEnvironment/cred/issues/22) ragnar ret
   column on the chunks object is silently dropped.
 - **The manifest is merged, never replaced** — it describes every store in the bucket, so a push
   built from the current run alone orphans the rest. `.crd_manifest_merge()` is pure and passes
-  untouched entries through verbatim, including shapes this version does not recognise.
+  untouched entries through verbatim, including shapes this version does not recognise. The
+  pushed store's own entry is replaced whole except for `notes`, which survives a push that
+  gives none ([#26](https://github.com/NewGraphEnvironment/cred/issues/26)).
 - **Fail toward not-clobbering** — an unreadable manifest aborts a push. Only a *confirmed*
   absence (bucket reachable via `head-bucket`, object missing via `head-object`) counts as "none
   yet", and even then `create_manifest = TRUE` is required: a wrong prefix produces the same 404.
@@ -304,10 +311,13 @@ Shipped: [#22](https://github.com/NewGraphEnvironment/cred/issues/22) ragnar ret
   each range once (ragnar keys `embeddings`, which the `chunks` view joins, on
   `(doc_id, start, end)`, and halves of neighbouring chunks collide), and drops a part at 64 characters. Any other embed failure leaves the chunks
   unembedded, so ragnar's main-process embed aborts the build and the store is deleted, as
-  before. **ragnar's progress output stays off** (`progress = FALSE`): its per-file message does
-  not handle arbitrary file names safely, which was reported to ragnar privately on
-  2026-10-31. Keep it off until ragnar's fix ships, and never put a file path into a cli
-  format string in cred either; pass it as a `{variable}`. Characters do not predict a
+  before. **ragnar's progress output follows the session** (`progress = rlang::is_interactive()`
+  on `crd_store_build()` and `crd_store_update()`; `.crd_store_ingest()` itself defaults to
+  `FALSE`). It was off from #35 to #49, because ragnar's per-file message did not handle
+  arbitrary file names safely. ragnar 0.4.0 prints each origin literally, measured with file
+  names carrying cli markup, and a test ingests one (#49). It stays off outside an interactive
+  session because each line names a full local path, which a kept log would publish. Never
+  put a file path into a cli format string in cred either; pass it as a `{variable}`. Characters do not predict a
   refusal: a 1,887-character run of `•` is refused, while a 2,073-character paragraph is not. So there is no length cap.
   [#35](https://github.com/NewGraphEnvironment/cred/issues/35),
   `research/ollama-embedding-context.md`.
@@ -318,8 +328,10 @@ Shipped: [#22](https://github.com/NewGraphEnvironment/cred/issues/22) ragnar ret
   re-parented to `baseenv()`. The structure test (`topenv()` is `baseenv()`) is the guard. The
   end-to-end test cannot be: under `R CMD check` the workers load the code under test anyway.
   ragnar (>= 0.4.0) reports a failed document as a `ragnar_ingest_worker_error` warning with a
-  `path` field and drops the worker's own class; `.crd_store_ingest()` muffles each one and
-  keeps it by path, and the `documents` table, not the conditions, decides what was ingested.
+  `path` field and drops the worker's own class, and records each input path's `status` and
+  `message` in the `ingest_summary` attribute of the store it **returns** (not the one passed
+  in). `.crd_store_ingest()` muffles each warning and takes a crashed worker's reason from that
+  summary (#51), and the `documents` table, not the summary, decides what was ingested.
   Releases before 0.4.0 re-raised the worker's error with its class kept, which needed a second
   handler that the 0.4.0 floor retired (#43). When ragnar changes again, test against both
   releases: install the other one into a scratch library and run the tests with `R_LIBS`

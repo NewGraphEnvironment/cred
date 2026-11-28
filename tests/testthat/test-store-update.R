@@ -130,6 +130,7 @@ local_update_world <- function(env = parent.frame()) {
     .crd_ollama_check = function(...) invisible(NULL),
     .crd_store_ingest = function(store, paths, read = NULL, progress = FALSE, build_index = TRUE) {
       world$ingested[[length(world$ingested) + 1L]] <- paths
+      world$progress <- c(world$progress, progress)
       real_ingest(store, paths, read = .crd_test_read_text, progress = progress,
                   build_index = build_index)
     },
@@ -201,6 +202,15 @@ test_that("an update holds what a fresh build from the same arguments holds", {
   expect_gt(bm25_hits(path, "zzzonlykeyC"), 0L)
   expect_identical(bm25_hits(path, "zzzonlykeyA"), 0L)
   expect_false(any(grepl("[.]updating-", list.files(world$root))))
+})
+
+test_that("an update hands its progress to the ingest (#49)", {
+  world <- local_update_world()
+  path <- build(world, "keyA")
+  # testthat runs non-interactively, so the build's default was off.
+  expect_identical(world$progress, FALSE)
+  suppressMessages(crd_store_update(path, citation_keys = c("keyA", "keyB"), progress = TRUE))
+  expect_identical(world$progress[length(world$progress)], TRUE)
 })
 
 test_that("an updated store carries no more free space than a fresh build (#48)", {

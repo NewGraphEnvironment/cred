@@ -11,7 +11,8 @@ crd_store_build(
   model = "nomic-embed-text",
   zotero_dir = "~/Zotero",
   overwrite = FALSE,
-  library = getOption("cred.zotero_library")
+  library = getOption("cred.zotero_library"),
+  progress = rlang::is_interactive()
 )
 }
 \arguments{
@@ -37,6 +38,10 @@ Library, or a group's name or groupID (as in its URL,
 \verb{zotero.org/groups/<groupID>}). Zotero's internal \code{libraryID} is not
 accepted: it differs between machines. Default
 \code{getOption("cred.zotero_library")}; \code{NULL} searches every library.}
+
+\item{progress}{\code{logical(1)} show ragnar's per-file progress while
+ingesting. Default \code{\link[rlang:is_interactive]{rlang::is_interactive()}}. Each line names a file's
+full local path.}
 }
 \value{
 Invisibly, a \link[tibble:tibble]{tibble} with one row per ingested
@@ -83,9 +88,11 @@ left out of the embeddings. Both are reported. A failure of the embedding
 service itself still stops the build and leaves no store: it would cost
 every PDF still to come, silently, rather than one that is named.
 
-ragnar's own progress output is off, because it does not handle every file
-name safely. The build says what it will ingest before it starts, and what
-it ingested, read differently, split or skipped when it ends.
+The build says what it will ingest before it starts, and what it
+ingested, read differently, split or skipped when it ends. In between,
+ragnar reports each file as it is ingested when \code{progress = TRUE}, which is
+the default in an interactive session. Each line names the file's full
+local path, so a script that keeps its output as a log leaves it off.
 }
 \examples{
 \dontrun{

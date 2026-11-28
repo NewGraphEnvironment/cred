@@ -44,7 +44,8 @@ embedding service, which for an Ollama-built store is localhost. Pass
 its recorded embedder now returns, and its model label against the
 manifest. Default \code{TRUE}. A confirmed width mismatch is an \strong{error}; pass
 \code{FALSE} to open such a store anyway, which is a reasonable thing to want —
-BM25 retrieval needs no embedding and is unaffected by the mismatch.}
+BM25 retrieval needs no embedding and is unaffected by the mismatch. Search
+it with \code{crd_search(method = "bm25")}: a default hybrid search stops on it.}
 }
 \value{
 A \code{ragnar} store object, as returned by
@@ -78,8 +79,9 @@ stayed the same. No check in this package can detect that.
 
 A mismatch that arises \emph{after} a successful connect — the model re-pulled
 mid-session, or \verb{@embed} replaced on the store object — is outside both, and
-still surfaces downstream as a \code{cred_retrieval_fallback_dimension} warning
-from \code{\link[=crd_search]{crd_search()}}; see "Diagnosing a fallback" there. So does any mismatch
+still surfaces downstream from \code{\link[=crd_search]{crd_search()}}, as an error by default or a
+\code{cred_retrieval_fallback_dimension} warning under \code{fallback = "bm25"}; see
+"Diagnosing a fallback" there. So does any mismatch
 on a store opened with \code{check_model = FALSE}, or one whose probe could not
 run. The two layers are complementary, not redundant
 (NewGraphEnvironment/cred#30).

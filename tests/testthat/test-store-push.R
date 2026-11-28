@@ -50,6 +50,37 @@ test_that(".crd_manifest_merge replaces only the named entry", {
   expect_setequal(names(out$stores), c("alpha", "beta"))
 })
 
+test_that(".crd_manifest_merge keeps a store's notes through a push without them (#26)", {
+  m <- manifest_two()
+  m$stores$alpha$notes <- "keys deduped by name, never by content"
+  out <- .crd_manifest_merge(m, "alpha", list(md5 = "zzz", built_by = "cred::crd_store_push()"))
+
+  expect_identical(out$stores$alpha$notes, "keys deduped by name, never by content")
+  # Only notes is carried: every other field of the old entry is replaced.
+  expect_identical(out$stores$alpha$built_by, "cred::crd_store_push()")
+  expect_identical(out$stores$alpha$md5, "zzz")
+  expect_null(out$stores$alpha$documents)
+  # A push that gives notes replaces them, an empty note included.
+  expect_identical(.crd_manifest_merge(m, "alpha", list(md5 = "z", notes = "new"))$stores$alpha$notes, "new")
+  expect_identical(.crd_manifest_merge(m, "alpha", list(md5 = "z", notes = ""))$stores$alpha$notes, "")
+  # Another store gains nothing.
+  expect_null(out$stores$beta$notes)
+})
+
+test_that(".crd_manifest_merge carries notes by its exact name only", {
+  # `$` partial-matches on a list: an old `notes_private` would answer for `notes`.
+  m <- list(stores = list(alpha = list(md5 = "x", notes_private = "internal only")))
+  out <- .crd_manifest_merge(m, "alpha", list(md5 = "y"))
+  expect_identical(out$stores$alpha, list(md5 = "y"))
+})
+
+test_that(".crd_manifest_merge replaces an old entry of a shape it does not know", {
+  m <- manifest_two()
+  m$stores$alpha <- "an entry written as a bare string"
+  out <- .crd_manifest_merge(m, "alpha", list(md5 = "zzz"))
+  expect_identical(out$stores$alpha, list(md5 = "zzz"))
+})
+
 test_that(".crd_manifest_merge preserves unrelated top-level fields", {
   out <- .crd_manifest_merge(manifest_two(), "gamma", list(md5 = "ccc"))
   expect_identical(out$chunking, "ragnar defaults (ragnar_store_ingest)")
@@ -203,6 +234,43 @@ test_that("crd_store_push dry-run previews only the selected store by default", 
   expect_identical(names(preview$stores), "current")
   expect_identical(preview$stores$current$head_sha, "current-sha")
   expect_false(any(grepl("PRIVATE_REPO|secret-[ab]|private-[ab]", printed)))
+})
+
+test_that("crd_store_push dry-run previews this store's notes, kept or given (#26)", {
+  skip_if_not_installed("duckdb")
+  f <- withr::local_tempfile(fileext = ".duckdb")
+  file.create(f)
+  manifest <- list(stores = list(
+    current = list(repo = "public/current", notes = "an earlier caveat"),
+    other = list(repo = "elsewhere", notes = "not this store's")
+  ))
+  local_mocked_bindings(
+    .crd_s3_head_bucket = function(source, profile = "") TRUE,
+    .crd_s3_head_object = function(source, key, profile = "") {
+      list(exists = TRUE, confirmed_absent = FALSE, etag = '"etag"', out = "")
+    },
+    .crd_manifest_read = function(source, profile = "") manifest,
+    .crd_store_describe = function(store_path, built_by) {
+      list(repo = "public/current", branch = "main", head_sha = "current-sha",
+           embedding_model = NA_character_, embedding_size = NA_integer_)
+    },
+    .crd_check_model = function(...) invisible(NULL),
+    .crd_s3_cp_up = function(...) stop("dry run attempted upload"),
+    .package = "cred"
+  )
+  preview <- function(...) {
+    printed <- utils::capture.output(suppressMessages(crd_store_push(
+      f, source = "s3://bucket/prefix/", name = "current", dry_run = TRUE, ...
+    )))
+    jsonlite::fromJSON(paste(printed, collapse = "\n"), simplifyVector = FALSE)$stores
+  }
+
+  # No notes given: the earlier push's caveat survives, and only this store is shown.
+  kept <- preview()
+  expect_identical(names(kept), "current")
+  expect_identical(kept$current$notes, "an earlier caveat")
+  expect_identical(preview(notes = "a new caveat")$current$notes, "a new caveat")
+  expect_error(preview(notes = c("two", "notes")), "notes")
 })
 
 test_that("crd_store_push can print the full manifest during a dry-run", {

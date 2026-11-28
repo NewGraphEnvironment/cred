@@ -45,7 +45,9 @@ sends 10 inputs per request, so one refused input fails the whole request.
   0.4.0 raises a `ragnar_ingest_worker_error` warning for it, with a `path` field, and the
   worker's own class is lost; ragnar 0.3.0 re-raised it with `warning(cond)` keeping the error
   class, so it reached `error =` calling handlers and never `warning =` ones. Either way the
-  document is skipped. (cred supports 0.4.0 and later since #43.)
+  document is skipped. (cred supports 0.4.0 and later since #43.) 0.4.0 also records each
+  input path's `status` and `message` in an `ingest_summary` attribute on the store it returns,
+  and cred takes a crashed worker's reason from there (#51).
 - A worker's *embed* error is swallowed (`tryCatch(..., error = function(e) NULL)`, still so in
   0.4.0's `R/ingest.R`). The chunks
   return unembedded, and `ragnar_store_update_v2()` embeds them again in the main process with
