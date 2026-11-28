@@ -125,9 +125,9 @@ None.
 - [x] Tests pass (`devtools::test()`, ragnar 0.4.0 installed)
 - [x] `lintr::lint_package()` 0 lints; `devtools::document()`; `pkgdown::check_pkgdown()`
       (new arguments only, no new exports)
-- [ ] `devtools::check()` 0 errors, 0 warnings. CI's R-CMD-check is green without `error-on`
+- [x] `devtools::check()` 0 errors, 0 warnings. CI's R-CMD-check is green without `error-on`
 - [x] `/code-check branch` clean (three-round floor)
-- [ ] PWF checkboxes match landed work. `/planning-archive`, then `/gh-pr-push`, whose body
+- [x] PWF checkboxes match landed work. `/planning-archive`, then `/gh-pr-push`, whose body
       carries `Closes #58`, `#32`, `#38`, `#51`, `#49`, `#47`, `#26` (#54 closes with #55)
       and `Bump: minor`
 
