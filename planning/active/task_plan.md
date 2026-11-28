@@ -122,11 +122,11 @@ umbrella #58 is claimed after approval.
 None.
 
 ## Validation
-- [ ] Tests pass (`devtools::test()`, ragnar 0.4.0 installed)
-- [ ] `lintr::lint_package()` 0 lints; `devtools::document()`; `pkgdown::check_pkgdown()`
+- [x] Tests pass (`devtools::test()`, ragnar 0.4.0 installed)
+- [x] `lintr::lint_package()` 0 lints; `devtools::document()`; `pkgdown::check_pkgdown()`
       (new arguments only, no new exports)
 - [ ] `devtools::check()` 0 errors, 0 warnings. CI's R-CMD-check is green without `error-on`
-- [ ] `/code-check branch` clean (three-round floor)
+- [x] `/code-check branch` clean (three-round floor)
 - [ ] PWF checkboxes match landed work. `/planning-archive`, then `/gh-pr-push`, whose body
       carries `Closes #58`, `#32`, `#38`, `#51`, `#49`, `#47`, `#26` (#54 closes with #55)
       and `Bump: minor`

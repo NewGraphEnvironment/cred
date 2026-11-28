@@ -31,3 +31,5 @@
 - #26: `crd_store_push(notes =)`, kept by the merge when a push gives none; merge and dry-run tests, each failing on the mutant that drops the carry.
 - Code-check rounds 1 and 2 clean (round 1 added the update progress test).
 - Next: code-check round 3 over the whole branch, then archive and PR.
+- Code-check round 3 found one defect in the #26 code (`$` partial matching on the old entry's notes), fixed with a regression test in ee8ef01; round 4 clean with a mechanism enumeration of every `$` read in the diff. Verdict: clean, 4 rounds, reviewed ee8ef01.
+- Full suite at ee8ef01: 1034 passed, 0 failed, 2 skipped (docx).
