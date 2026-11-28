@@ -1,6 +1,6 @@
 # Changelog
 
-## cred (development version)
+## cred 0.9.0
 
 - `crd_store_push(dry_run = TRUE)` prints only the selected store’s
   manifest entry by default, while still listing all store names, so a
