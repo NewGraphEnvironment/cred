@@ -3189,7 +3189,8 @@ crd_store_update <- function(store_path,
 
   merged <- existing
   old <- existing$stores[[name]]
-  if (is.null(entry$notes) && is.list(old) && !is.null(old$notes)) entry$notes <- old$notes
+  # `[[`, not `$`: `$` partial-matches, so an old `notes_private` would answer for `notes`.
+  if (is.null(entry[["notes"]]) && is.list(old) && !is.null(old[["notes"]])) entry$notes <- old[["notes"]]
   merged$stores[[name]] <- entry
   merged$date_updated <- format(as.POSIXct(Sys.time(), tz = "UTC"), "%Y-%m-%dT%H:%M:%SZ")
   merged$manifest_note <-

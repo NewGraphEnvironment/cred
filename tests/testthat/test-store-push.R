@@ -67,6 +67,13 @@ test_that(".crd_manifest_merge keeps a store's notes through a push without them
   expect_null(out$stores$beta$notes)
 })
 
+test_that(".crd_manifest_merge carries notes by its exact name only", {
+  # `$` partial-matches on a list: an old `notes_private` would answer for `notes`.
+  m <- list(stores = list(alpha = list(md5 = "x", notes_private = "internal only")))
+  out <- .crd_manifest_merge(m, "alpha", list(md5 = "y"))
+  expect_identical(out$stores$alpha, list(md5 = "y"))
+})
+
 test_that(".crd_manifest_merge replaces an old entry of a shape it does not know", {
   m <- manifest_two()
   m$stores$alpha <- "an entry written as a bare string"
