@@ -13,7 +13,8 @@ crd_store_push(
   dry_run = FALSE,
   create_manifest = FALSE,
   allow_model_mismatch = FALSE,
-  max_retries = 3L
+  max_retries = 3L,
+  show_full_manifest = FALSE
 )
 }
 \arguments{
@@ -30,8 +31,8 @@ name without its extension.}
 
 \item{built_by}{\code{character} what produced the store, recorded in the entry.}
 
-\item{dry_run}{\code{logical(1)} print the merged manifest and upload nothing.
-Default \code{FALSE}.}
+\item{dry_run}{\code{logical(1)} print a manifest preview and upload nothing.
+By default, the preview includes only this store's entry. Default \code{FALSE}.}
 
 \item{create_manifest}{\code{logical(1)} allow writing a manifest where none
 exists. Default \code{FALSE}. The create path is still conditional
@@ -43,6 +44,10 @@ model. Default \code{FALSE}.}
 
 \item{max_retries}{\code{integer(1)} conditional-write retries before giving up.
 Default \code{3L}.}
+
+\item{show_full_manifest}{\code{logical(1)} print every store's manifest entry
+during a dry run. Use this only when the output can be shared safely.
+Default \code{FALSE}.}
 }
 \value{
 Invisibly, the merged manifest as a \code{list}.
@@ -94,7 +99,7 @@ concerns and deliberately live outside this package.
 \dontrun{
 options(cred.store_source = "s3://<bucket>/<prefix>/")
 
-# Always dry-run first — prints the merged manifest, uploads nothing.
+# Always dry-run first — previews this store's entry, uploads nothing.
 crd_store_push("data/rag/vca_refs.duckdb", dry_run = TRUE)
 
 crd_store_push("data/rag/vca_refs.duckdb")

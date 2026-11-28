@@ -20,6 +20,13 @@
   `Imports`, `openxlsx` in `Suggests`, and cred depends on R >= 4.1.0, which its code already
   needed.
 
+# cred 0.9.0
+
+* `crd_store_push(dry_run = TRUE)` prints only the selected store's manifest entry by default,
+  while still listing all store names, so a logged dry run carries no other store's provenance
+  ([#54](https://github.com/NewGraphEnvironment/cred/issues/54)). Set
+  `show_full_manifest = TRUE` to print every entry.
+
 # cred 0.8.1
 
 * `crd_store_update()` leaves a store the size a fresh `crd_store_build()` would

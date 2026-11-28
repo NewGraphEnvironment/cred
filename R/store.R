@@ -1839,12 +1839,13 @@ crd_search <- function(store, query, top_k = 5L,
   }
 
   prepare <- function(path) {
-    held <- character()
+    held <- new.env(parent = emptyenv())
+    held$lines <- character()
     note <- function(kind, detail) {
-      held <<- c(held, paste0(path, "\t", kind, "\t", gsub("[\t\r\n]+", " ", detail), "\n"))
+      held$lines <- c(held$lines, paste0(path, "\t", kind, "\t", gsub("[\t\r\n]+", " ", detail), "\n"))
     }
     flush <- function(kinds = NULL) {
-      keep <- if (is.null(kinds)) held else held[grepl(paste0("\t(", paste(kinds, collapse = "|"), ")\t"), held)]
+      keep <- if (is.null(kinds)) held$lines else held$lines[grepl(paste0("\t(", paste(kinds, collapse = "|"), ")\t"), held$lines)]
       if (length(keep)) {
         out <- tempfile(paste0("notes-", Sys.getpid(), "-"), tmpdir = notes_dir, fileext = ".tsv")
         cat(paste(keep, collapse = ""), file = out)
@@ -3307,8 +3308,8 @@ crd_store_update <- function(store_path,
 #'   name without its extension.
 #' @param profile `character(1)` AWS profile. Default `AWS_PROFILE`.
 #' @param built_by `character` what produced the store, recorded in the entry.
-#' @param dry_run `logical(1)` print the merged manifest and upload nothing.
-#'   Default `FALSE`.
+#' @param dry_run `logical(1)` print a manifest preview and upload nothing.
+#'   By default, the preview includes only this store's entry. Default `FALSE`.
 #' @param create_manifest `logical(1)` allow writing a manifest where none
 #'   exists. Default `FALSE`. The create path is still conditional
 #'   (`--if-none-match "*"`), so two simultaneous first pushes cannot silently
@@ -3317,13 +3318,16 @@ crd_store_update <- function(store_path,
 #'   model. Default `FALSE`.
 #' @param max_retries `integer(1)` conditional-write retries before giving up.
 #'   Default `3L`.
+#' @param show_full_manifest `logical(1)` print every store's manifest entry
+#'   during a dry run. Use this only when the output can be shared safely.
+#'   Default `FALSE`.
 #' @return Invisibly, the merged manifest as a `list`.
 #' @export
 #' @examples
 #' \dontrun{
 #' options(cred.store_source = "s3://<bucket>/<prefix>/")
 #'
-#' # Always dry-run first — prints the merged manifest, uploads nothing.
+#' # Always dry-run first — previews this store's entry, uploads nothing.
 #' crd_store_push("data/rag/vca_refs.duckdb", dry_run = TRUE)
 #'
 #' crd_store_push("data/rag/vca_refs.duckdb")
@@ -3336,12 +3340,14 @@ crd_store_push <- function(store_path,
                            dry_run = FALSE,
                            create_manifest = FALSE,
                            allow_model_mismatch = FALSE,
-                           max_retries = 3L) {
+                           max_retries = 3L,
+                           show_full_manifest = FALSE) {
   chk::chk_string(store_path)
   chk::chk_flag(dry_run)
   chk::chk_flag(create_manifest)
   chk::chk_flag(allow_model_mismatch)
   chk::chk_whole_number(max_retries)
+  chk::chk_flag(show_full_manifest)
   chk::chk_file(store_path)
 
   store_path <- path.expand(store_path)
@@ -3398,7 +3404,11 @@ crd_store_push <- function(store_path,
     message("[dry run] would upload ", store_path, " -> ", source, name, ".duckdb")
     message("[dry run] merged manifest would hold: ",
             paste(names(merged$stores), collapse = ", "))
-    cat(jsonlite::toJSON(merged, auto_unbox = TRUE, pretty = TRUE,
+    preview <- merged
+    if (!show_full_manifest) {
+      preview$stores <- stats::setNames(list(merged$stores[[name]]), name)
+    }
+    cat(jsonlite::toJSON(preview, auto_unbox = TRUE, pretty = TRUE,
                          null = "null", na = "null"), "\n")
     return(invisible(merged))
   }
