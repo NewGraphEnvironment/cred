@@ -3172,6 +3172,11 @@ crd_store_update <- function(store_path,
 #' every entry other than `name` comes through untouched, including entries
 #' whose shape this version of cred does not recognise.
 #'
+#' The entry for `name` is replaced whole, with one exception: when the new
+#' entry carries no `notes` and the old one does, the old `notes` is kept, so
+#' a push without `notes` does not erase a caveat an earlier push recorded
+#' (#26). An old entry that is not a list has no notes to keep.
+#'
 #' @param existing `list` parsed manifest, or `NULL` for a fresh one.
 #' @param name `character(1)` store name to add or replace.
 #' @param entry `list` manifest entry for `name`.
@@ -3183,6 +3188,8 @@ crd_store_update <- function(store_path,
   if (is.null(existing$stores)) existing$stores <- list()
 
   merged <- existing
+  old <- existing$stores[[name]]
+  if (is.null(entry$notes) && is.list(old) && !is.null(old$notes)) entry$notes <- old$notes
   merged$stores[[name]] <- entry
   merged$date_updated <- format(as.POSIXct(Sys.time(), tz = "UTC"), "%Y-%m-%dT%H:%M:%SZ")
   merged$manifest_note <-
@@ -3321,6 +3328,9 @@ crd_store_update <- function(store_path,
 #' @param show_full_manifest `logical(1)` print every store's manifest entry
 #'   during a dry run. Use this only when the output can be shared safely.
 #'   Default `FALSE`.
+#' @param notes `character(1)` a free-text caveat recorded as the entry's
+#'   `notes`, such as what the store leaves out. Default `NULL` keeps the notes
+#'   an earlier push recorded; `""` replaces them with an empty note.
 #' @return Invisibly, the merged manifest as a `list`.
 #' @export
 #' @examples
@@ -3341,13 +3351,15 @@ crd_store_push <- function(store_path,
                            create_manifest = FALSE,
                            allow_model_mismatch = FALSE,
                            max_retries = 3L,
-                           show_full_manifest = FALSE) {
+                           show_full_manifest = FALSE,
+                           notes = NULL) {
   chk::chk_string(store_path)
   chk::chk_flag(dry_run)
   chk::chk_flag(create_manifest)
   chk::chk_flag(allow_model_mismatch)
   chk::chk_whole_number(max_retries)
   chk::chk_flag(show_full_manifest)
+  if (!is.null(notes)) chk::chk_string(notes)
   chk::chk_file(store_path)
 
   store_path <- path.expand(store_path)
@@ -3394,6 +3406,7 @@ crd_store_push <- function(store_path,
 
   existing <- if (head$exists) .crd_manifest_read(source, profile = profile) else NULL
   entry <- .crd_store_describe(store_path, built_by = built_by)
+  if (!is.null(notes)) entry$notes <- notes
   if (!is.null(existing)) {
     .crd_check_model(existing, name, entry$embedding_model, allow_model_mismatch,
                      size = entry$embedding_size)

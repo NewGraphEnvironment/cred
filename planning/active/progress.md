@@ -25,3 +25,9 @@
 - `crd_search(fallback = c("error", "bm25"))`, default error with the vss classes; stale sentences rewritten; NEWS written for batches 1, 2, 4.
 - Tests: all store tests 800 passed, 0 skipped (Ollama reachable).
 - Next: Phase 5 (#26), waiting on the owner's word to merge PR #55
+
+## Phase 5, 2026-11-28
+- PR #55 reviewed, its NEWS bullet moved, CI approved by the owner, merged and released as v0.9.0; main merged into this branch (NEWS conflict resolved by keeping both sections).
+- #26: `crd_store_push(notes =)`, kept by the merge when a push gives none; merge and dry-run tests, each failing on the mutant that drops the carry.
+- Code-check rounds 1 and 2 clean (round 1 added the update progress test).
+- Next: code-check round 3 over the whole branch, then archive and PR.

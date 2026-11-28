@@ -292,7 +292,9 @@ Shipped: [#22](https://github.com/NewGraphEnvironment/cred/issues/22) ragnar ret
   column on the chunks object is silently dropped.
 - **The manifest is merged, never replaced** — it describes every store in the bucket, so a push
   built from the current run alone orphans the rest. `.crd_manifest_merge()` is pure and passes
-  untouched entries through verbatim, including shapes this version does not recognise.
+  untouched entries through verbatim, including shapes this version does not recognise. The
+  pushed store's own entry is replaced whole except for `notes`, which survives a push that
+  gives none ([#26](https://github.com/NewGraphEnvironment/cred/issues/26)).
 - **Fail toward not-clobbering** — an unreadable manifest aborts a push. Only a *confirmed*
   absence (bucket reachable via `head-bucket`, object missing via `head-object`) counts as "none
   yet", and even then `create_manifest = TRUE` is required: a wrong prefix produces the same 404.

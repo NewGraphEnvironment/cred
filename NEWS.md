@@ -19,6 +19,9 @@
   [#38](https://github.com/NewGraphEnvironment/cred/issues/38)). `tibble` is now declared in
   `Imports`, `openxlsx` in `Suggests`, and cred depends on R >= 4.1.0, which its code already
   needed.
+* `crd_store_push()` takes `notes`, a free-text caveat written into the store's manifest entry
+  ([#26](https://github.com/NewGraphEnvironment/cred/issues/26)). A later push without `notes`
+  keeps it, so a caveat no longer has to ride in `built_by`.
 
 # cred 0.9.0
 

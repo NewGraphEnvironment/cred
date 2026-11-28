@@ -105,13 +105,13 @@ umbrella #58 is claimed after approval.
 - [x] NEWS: the changed default leads the entry. PR body: `Bump: minor`.
 
 ## Phase 5: Push manifest notes (batch 3: #26; #54 is left to #55)
-- [ ] Before building: `members_check.sh ... 58 <branch> --batch 3 --skip 54`. Start only
+- [x] Before building: `members_check.sh ... 58 <branch> --batch 3 --skip 54`. Start only
       after #55 is merged, then `git merge origin/main`. If #55 is not merged once Phases
       2-4 are done, ask again rather than build on a conflicting base.
-- [ ] Add `notes = NULL` to `crd_store_push()` (`chk_string` when given), written into the
+- [x] Add `notes = NULL` to `crd_store_push()` (`chk_string` when given), written into the
       entry. `.crd_manifest_merge()` keeps the existing entry's `notes` when the new entry
       has none. Document that `notes = ""` clears a note.
-- [ ] Tests in `tests/testthat/test-store-push.R`: a pure merge test where notes survive a
+- [x] Tests in `tests/testthat/test-store-push.R`: a pure merge test where notes survive a
       push without them, while `built_by` from the old entry does not (AC2). A dry-run test
       whose preview shows a note preserved from the existing manifest (AC3). An atomic
       existing entry does not crash the merge (G8). The `.crd_manifest_merge` roxygen and the

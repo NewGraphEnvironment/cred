@@ -14,7 +14,8 @@ crd_store_push(
   create_manifest = FALSE,
   allow_model_mismatch = FALSE,
   max_retries = 3L,
-  show_full_manifest = FALSE
+  show_full_manifest = FALSE,
+  notes = NULL
 )
 }
 \arguments{
@@ -48,6 +49,10 @@ Default \code{3L}.}
 \item{show_full_manifest}{\code{logical(1)} print every store's manifest entry
 during a dry run. Use this only when the output can be shared safely.
 Default \code{FALSE}.}
+
+\item{notes}{\code{character(1)} a free-text caveat recorded as the entry's
+\code{notes}, such as what the store leaves out. Default \code{NULL} keeps the notes
+an earlier push recorded; \code{""} replaces them with an empty note.}
 }
 \value{
 Invisibly, the merged manifest as a \code{list}.
