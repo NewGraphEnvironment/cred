@@ -19,7 +19,8 @@ crd_store_push(
   dry_run = FALSE,
   create_manifest = FALSE,
   allow_model_mismatch = FALSE,
-  max_retries = 3L
+  max_retries = 3L,
+  show_full_manifest = FALSE
 )
 ```
 
@@ -50,8 +51,8 @@ crd_store_push(
 
 - dry_run:
 
-  `logical(1)` print the merged manifest and upload nothing. Default
-  `FALSE`.
+  `logical(1)` print a manifest preview and upload nothing. By default,
+  the preview includes only this store's entry. Default `FALSE`.
 
 - create_manifest:
 
@@ -68,6 +69,11 @@ crd_store_push(
 - max_retries:
 
   `integer(1)` conditional-write retries before giving up. Default `3L`.
+
+- show_full_manifest:
+
+  `logical(1)` print every store's manifest entry during a dry run. Use
+  this only when the output can be shared safely. Default `FALSE`.
 
 ## Value
 
@@ -126,7 +132,7 @@ deliberately live outside this package.
 if (FALSE) { # \dontrun{
 options(cred.store_source = "s3://<bucket>/<prefix>/")
 
-# Always dry-run first — prints the merged manifest, uploads nothing.
+# Always dry-run first — previews this store's entry, uploads nothing.
 crd_store_push("data/rag/vca_refs.duckdb", dry_run = TRUE)
 
 crd_store_push("data/rag/vca_refs.duckdb")

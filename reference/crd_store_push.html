@@ -63,7 +63,8 @@ plainly present. That failure has been observed in practice.</p>
 <span>  dry_run <span class="op">=</span> <span class="cn">FALSE</span>,</span>
 <span>  create_manifest <span class="op">=</span> <span class="cn">FALSE</span>,</span>
 <span>  allow_model_mismatch <span class="op">=</span> <span class="cn">FALSE</span>,</span>
-<span>  max_retries <span class="op">=</span> <span class="fl">3L</span></span>
+<span>  max_retries <span class="op">=</span> <span class="fl">3L</span>,</span>
+<span>  show_full_manifest <span class="op">=</span> <span class="cn">FALSE</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
 
@@ -95,8 +96,8 @@ name without its extension.</p></dd>
 
 
 <dt id="arg-dry-run">dry_run<a class="anchor" aria-label="anchor" href="#arg-dry-run"></a></dt>
-<dd><p><code>logical(1)</code> print the merged manifest and upload nothing.
-Default <code>FALSE</code>.</p></dd>
+<dd><p><code>logical(1)</code> print a manifest preview and upload nothing.
+By default, the preview includes only this store's entry. Default <code>FALSE</code>.</p></dd>
 
 
 <dt id="arg-create-manifest">create_manifest<a class="anchor" aria-label="anchor" href="#arg-create-manifest"></a></dt>
@@ -114,6 +115,12 @@ model. Default <code>FALSE</code>.</p></dd>
 <dt id="arg-max-retries">max_retries<a class="anchor" aria-label="anchor" href="#arg-max-retries"></a></dt>
 <dd><p><code>integer(1)</code> conditional-write retries before giving up.
 Default <code>3L</code>.</p></dd>
+
+
+<dt id="arg-show-full-manifest">show_full_manifest<a class="anchor" aria-label="anchor" href="#arg-show-full-manifest"></a></dt>
+<dd><p><code>logical(1)</code> print every store's manifest entry
+during a dry run. Use this only when the output can be shared safely.
+Default <code>FALSE</code>.</p></dd>
 
 </dl></div>
     <div class="section level2">
@@ -157,7 +164,7 @@ concerns and deliberately live outside this package.</p>
     <div class="sourceCode"><pre class="sourceCode r"><code><span class="r-in"><span><span class="kw">if</span> <span class="op">(</span><span class="cn">FALSE</span><span class="op">)</span> <span class="op">{</span> <span class="co"># \dontrun{</span></span></span>
 <span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/base/options.html" class="external-link">options</a></span><span class="op">(</span>cred.store_source <span class="op">=</span> <span class="st">"s3://&lt;bucket&gt;/&lt;prefix&gt;/"</span><span class="op">)</span></span></span>
 <span class="r-in"><span></span></span>
-<span class="r-in"><span><span class="co"># Always dry-run first — prints the merged manifest, uploads nothing.</span></span></span>
+<span class="r-in"><span><span class="co"># Always dry-run first — previews this store's entry, uploads nothing.</span></span></span>
 <span class="r-in"><span><span class="fu">crd_store_push</span><span class="op">(</span><span class="st">"data/rag/vca_refs.duckdb"</span>, dry_run <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span></span>
 <span class="r-in"><span></span></span>
 <span class="r-in"><span><span class="fu">crd_store_push</span><span class="op">(</span><span class="st">"data/rag/vca_refs.duckdb"</span><span class="op">)</span></span></span>
